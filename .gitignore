@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Astro generated
+.astro/
+
+# Data (DB, uploads)
+data/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+
+# OCR trained data (download from https://github.com/tesseract-ocr/tessdata)
+*.traineddata
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
