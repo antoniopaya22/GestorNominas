@@ -21,12 +21,13 @@ function UploadManager() {
   });
 
   const [selectedProfile, setSelectedProfile] = useState<number | null>(null);
+  const [payslipType, setPayslipType] = useState<"ordinal" | "extra">("ordinal");
   const [files, setFiles] = useState<File[]>([]);
   const [results, setResults] = useState<Payslip[]>([]);
 
   const uploadMut = useMutation({
-    mutationFn: (args: { profileId: number; files: File[] }) =>
-      uploadPayslips(args.profileId, args.files),
+    mutationFn: (args: { profileId: number; files: File[]; payslipType: "ordinal" | "extra" }) =>
+      uploadPayslips(args.profileId, args.files, args.payslipType),
     onSuccess: (data) => {
       setResults(data);
       setFiles([]);
@@ -47,7 +48,7 @@ function UploadManager() {
 
   const handleUpload = () => {
     if (!selectedProfile || files.length === 0) return;
-    uploadMut.mutate({ profileId: selectedProfile, files });
+    uploadMut.mutate({ profileId: selectedProfile, files, payslipType });
   };
 
   const removeFile = (index: number) => setFiles((prev) => prev.filter((_, i) => i !== index));
@@ -106,6 +107,34 @@ function UploadManager() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Type selector */}
+          <div className="mb-6">
+            <label className="block text-xs font-semibold text-surface-500 uppercase tracking-wider mb-2">Tipo de nómina</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPayslipType("ordinal")}
+                className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
+                  payslipType === "ordinal"
+                    ? "bg-white shadow-card border border-surface-200 text-surface-900"
+                    : "text-surface-500 hover:text-surface-700 hover:bg-surface-100"
+                }`}
+              >
+                Mensual
+              </button>
+              <button
+                onClick={() => setPayslipType("extra")}
+                className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer ${
+                  payslipType === "extra"
+                    ? "bg-accent-50 shadow-card border border-accent-200 text-accent-700"
+                    : "text-surface-500 hover:text-surface-700 hover:bg-surface-100"
+                }`}
+              >
+                Paga Extra
+              </button>
+            </div>
+            <p className="text-xs text-surface-400 mt-1.5">El tipo se detectará automáticamente si el PDF lo indica</p>
           </div>
 
           {/* Dropzone */}

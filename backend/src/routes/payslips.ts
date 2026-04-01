@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../db/index.js";
-import { payslips, payslipConcepts } from "../db/schema.js";
+import { payslips, payslipConcepts, profiles } from "../db/schema.js";
 import { eq, and, desc, like, gte, lte, sql } from "drizzle-orm";
 import { upload, validatePdfMagicBytes } from "../middleware/upload.js";
 import { parsePayslip } from "../parsers/parser-engine.js";
@@ -14,6 +14,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export const payslipsRouter = Router();
 
+/** Returns the IDs of profiles owned by the authenticated user */
+async function getUserProfileIds(userId: number): Promise<number[]> {
+  const rows = await db
+    .select({ id: profiles.id })
+    .from(profiles)
+    .where(eq(profiles.userId, userId));
+  return rows.map((r) => r.id);
+}
+
 // Upload one or more PDFs
 payslipsRouter.post(
   "/upload",
@@ -21,9 +30,22 @@ payslipsRouter.post(
   validatePdfMagicBytes,
   async (req, res, next) => {
     try {
+      const { userId } = req.user!;
       const profileId = Number(req.body.profileId);
       if (!profileId)
         return res.status(400).json({ error: "profileId requerido" });
+
+      const bodyType = req.body.payslipType;
+      const manualType: "ordinal" | "extra" =
+        bodyType === "extra" ? "extra" : "ordinal";
+
+      // Verify the profile belongs to this user
+      const [profile] = await db
+        .select()
+        .from(profiles)
+        .where(and(eq(profiles.id, profileId), eq(profiles.userId, userId)));
+      if (!profile)
+        return res.status(403).json({ error: "Perfil no pertenece al usuario" });
 
       const files = req.files as Express.Multer.File[];
       if (!files?.length)
@@ -38,6 +60,7 @@ payslipsRouter.post(
             profileId,
             fileName: file.originalname,
             filePath: file.filename,
+            payslipType: manualType,
             parsingStatus: "pending",
           })
           .returning();
@@ -56,21 +79,46 @@ payslipsRouter.post(
   }
 );
 
+const payslipListQuerySchema = z.object({
+  profileId: z.coerce.number().int().positive().optional(),
+  year: z.coerce.number().int().min(1900).max(2200).optional(),
+  search: z.string().max(200).optional(),
+  status: z.enum(["pending", "parsed", "error", "review"]).optional(),
+  type: z.enum(["ordinal", "extra"]).optional(),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+
 // List payslips with pagination and search
 payslipsRouter.get("/", async (req, res, next) => {
   try {
-    const profileId = Number(req.query.profileId) || undefined;
-    const year = req.query.year ? Number(req.query.year) : undefined;
-    const search = (req.query.search as string) || undefined;
-    const status = req.query.status as string | undefined;
-    const page = Math.max(1, Number(req.query.page) || 1);
-    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+    const parsed = payslipListQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Parámetros de consulta inválidos",
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const { userId } = req.user!;
+    const userProfileIds = await getUserProfileIds(userId);
+    if (userProfileIds.length === 0)
+      return res.json({ data: [], total: 0, page: 1, limit: 50 });
+
+    const { profileId, year, search, status, type, page, limit } = parsed.data;
     const offset = (page - 1) * limit;
 
-    const conditions = [];
-    if (profileId) conditions.push(eq(payslips.profileId, profileId));
+    const conditions = [
+      sql`${payslips.profileId} IN (${sql.join(userProfileIds.map((id) => sql`${id}`), sql`, `)})`
+    ];
+    if (profileId) {
+      if (!userProfileIds.includes(profileId))
+        return res.json({ data: [], total: 0, page, limit });
+      conditions.push(eq(payslips.profileId, profileId));
+    }
     if (year) conditions.push(eq(payslips.periodYear, year));
-    if (status) conditions.push(eq(payslips.parsingStatus, status as "pending" | "parsed" | "error" | "review"));
+    if (status) conditions.push(eq(payslips.parsingStatus, status));
+    if (type) conditions.push(eq(payslips.payslipType, type));
     if (search) {
       conditions.push(
         sql`(${payslips.fileName} LIKE ${'%' + search + '%'} OR ${payslips.company} LIKE ${'%' + search + '%'})`
@@ -101,13 +149,15 @@ payslipsRouter.get("/", async (req, res, next) => {
 // Get single payslip with concepts
 payslipsRouter.get("/:id", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
+    const userProfileIds = await getUserProfileIds(userId);
     const id = Number(req.params.id);
     const [payslip] = await db
       .select()
       .from(payslips)
       .where(eq(payslips.id, id));
 
-    if (!payslip)
+    if (!payslip || !userProfileIds.includes(payslip.profileId))
       return res.status(404).json({ error: "Nómina no encontrada" });
 
     const concepts = await db
@@ -140,7 +190,15 @@ const conceptSchema = z.object({
 
 payslipsRouter.put("/:id/concepts", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
+    const userProfileIds = await getUserProfileIds(userId);
     const id = Number(req.params.id);
+
+    // Verify ownership
+    const [existing] = await db.select().from(payslips).where(eq(payslips.id, id));
+    if (!existing || !userProfileIds.includes(existing.profileId))
+      return res.status(404).json({ error: "Nómina no encontrada" });
+
     const parsed = conceptSchema.safeParse(req.body);
     if (!parsed.success)
       return res.status(400).json({ error: parsed.error.flatten() });
@@ -168,13 +226,15 @@ payslipsRouter.put("/:id/concepts", async (req, res, next) => {
 // Reprocess a payslip
 payslipsRouter.post("/:id/reprocess", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
+    const userProfileIds = await getUserProfileIds(userId);
     const id = Number(req.params.id);
     const [payslip] = await db
       .select()
       .from(payslips)
       .where(eq(payslips.id, id));
 
-    if (!payslip)
+    if (!payslip || !userProfileIds.includes(payslip.profileId))
       return res.status(404).json({ error: "Nómina no encontrada" });
 
   const filePath = resolve(
@@ -203,13 +263,15 @@ payslipsRouter.post("/:id/reprocess", async (req, res, next) => {
 // Delete payslip
 payslipsRouter.delete("/:id", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
+    const userProfileIds = await getUserProfileIds(userId);
     const id = Number(req.params.id);
     const [payslip] = await db
       .select()
       .from(payslips)
       .where(eq(payslips.id, id));
 
-    if (!payslip)
+    if (!payslip || !userProfileIds.includes(payslip.profileId))
       return res.status(404).json({ error: "Nómina no encontrada" });
 
     try {
@@ -230,20 +292,64 @@ payslipsRouter.delete("/:id", async (req, res, next) => {
   }
 });
 
+// Update payslip type
+const payslipTypeSchema = z.object({
+  type: z.enum(["ordinal", "extra"]),
+});
+
+payslipsRouter.patch("/:id/type", async (req, res, next) => {
+  try {
+    const { userId } = req.user!;
+    const userProfileIds = await getUserProfileIds(userId);
+    const id = Number(req.params.id);
+
+    const parsed = payslipTypeSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: "Tipo inválido", details: parsed.error.flatten().fieldErrors });
+
+    const [payslip] = await db.select().from(payslips).where(eq(payslips.id, id));
+    if (!payslip || !userProfileIds.includes(payslip.profileId))
+      return res.status(404).json({ error: "Nómina no encontrada" });
+
+    const [updated] = await db
+      .update(payslips)
+      .set({ payslipType: parsed.data.type })
+      .where(eq(payslips.id, id))
+      .returning();
+
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Reparse all payslips (useful after parser improvements)
 payslipsRouter.post("/reparse", async (req, res, next) => {
   try {
-    const allPayslips = await db.select().from(payslips);
+    const { userId } = req.user!;
+    const userProfileIds = await getUserProfileIds(userId);
+    if (userProfileIds.length === 0)
+      return res.json({ ok: true, reparsed: 0, errors: 0 });
+
+    const allPayslips = await db
+      .select()
+      .from(payslips)
+      .where(sql`${payslips.profileId} IN (${sql.join(userProfileIds.map((id) => sql`${id}`), sql`, `)})`);
     let success = 0;
     let errors = 0;
 
-    for (const p of allPayslips) {
-      try {
-        const filePath = resolve(__dirname, "../../../data/uploads", p.filePath);
-        await processPayslip(p.id, filePath);
-        success++;
-      } catch {
-        errors++;
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < allPayslips.length; i += BATCH_SIZE) {
+      const batch = allPayslips.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map((p) => {
+          const filePath = resolve(__dirname, "../../../data/uploads", p.filePath);
+          return processPayslip(p.id, filePath);
+        }),
+      );
+      for (const r of results) {
+        if (r.status === "fulfilled") success++;
+        else errors++;
       }
     }
 

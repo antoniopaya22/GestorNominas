@@ -1,19 +1,56 @@
 import { Router } from "express";
+import { z } from "zod";
 import { db } from "../db/index.js";
 import { payslips, payslipConcepts, profiles } from "../db/schema.js";
 import { eq, and, sql } from "drizzle-orm";
 
 export const exportRouter = Router();
 
+const exportQuerySchema = z.object({
+  profileId: z.coerce.number().int().positive().optional(),
+  year: z.coerce.number().int().min(1900).max(2200).optional(),
+  type: z.enum(["ordinal", "extra"]).optional(),
+  format: z.enum(["csv", "json"]).default("csv"),
+});
+
 exportRouter.get("/", async (req, res, next) => {
   try {
-    const profileId = req.query.profileId ? Number(req.query.profileId) : undefined;
-    const year = req.query.year ? Number(req.query.year) : undefined;
-    const format = (req.query.format as string) || "csv";
+    const parsed = exportQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Parámetros de consulta inválidos",
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const { userId } = req.user!;
+
+    // Only user's profiles
+    const userProfiles = await db.select().from(profiles).where(eq(profiles.userId, userId));
+    const userProfileIds = userProfiles.map((p) => p.id);
+
+    if (userProfileIds.length === 0) {
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", 'attachment; filename="nominas.csv"');
+      return res.send("Sin datos");
+    }
+
+    const { profileId, year, type, format } = parsed.data;
 
     const conditions = [eq(payslips.parsingStatus, "parsed")];
-    if (profileId) conditions.push(eq(payslips.profileId, profileId));
+    if (profileId) {
+      if (!userProfileIds.includes(profileId)) {
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        return res.send("Sin datos");
+      }
+      conditions.push(eq(payslips.profileId, profileId));
+    } else {
+      conditions.push(
+        sql`${payslips.profileId} IN (${sql.join(userProfileIds.map((id) => sql`${id}`), sql`, `)})`
+      );
+    }
     if (year) conditions.push(eq(payslips.periodYear, year));
+    if (type) conditions.push(eq(payslips.payslipType, type));
 
     const allPayslips = await db
       .select()
@@ -21,8 +58,7 @@ exportRouter.get("/", async (req, res, next) => {
       .where(and(...conditions))
       .orderBy(payslips.periodYear, payslips.periodMonth);
 
-    const allProfiles = await db.select().from(profiles);
-    const profileMap = new Map(allProfiles.map((p) => [p.id, p.name]));
+    const profileMap = new Map(userProfiles.map((p) => [p.id, p.name]));
 
     // Get concepts for all payslips
     const payslipIds = allPayslips.map((p) => p.id);
@@ -60,6 +96,7 @@ exportRouter.get("/", async (req, res, next) => {
 
       return {
         Perfil: profileMap.get(p.profileId) ?? "",
+        Tipo: p.payslipType === "extra" ? "Paga Extra" : "Mensual",
         Periodo: p.periodMonth && p.periodYear ? `${String(p.periodMonth).padStart(2, "0")}/${p.periodYear}` : "",
         Empresa: p.company ?? "",
         "Salario Bruto": p.grossSalary ?? "",

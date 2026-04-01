@@ -7,6 +7,15 @@ export interface AuthPayload {
   email: string;
 }
 
+// Augment Express Request so req.user is available after authMiddleware
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthPayload;
+    }
+  }
+}
+
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) {
@@ -16,7 +25,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
   try {
     const token = header.slice(7);
     const payload = jwt.verify(token, env.JWT_SECRET) as AuthPayload;
-    (req as Request & { user: AuthPayload }).user = payload;
+    req.user = payload;
     next();
   } catch {
     res.status(401).json({ error: "Token inválido o expirado" });

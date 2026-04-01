@@ -16,14 +16,15 @@ import { exportRouter } from "./routes/export.js";
 import { alertsRouter } from "./routes/alerts.js";
 import { notesRouter } from "./routes/notes.js";
 import { tagsRouter } from "./routes/tags.js";
-import { resolve, dirname } from "path";
+import { resolve, dirname, basename } from "path";
 import { fileURLToPath } from "url";
 import { mkdirSync, existsSync } from "fs";
+import { sqlite } from "./db/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Ensure data directories exist
-const uploadsDir = resolve(__dirname, "../../", env.UPLOAD_DIR);
+const uploadsDir = resolve(__dirname, "../", env.UPLOAD_DIR);
 mkdirSync(uploadsDir, { recursive: true });
 
 const app = express();
@@ -59,13 +60,43 @@ const authLimiter = rateLimit({
 
 // ─── Public routes ──────────────────────────────────────────────
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", version: "2.0.0" });
+  try {
+    sqlite.prepare("SELECT 1").get();
+    res.json({ status: "ok", version: "2.0.0" });
+  } catch {
+    res.status(503).json({ status: "error", message: "Base de datos no disponible" });
+  }
 });
 
 app.use("/api/auth", authLimiter, authRouter);
 
-// ─── Static files ───────────────────────────────────────────────
-app.use("/uploads", express.static(uploadsDir));
+// ─── Authenticated file serving ─────────────────────────────────
+app.get("/uploads/:filename", authMiddleware, async (req, res, next) => {
+  try {
+    const { db } = await import("./db/index.js");
+    const { payslips, profiles } = await import("./db/schema.js");
+    const { eq, and } = await import("drizzle-orm");
+
+    const filename = basename(String(req.params.filename)); // sanitize path traversal
+    const userId = req.user!.userId;
+
+    // Verify this file belongs to a payslip owned by the user
+    const [payslip] = await db
+      .select({ id: payslips.id })
+      .from(payslips)
+      .innerJoin(profiles, eq(payslips.profileId, profiles.id))
+      .where(and(eq(payslips.filePath, filename), eq(profiles.userId, userId)));
+
+    if (!payslip) return res.status(404).json({ error: "Archivo no encontrado" });
+
+    const filePath = resolve(uploadsDir, filename);
+    if (!existsSync(filePath)) return res.status(404).json({ error: "Archivo no encontrado" });
+
+    res.sendFile(filePath);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ─── Protected routes ───────────────────────────────────────────
 app.use("/api/profiles", authMiddleware, profilesRouter);
@@ -98,4 +129,22 @@ if (existsSync(frontendDist)) {
 
 app.listen(env.PORT, () => {
   logger.info(`🚀 Backend running on http://localhost:${env.PORT}`);
+});
+
+// ─── Graceful shutdown ──────────────────────────────────────────
+function shutdown(signal: string) {
+  logger.info(`${signal} received — shutting down`);
+  sqlite.close();
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
+
+process.on("uncaughtException", (err) => {
+  logger.error({ err }, "Uncaught exception (non-fatal)");
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.error({ err: reason }, "Unhandled rejection (non-fatal)");
 });

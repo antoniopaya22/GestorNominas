@@ -18,8 +18,38 @@ export interface ParsedPayslip {
 // ─── Number parsing ─────────────────────────────────────────────
 
 /** Parse Spanish number format: "1.234,56" → 1234.56 */
+function normalizeOcrNumericText(str: string): string {
+  return str.replace(/[OQDCcoIlSBEbse\|€]/g, (char) => {
+    switch (char) {
+      case "O":
+      case "Q":
+      case "D":
+      case "C":
+      case "c":
+      case "o":
+        return "0";
+      case "I":
+      case "l":
+      case "|":
+        return "1";
+      case "S":
+      case "s":
+        return "5";
+      case "B":
+      case "E":
+      case "b":
+      case "e":
+        return "8";
+      case "€":
+        return "8";
+      default:
+        return char;
+    }
+  });
+}
+
 function parseSpanishNumber(str: string): number | null {
-  const cleaned = str
+  const cleaned = normalizeOcrNumericText(str)
     .replace(/\s/g, "")
     .replace(/\.(\d{3})/g, "$1") // Remove thousands dots (1.234 → 1234)
     .replace(",", ".");           // Decimal comma → dot
@@ -29,7 +59,7 @@ function parseSpanishNumber(str: string): number | null {
 
 /** Find ALL Spanish-format amounts in a string */
 function findAllAmounts(text: string): number[] {
-  const re = /(\d{1,3}(?:\.\d{3})*,\d{2})/g;
+  const re = /([0-9OQDCIEBSloqdciebs€]{1,3}(?:\.[0-9OQDCIEBSloqdciebs€]{3})*,[0-9OQDCIEBSloqdciebs€]{2})/g;
   const results: number[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
@@ -85,7 +115,9 @@ const NAME_PATTERNS: Array<{ regex: RegExp; name: string }> = [
   // Devengos
   { regex: /salario\s*base/i, name: "Salario Base" },
   { regex: /sueldo\s*base/i, name: "Salario Base" },
-  { regex: /complemento\s*(?:personal|puesto|espec[ií]fico|destino)/i, name: "Complemento" },
+  { regex: /complemento\s*destino/i, name: "Complemento de Destino" },
+  { regex: /C\.\s*DESTINO/i, name: "Complemento de Destino" },
+  { regex: /complemento\s*(?:personal|puesto|espec[ií]fico)/i, name: "Complemento" },
   { regex: /plus\s*(?:convenio|transporte|actividad|nocturnidad|peligrosidad|turnicidad)/i, name: "Plus Convenio" },
   { regex: /antig[üu]edad/i, name: "Antigüedad" },
   { regex: /trienio/i, name: "Trienios" },
@@ -93,12 +125,13 @@ const NAME_PATTERNS: Array<{ regex: RegExp; name: string }> = [
   { regex: /paga\s*extra/i, name: "Paga Extra" },
   { regex: /gratificaci[oó]n/i, name: "Gratificación" },
   { regex: /incentivo/i, name: "Incentivo" },
-  { regex: /bonus|prima\b/i, name: "Bonus/Prima" },
+  { regex: /bonus|[fp]rima\b|frima\b/i, name: "Bonus/Prima" },
   { regex: /dieta/i, name: "Dietas" },
   { regex: /locomoci[oó]n|km|kil[oó]metro/i, name: "Locomoción/Transporte" },
   { regex: /mejora\s*(?:voluntaria|absorbible)/i, name: "Mejora Voluntaria" },
   { regex: /retribuci[oó]n\s*flexible/i, name: "Retribución Flexible" },
   { regex: /complemento\s*(?:de\s*)?convenio/i, name: "Complemento Convenio" },
+  { regex: /(?:p|f)arte\s+pro[fp]\.?p(?:agas|ag)/i, name: "Parte Proporcional Pagas" },
   { regex: /vacaciones/i, name: "Vacaciones" },
   { regex: /productividad/i, name: "Productividad" },
   { regex: /poliza\s*seg(?:uro)?\s*salud/i, name: "Póliza Seguro Salud" },
@@ -106,18 +139,24 @@ const NAME_PATTERNS: Array<{ regex: RegExp; name: string }> = [
   { regex: /abono\s*trabajador/i, name: "Abono Trabajador" },
   { regex: /abono\s*catering/i, name: "Abono Catering" },
   { regex: /catering/i, name: "Catering" },
+  // Type 2 specific devengos
+  { regex: /C\.?P\.?\s*TRANSITORIO?/i, name: "Complemento Transitorio" },
+  { regex: /COMP\.?\s*GEN\.?\s*ESP|C\.?GRAL\.?\s*C\.?\s*ESP/i, name: "Complemento General Específico" },
+  { regex: /COMP\.?\s*SING|C\.?SING\.?\s*C\.?\s*ESPE/i, name: "Complemento Singular Específico" },
   // Deducciones
+  { regex: /seguridad\s*social/i, name: "Contingencias Comunes" },
   { regex: /cotizaci[oó]n\s*cont\.?\s*(?:ingencias?)?\s*comu/i, name: "Contingencias Comunes" },
   { regex: /contingencias?\s*comunes?/i, name: "Contingencias Comunes" },
-  { regex: /cotizaci[oó]n\s*desempleo/i, name: "Desempleo" },
+  { regex: /cotizaci[oó]n\s*desemple\w*/i, name: "Desempleo" },
   { regex: /cotizaci[oó]n\s*formaci[oó]n/i, name: "Formación Profesional" },
-  { regex: /formaci[oó]n\s*profesional/i, name: "Formación Profesional" },
+  { regex: /form\.?\s*profesional/i, name: "Formación Profesional" },
   { regex: /cotizaci[oó]n\s*MEI|MEI\b/i, name: "MEI" },
-  { regex: /mecanismo\s*equidad/i, name: "MEI" },
+  { regex: /mec\s*equidad/i, name: "MEI" },
   { regex: /tributaci[oó]n\s*i\.?\s*r\.?\s*p\.?\s*f/i, name: "IRPF" },
+  { regex: /^I\.?\s*R\.?\s*P\.?\s*F\.?$/i, name: "IRPF" },
   { regex: /i\.?\s*r\.?\s*p\.?\s*f\.?\s*\d/i, name: "IRPF" },
   { regex: /retenci[oó]n(?:es)?\s*(?:a\s*cuenta|irpf|fiscal)/i, name: "IRPF" },
-  { regex: /desempleo/i, name: "Desempleo" },
+  { regex: /desemple\w*/i, name: "Desempleo" },
   { regex: /anticipo/i, name: "Anticipo" },
   { regex: /embargo/i, name: "Embargo" },
   { regex: /pr[eé]stamo/i, name: "Préstamo" },
@@ -125,9 +164,76 @@ const NAME_PATTERNS: Array<{ regex: RegExp; name: string }> = [
   { regex: /seguro\s*m[eé]dico/i, name: "Seguro Médico" },
   { regex: /plan\s*(?:de\s*)?pensiones/i, name: "Plan de Pensiones" },
   { regex: /devol(?:uci[oó]n)?\s*poliza/i, name: "Devolución Póliza" },
-  { regex: /dcto[\.\s]*conceptos/i, name: "Descuento Conceptos en Especie" },
-  { regex: /imp[\.\s]*ingr/i, name: "Ingreso a Cuenta Especie" },
+  { regex: /d(?:cto|eto|ceto)[\.\s]*concept\w*/i, name: "Descuento Conceptos en Especie" },
+  { regex: /imp[\.\s]*ingr/i, name: "Ingreso a Cuenta Especie" },  // Type 2 specific deducciones
+  { regex: /ATR\.?\s*IRPF/i, name: "Atraso IRPF" },];
+
+const TYPE1_DEDUCTION_NAMES = new Set([
+  "Contingencias Comunes",
+  "Desempleo",
+  "Formación Profesional",
+  "IRPF",
+  "MEI",
+  "Atraso IRPF",
+  "Anticipo",
+  "Embargo",
+  "Préstamo",
+  "Cuota Sindical",
+  "Seguro Médico",
+  "Plan de Pensiones",
+  "Devolución Póliza",
+  "Descuento Conceptos en Especie",
+  "Ingreso a Cuenta Especie",
+]);
+
+const TYPE1_RATE_BASED_DEDUCTIONS = new Set([
+  "Contingencias Comunes",
+  "Desempleo",
+  "Formación Profesional",
+  "MEI",
+]);
+
+function roundCurrency(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+// ─── Text preprocessing ─────────────────────────────────────────
+
+/** Strip box-drawing characters used in public-sector payslip tables */
+function stripBoxDrawingChars(text: string): string {
+  return text.replace(/[│├┤┌┐└┘┬┴┼─═║╔╗╚╝╠╣╦╩╬]/g, " ");
+}
+
+// ─── Payslip format detection ───────────────────────────────────
+
+type PayslipFormat = "type1" | "type2";
+
+/** Detect whether the PDF text corresponds to a private-company (type1) or public-sector (type2) payslip */
+function detectFormat(text: string): PayslipFormat {
+  if (/NOTIFICACION\s+DE\s+RETRIBUCIONES/i.test(text)) return "type2";
+  if (/NOMINA\s+MENSUAL\s*,/i.test(text)) return "type2";
+  return "type1";
+}
+
+// ─── Type 2 deduction name matching ─────────────────────────────
+
+const TYPE2_DEDUCTION_PREFIXES = [
+  "SEGURIDAD SOCIAL",
+  "DESEMPLEO",
+  "FORM. PROFESIONAL",
+  "FORMACION PROFESIONAL",
+  "MEC EQUIDAD",
+  "I.R.P.F",
+  "IRPF",
+  "ATR. IRPF",
+  "ATR IRPF",
+  "TRIBUTACION",
 ];
+
+function isType2DeductionName(name: string): boolean {
+  const upper = name.toUpperCase().replace(/[−\-]/g, " ").trim();
+  return TYPE2_DEDUCTION_PREFIXES.some((p) => upper.startsWith(p));
+}
 
 // ─── Period extraction ──────────────────────────────────────────
 
@@ -158,6 +264,27 @@ function resolveYear(s: string): number | null {
 }
 
 function extractPeriod(text: string): { month: number | null; year: number | null } {
+  // 0) Type 2: "NOMINA MENSUAL, NOVIEMBRE" + "Del DD/MM/YYYY al DD/MM/YYYY"
+  const nomlPattern = /NOMINA\s+MENSUAL\s*,\s*([A-ZÀ-ÿ]+)/i;
+  const nomlMatch = text.match(nomlPattern);
+  if (nomlMatch) {
+    const month = resolveMonth(nomlMatch[1]);
+    if (month) {
+      const delPattern = /Del\s+\d{1,2}\/\d{1,2}\/(\d{4})\s+al\s+\d{1,2}\/\d{1,2}\/(\d{4})/i;
+      const delMatch = text.match(delPattern);
+      if (delMatch) {
+        const year = resolveYear(delMatch[2]) ?? resolveYear(delMatch[1]);
+        if (year) return { month, year };
+      }
+      // Try year from any 4-digit number near the month name
+      const yearNear = text.match(new RegExp(nomlMatch[0] + "[\\s\\S]{0,100}?(\\d{4})", "i"));
+      if (yearNear) {
+        const year = resolveYear(yearNear[1]);
+        if (year) return { month, year };
+      }
+    }
+  }
+
   // 1) "MENS DD MON YY a DD MON YY" — payroll software period line
   const mensPattern = /MENS\s+\d{1,2}\s+(\w{3,})\s+(\d{2,4})\s+a\s+\d{1,2}\s+(\w{3,})\s+(\d{2,4})/i;
   const mensMatch = text.match(mensPattern);
@@ -231,8 +358,11 @@ function extractPeriod(text: string): { month: number | null; year: number | nul
 // ─── Company extraction ─────────────────────────────────────────
 
 function extractCompany(text: string): string | null {
+  // Type 2 public-sector payslips have no company name — skip expensive patterns
+  if (detectFormat(text) === "type2") return null;
+
   // Pattern 1: Line after "NIF." containing company name (common payroll software)
-  const nifBlock = /NIF\.?\s*[A-Z]?\d{7,8}[A-Z]?[\s\S]{0,200}?\n\s*([A-Z][A-Z0-9\s,\.]{2,60}(?:SL|SA|SLU|SAU|SLL|COOP|SCL))\b/i;
+  const nifBlock = /NIF\.?\s*[A-Z]?\d{7,8}[A-Z]?[\s\S]{0,200}?\n\s*\[?([A-Z][A-Z0-9\s,\.]{2,60}(?:SL|SA|SLU|SAU|SLL|COOP|SCL))\b/i;
   const nifMatch = text.match(nifBlock);
   if (nifMatch) return nifMatch[1].trim();
 
@@ -244,16 +374,35 @@ function extractCompany(text: string): string | null {
     const m = text.match(pat);
     if (m) {
       const company = m[1].trim().split(/\s{3,}/)[0].trim();
-      if (company.length > 2 && company.length < 100) return company;
+      if (
+        company.length > 2
+        && company.length < 100
+        && /[A-Za-zÀ-ÿ]/.test(company)
+        && !/\bRECIBI\b/i.test(company)
+        && !/^(?:FECHA\s+SELLO\s+EMPRESA|COSTE\s+EMPRESA)\b/i.test(company)
+      ) {
+        return company;
+      }
     }
   }
 
   // Pattern 3: Look for "SL", "SA" etc. on a line by itself or with a name
-  const slPattern = /^\s{2,}([A-Z][A-Z0-9\s,\.]{2,60}(?:SL|SA|SLU|SAU|SLL)\b)/m;
+  const slPattern = /^\s*\[?([A-Z][A-Z0-9\s,\.]{2,60}(?:SL|SA|SLU|SAU|SLL)\b)/m;
   const slMatch = text.match(slPattern);
   if (slMatch) return slMatch[1].trim();
 
   return null;
+}
+
+function sanitizeCompanyCandidate(company: string | null): string | null {
+  if (!company) return null;
+
+  const normalized = company.replace(/\s+/g, " ").trim();
+  if (normalized.length < 3 || normalized.length > 100) return null;
+  if (!/[A-Za-zÀ-ÿ]/.test(normalized)) return null;
+  if (/\b(?:RECIBI|FECHA|SELLO|COSTE|LIQUIDO|PERCIBIR)\b/i.test(normalized)) return null;
+
+  return normalized;
 }
 
 // ─── Concept line detection ─────────────────────────────────────
@@ -266,19 +415,115 @@ function extractCompany(text: string): string | null {
  */
 function isConceptLine(line: string): boolean {
   // Must contain at least one amount
-  if (!/\d{1,3}(?:\.\d{3})*,\d{2}/.test(line)) return false;
-  // Must have a concept code (1-3 digit number) followed by text
-  if (/\d{1,3}\s+\*?\s*[A-Za-zÀ-ÿ]/.test(line)) return true;
-  // Or starts with spaces + code
-  if (/^\s+\d{1,3}\s+/.test(line)) return true;
+  if (findAllAmounts(line).length === 0) return false;
+  // Standard code + text, allowing OCR-inserted separators
+  if (/(?:^|[^\d])\d{1,3}\s*\|?\s*\*?\s*[A-Za-zÀ-ÿ]/.test(line)) return true;
+  // Some OCR outputs preserve the asterisk marker but mangle the code column
+  if (/\*\s*[A-Za-zÀ-ÿ]/.test(line)) return true;
+  // APG OCR often loses the header but keeps recognizable concept words
+  if (/(salario|convenio|absorbible|poliza|catering|abono|d(?:cto|eto|ceto)|concept|cotizaci[oó]n|tributaci[oó]n|irpf)/i.test(line)) return true;
   return false;
 }
 
-// ─── Main parser ────────────────────────────────────────────────
+function isType1ConceptHeader(line: string): boolean {
+  return /CONCEPTO\s*DEVENGOS\s*DEDUCCIONES/i.test(line)
+    || /(?:CANT|CUANT).*(?:PREC|PRE[Cc]O).*(?:DEVEN|PEVENC).*(?:DEDUC|NENCCO)/i.test(line);
+}
+
+function isType1NetLabel(line: string): boolean {
+  return /L[IÍ]Q[UÜ]I?D[O0]\s*A\s*PERCI?BIR/i.test(line);
+}
+
+function isType1FooterLine(line: string): boolean {
+  return isType1NetLabel(line)
+    || /\bIBAN\b/i.test(line)
+    || /\bSWIFT\/?BIC\b/i.test(line)
+    || /COSTE\s*EMPRESA/i.test(line)
+    || /CONCEPTO\s+BASE\s+TIPO/i.test(line)
+    || /DETERMINACI[OÓ]N\s*(?:DE\s*)?(?:LAS?\s*)?B/i.test(line);
+}
+
+function extractType1ConceptCode(line: string): number {
+  const codeBeforeMarker = line.match(/(?:^|\s)(\d{1,3})\s*\|?\s*\*\s*[A-Za-zÀ-ÿ]/);
+  if (codeBeforeMarker) return parseInt(codeBeforeMarker[1], 10);
+
+  const leadingCode = line.match(/^\s*(\d{1,3})\s*\|?\s*\*?\s*[A-Za-zÀ-ÿ]/);
+  if (leadingCode) return parseInt(leadingCode[1], 10);
+
+  const inlineCode = line.match(/(?:^|\s)(\d{1,3})\s*\|?\s*\*?\s*[A-Za-zÀ-ÿ]/);
+  if (inlineCode) return parseInt(inlineCode[1], 10);
+
+  return -1;
+}
+
+function isType1DeductionName(name: string): boolean {
+  return TYPE1_DEDUCTION_NAMES.has(name);
+}
+
+function extractType1ContributionBase(text: string): number | null {
+  for (const line of text.split("\n")) {
+    if (!/contingencias?\s+comunes?/i.test(line)) continue;
+    const amounts = findAllAmounts(line);
+    if (amounts.length >= 3) {
+      return amounts[0];
+    }
+  }
+
+  return null;
+}
+
+// ─── Payslip type detection ─────────────────────────────────────
+
+/**
+ * Patterns that indicate the payslip IS a paga extra (not just a concept line).
+ * We look for header-level indicators and exclude concept-line false positives
+ * like "PRORRATA PAGA EXTRA" or "P. EXTRA JUNIO" which appear in regular payslips.
+ */
+const EXTRA_TITLE_PATTERNS = [
+  /gratificaci[oó]n\s*(extra|extraordinaria)/i,
+  /n[oó]mina\s+(de\s+)?paga\s*extra/i,
+  /tipo\s*de\s*n[oó]mina\s*:?\s*extra/i,
+];
+
+/** Concept-line patterns that should NOT trigger detection on their own */
+const EXTRA_CONCEPT_EXCLUSIONS = [
+  /prorrat/i,         // "PRORRATA PAGA EXTRA"
+  /^\s*\d{1,3}\s+/,  // line starting with a concept code number
+  /p\.?\s*p\.?\s*extras?/i,
+  /rem\.\s*total/i,
+];
+
+export function detectPayslipType(rawText: string): "ordinal" | "extra" {
+  // Strong title-level match → always extra
+  if (EXTRA_TITLE_PATTERNS.some((re) => re.test(rawText))) return "extra";
+
+  // Check each line containing "paga extra" or "P. EXTRA"
+  const weakPattern = /paga\s*extra|P\.?\s*EXTRA/i;
+  const lines = rawText.split(/\r?\n/);
+  for (const line of lines) {
+    if (!weakPattern.test(line)) continue;
+    // Skip if it looks like a concept line (prorated, or starts with code number)
+    if (EXTRA_CONCEPT_EXCLUSIONS.some((re) => re.test(line))) continue;
+    return "extra";
+  }
+
+  return "ordinal";
+}
+
+// ─── Main parser (dispatcher) ───────────────────────────────────
 
 export function matchConcepts(rawText: string): ParsedPayslip {
-  // Step 1: Rejoin numbers split across line breaks
-  const text = rejoinSplitNumbers(rawText.replace(/\r\n/g, "\n"));
+  const format = detectFormat(rawText);
+  return format === "type2"
+    ? matchConceptsType2(rawText)
+    : matchConceptsType1(rawText);
+}
+
+// ─── Type 1 parser (private company) ────────────────────────────
+
+function matchConceptsType1(rawText: string): ParsedPayslip {
+  // Step 1: Rejoin numbers split across line breaks and strip OCR pipe chars (table borders)
+  const text = rejoinSplitNumbers(rawText.replace(/\r\n/g, "\n")).replace(/\|/g, " ");
   const lines = text.split("\n");
 
   const concepts: ParsedConcept[] = [];
@@ -286,6 +531,8 @@ export function matchConcepts(rawText: string): ParsedPayslip {
   let netSalary: number | null = null;
   let totalDeductions: number | null = null;
   let inConceptsSection = false;
+  let reachedTotalsSection = false;
+  const deductionRates = new Map<string, number>();
 
   // Detect concepts section by looking for the header
   for (let i = 0; i < lines.length; i++) {
@@ -294,25 +541,40 @@ export function matchConcepts(rawText: string): ParsedPayslip {
     if (!trimmed) continue;
 
     // Detect start of concepts section
-    if (/CONCEPTO\s*DEVENGOS\s*DEDUCCIONES/i.test(trimmed)) {
+    if (isType1ConceptHeader(trimmed)) {
       inConceptsSection = true;
       continue;
     }
 
+    // Auto-detect concept section start: line with code + asterisk + name + amount
+    // This catches OCR-mangled headers where "CONCEPTO DEVENGOS DEDUCCIONES" is unreadable
+    if (!inConceptsSection && /\b\d{1,3}\s+\*\s*[A-Za-z\xC0-\xFF]/.test(trimmed) && /\d{1,3}(?:\.\d{3})*,\d{2}/.test(trimmed)) {
+      inConceptsSection = true;
+      // Don't continue — this line itself is a concept to parse
+    }
+
     // Detect end of concepts section (totals row)
-    if (/T\.\s*DEVENGADO/i.test(trimmed) || /BASE\s*S\.?\s*S\.?/i.test(trimmed)) {
+    if (
+      /T[.\-]\s*DEVENGADO/i.test(trimmed)
+      || /BASE\s*S\.?\s*S\.?/i.test(trimmed)
+      || isType1FooterLine(trimmed)
+    ) {
       inConceptsSection = false;
+      reachedTotalsSection = true;
     }
 
     // ─── Parse concept lines ──────────────────────────────────
-    if (inConceptsSection && /\d{1,3}(?:\.\d{3})*,\d{2}/.test(trimmed)) {
+    const looksLikeConcept = isConceptLine(trimmed);
+
+    if (!reachedTotalsSection && (inConceptsSection || looksLikeConcept)) {
+      if (!looksLikeConcept) continue;
+
       const amounts = findAllAmounts(trimmed);
       const lastAmount = amounts.length > 0 ? amounts[amounts.length - 1] : null;
 
       if (lastAmount !== null && lastAmount > 0) {
         // Extract concept code (1-3 digit number before the concept name)
-        const codeMatch = trimmed.match(/\b(\d{1,3})\s+[\*A-Za-zÀ-ÿ]/);
-        const code = codeMatch ? parseInt(codeMatch[1]) : -1;
+        const code = extractType1ConceptCode(trimmed);
 
         // Try to match a friendly name from NAME_PATTERNS
         let conceptName: string | null = null;
@@ -336,8 +598,17 @@ export function matchConcepts(rawText: string): ParsedPayslip {
         let category: "devengo" | "deduccion";
         if (DEVENGO_NAMES.includes(conceptName)) {
           category = "devengo";
+        } else if (isType1DeductionName(conceptName)) {
+          category = "deduccion";
         } else {
           category = code >= 700 ? "deduccion" : "devengo";
+        }
+
+        if (category === "deduccion" && amounts.length >= 2) {
+          const rateCandidate = amounts[0];
+          if (rateCandidate > 0 && rateCandidate <= 50) {
+            deductionRates.set(conceptName, rateCandidate);
+          }
         }
 
         if (!concepts.some((c) => c.name === conceptName && c.amount === lastAmount)) {
@@ -348,7 +619,7 @@ export function matchConcepts(rawText: string): ParsedPayslip {
 
     // ─── Extract totals ──────────────────────────────────────
     // "LIQUIDO A PERCIBIR" — net salary (most reliable, extract first)
-    if (/L[IÍ]QUIDO\s*A\s*PERCIBIR/i.test(trimmed)) {
+    if (isType1NetLabel(trimmed)) {
       const searchBlock = lines.slice(i, Math.min(i + 3, lines.length)).join(" ");
       const blockAmounts = findAllAmounts(searchBlock);
       if (blockAmounts.length > 0) {
@@ -404,8 +675,55 @@ export function matchConcepts(rawText: string): ParsedPayslip {
     }
   }
 
+  // ─── Fallback pass: NAME_PATTERNS matching when section detection failed ──
+  if (concepts.length === 0) {
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (!trimmed) continue;
+
+      // Stop at bottom sections
+      if (/DETERMINACI[O\xD3]N|CONCEPTO\s+BASE\s+TIPO/i.test(trimmed)) break;
+      if (/IBAN|SWIFT|COSTE\s*EMPRESA/i.test(trimmed)) continue;
+      if (/LIQUIDO\s*A\s*PERCIBIR/i.test(trimmed)) continue;
+
+      if (!/\d{1,3}(?:\.\d{3})*,\d{2}/.test(trimmed)) continue;
+
+      // Must match a known concept name
+      let matchedName: string | null = null;
+      for (const { regex, name } of NAME_PATTERNS) {
+        if (regex.test(trimmed)) {
+          matchedName = name;
+          break;
+        }
+      }
+      if (!matchedName) continue;
+
+      const amounts = findAllAmounts(trimmed);
+      const lastAmount = amounts.length > 0 ? amounts[amounts.length - 1] : null;
+      if (lastAmount === null || lastAmount <= 0) continue;
+
+      const code = extractType1ConceptCode(trimmed);
+
+      const DEVENGO_NAMES = ["Paga Extra", "Gratificación", "Bonus/Prima"];
+      const category: "devengo" | "deduccion" = DEVENGO_NAMES.includes(matchedName)
+        ? "devengo"
+        : isType1DeductionName(matchedName) || code >= 700 ? "deduccion" : "devengo";
+
+      if (category === "deduccion" && amounts.length >= 2) {
+        const rateCandidate = amounts[0];
+        if (rateCandidate > 0 && rateCandidate <= 50) {
+          deductionRates.set(matchedName, rateCandidate);
+        }
+      }
+
+      if (!concepts.some((c) => c.name === matchedName && c.amount === lastAmount)) {
+        concepts.push({ category, name: matchedName, amount: lastAmount, isPercentage: false });
+      }
+    }
+  }
+
   const period = extractPeriod(text);
-  const company = extractCompany(text);
+  const company = sanitizeCompanyCandidate(extractCompany(text));
 
   // ─── Fallbacks ──────────────────────────────────────────────
 
@@ -414,22 +732,321 @@ export function matchConcepts(rawText: string): ParsedPayslip {
   if (grossSalary === null && concepts.length > 0) {
     const devengos = concepts.filter((c) => c.category === "devengo");
     if (devengos.length > 0) {
-      grossSalary = Math.round(devengos.reduce((s, c) => s + c.amount, 0) * 100) / 100;
+      grossSalary = roundCurrency(devengos.reduce((s, c) => s + c.amount, 0));
+    }
+  }
+
+  const contributionBase = extractType1ContributionBase(text);
+  if (contributionBase !== null) {
+    for (const concept of concepts) {
+      if (!TYPE1_RATE_BASED_DEDUCTIONS.has(concept.name)) continue;
+
+      const rate = deductionRates.get(concept.name);
+      if (rate === undefined) continue;
+
+      const expectedAmount = roundCurrency((contributionBase * rate) / 100);
+      if (Math.abs(expectedAmount - concept.amount) <= 0.05) {
+        concept.amount = expectedAmount;
+      }
+    }
+
+    const currentDevengos = concepts.filter((concept) => concept.category === "devengo");
+    const currentGross = roundCurrency(currentDevengos.reduce((sum, concept) => sum + concept.amount, 0));
+    const grossDiff = roundCurrency(contributionBase - currentGross);
+
+    if (
+      grossSalary === null
+      || Math.abs(grossSalary - contributionBase) <= 1
+      || Math.abs(grossDiff) <= 1
+    ) {
+      grossSalary = contributionBase;
+    }
+
+    if (Math.abs(grossDiff) > 0 && Math.abs(grossDiff) <= 0.5) {
+      const salaryBaseConcept = concepts.find((concept) => concept.category === "devengo" && concept.name === "Salario Base");
+      if (salaryBaseConcept) {
+        salaryBaseConcept.amount = roundCurrency(salaryBaseConcept.amount + grossDiff);
+      }
     }
   }
 
   // Net = check LIQUIDO first, then gross - deductions
   if (netSalary === null && grossSalary !== null && totalDeductions !== null) {
-    netSalary = Math.round((grossSalary - totalDeductions) * 100) / 100;
+    netSalary = roundCurrency(grossSalary - totalDeductions);
   }
   if (netSalary === null && grossSalary !== null && concepts.length > 0) {
     const deducciones = concepts.filter((c) => c.category === "deduccion");
     if (deducciones.length > 0) {
-      netSalary = Math.round((grossSalary - deducciones.reduce((s, c) => s + c.amount, 0)) * 100) / 100;
+      netSalary = roundCurrency(grossSalary - deducciones.reduce((s, c) => s + c.amount, 0));
     } else {
       netSalary = grossSalary;
     }
   }
+
+  return {
+    periodMonth: period.month,
+    periodYear: period.year,
+    company,
+    grossSalary,
+    netSalary,
+    concepts,
+    rawText,
+  };
+}
+
+// ─── Type 2 parser (public sector) ──────────────────────────────
+
+/** Resolve a friendly concept name from NAME_PATTERNS, or title-case as fallback */
+function resolveConceptName(raw: string): string {
+  for (const { regex, name } of NAME_PATTERNS) {
+    if (regex.test(raw)) return name;
+  }
+  return raw
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .split(" ")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+/**
+ * Collapse multi-line vertical borders in the raw PDF text so that each
+ * original table row ends up as a single │-separated line.
+ * Then strip remaining horizontal box-drawing characters.
+ */
+function preprocessType2Text(rawText: string): string {
+  let text = rawText.replace(/\r\n/g, "\n");
+  // Collapse vertical border runs: consecutive │ separated by line breaks
+  text = text.replace(/│\n│\n│\n/g, "│");
+  text = text.replace(/│\n│\n/g, "│");
+  // Strip horizontal box-drawing characters (borders/corners)
+  text = text.replace(/[├┤┌┐└┘┬┴┼─═║╔╗╚╝╠╣╦╩╬]/g, " ");
+  return text;
+}
+
+/**
+ * Walk through │-separated cells of the concept table section and
+ * produce one logical line per concept (e.g. "1  SUELDO BASE  553,43").
+ */
+function rebuildConceptLines(cells: string[]): string[] {
+  const lines: string[] = [];
+  let current = "";
+  let hasConceptName = false;
+  const AMOUNT_RE = /^\d{1,3}(?:\.\d{3})*,\d{2}$/;
+
+  for (const raw of cells) {
+    const cell = raw.trim();
+    if (!cell) continue;
+
+    // Skip continuation markers
+    if (/^CONTINU/i.test(cell)) continue;
+
+    const isPeriodDigit = /^\d$/.test(cell);
+    const isConceptName =
+      /^[A-ZÀ-Ÿ]/.test(cell) &&
+      cell.length >= 3 &&
+      !AMOUNT_RE.test(cell) &&
+      cell !== "%";
+
+    if (isPeriodDigit && hasConceptName) {
+      // New period digit when we already have a concept → flush row
+      lines.push(current.trim());
+      current = cell;
+      hasConceptName = false;
+    } else if (isConceptName && hasConceptName) {
+      // New concept name when we already have one → flush row
+      lines.push(current.trim());
+      current = cell;
+      hasConceptName = true;
+    } else {
+      current += (current ? "  " : "") + cell;
+      if (isConceptName) hasConceptName = true;
+    }
+  }
+  if (current.trim()) lines.push(current.trim());
+  return lines;
+}
+
+/**
+ * Parse a single reconstructed concept line from a Type 2 payslip.
+ * Pushes extracted concepts into the `concepts` array.
+ */
+function parseConceptLineType2(line: string, concepts: ParsedConcept[]): void {
+  const amounts = findAllAmounts(line);
+  if (amounts.length === 0) return;
+
+  const hasPeriodPrefix = /^\d\s/.test(line);
+
+  // ── Extract concept name ─────────────────────────────────
+  let nameStr = line;
+  if (hasPeriodPrefix) nameStr = nameStr.replace(/^\d\s+/, "");
+  // Extract and strip AT.XXX.YY suffix (atrasos)
+  let atSuffix = "";
+  const atMatch = nameStr.match(/\s+AT\.(\w{3}\.\d{2})/i);
+  if (atMatch) {
+    atSuffix = ` (Atraso ${atMatch[1]})`;
+    nameStr = nameStr.replace(/\s+AT\.\w{3}\.\d{2}/i, "");
+  }
+  // Remove amounts and %
+  nameStr = nameStr
+    .replace(/\d{1,3}(?:\.\d{3})*,\d{2}/g, "")
+    .replace(/%/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (!nameStr || nameStr.length < 2) return;
+
+  // ── Classify ─────────────────────────────────────────────
+  const isExtra = /EXTRA\s*[−\-]/i.test(nameStr);
+  const isDeduction = isType2DeductionName(nameStr);
+
+  // In type 2 payslips, earlier numeric cells are usually quantity/base/price.
+  // The rightmost monetary cell is the actual amount to persist.
+  const amount = amounts[amounts.length - 1];
+  const category: "devengo" | "deduccion" = isDeduction ? "deduccion" : "devengo";
+
+  // ── Resolve friendly name ────────────────────────────────
+  let conceptName: string;
+  if (isExtra) {
+    const baseName = nameStr.replace(/EXTRA\s*[−\-]\s*/i, "").trim();
+    conceptName = "Paga Extra - " + resolveConceptName(baseName);
+  } else {
+    conceptName = resolveConceptName(nameStr);
+  }
+  conceptName += atSuffix;
+
+  if (amount > 0 && !concepts.some((c) => c.name === conceptName && c.amount === amount)) {
+    concepts.push({ category, name: conceptName, amount, isPercentage: false });
+  }
+}
+
+function sumConceptAmounts(concepts: ParsedConcept[], category: ParsedConcept["category"]): number {
+  return Math.round(
+    concepts
+      .filter((concept) => concept.category === category)
+      .reduce((sum, concept) => sum + concept.amount, 0) * 100,
+  ) / 100;
+}
+
+function extractType2SummaryTotals(
+  lines: string[],
+  netSalary: number | null,
+): { grossSalary: number | null; totalDeductions: number | null } {
+  for (let index = 0; index < lines.length; index += 1) {
+    const stripped = lines[index].replace(/│/g, " ").trim();
+    if (!/Remuneraci[oó]n/i.test(stripped) || !/Devengado/i.test(stripped) || !/Deducciones/i.test(stripped)) {
+      continue;
+    }
+
+    const searchBlock = lines
+      .slice(index, Math.min(index + 6, lines.length))
+      .map((candidate) => candidate.replace(/│/g, " ").replace(/\s+/g, " ").trim())
+      .join(" ");
+    const amounts = findAllAmounts(searchBlock);
+
+    if (amounts.length === 0) {
+      continue;
+    }
+
+    if (netSalary !== null) {
+      for (const grossCandidate of amounts) {
+        for (const deductionCandidate of amounts) {
+          if (grossCandidate <= deductionCandidate) continue;
+          if (Math.abs(grossCandidate - deductionCandidate - netSalary) < 1) {
+            return { grossSalary: grossCandidate, totalDeductions: deductionCandidate };
+          }
+        }
+      }
+    }
+
+    const sorted = [...amounts].sort((left, right) => right - left);
+    return {
+      grossSalary: sorted[0] ?? null,
+      totalDeductions: sorted[1] ?? null,
+    };
+  }
+
+  return { grossSalary: null, totalDeductions: null };
+}
+
+function matchConceptsType2(rawText: string): ParsedPayslip {
+  const preprocessed = preprocessType2Text(rawText);
+  const lines = preprocessed.split("\n");
+  const concepts: ParsedConcept[] = [];
+  let grossSalary: number | null = null;
+  let netSalary: number | null = null;
+  let totalDeductions: number | null = null;
+
+  // ── 1. Find concept section(s) and totals in the │-separated text ──
+  // Concept table starts after "Concepto│...│A deducir│" header
+  // and ends at "Remuneración│Prorr.│..."
+  let conceptCells: string[] = [];
+  let inConcepts = false;
+
+  for (const line of lines) {
+    const stripped = line.replace(/│/g, " ").trim();
+
+    // Detect concept section header
+    if (/Concepto/.test(line) && /Devengado|A\s*deducir/.test(line)) {
+      inConcepts = true;
+      continue;
+    }
+
+    // Detect end of concept section (totals row)
+    if (/Remuneraci[oó]n/i.test(stripped) && /prorr|pagas?\s*extra/i.test(stripped)) {
+      inConcepts = false;
+      continue;
+    }
+
+    // Líquido → net salary
+    if (/L[ií]quido/i.test(stripped)) {
+      const amt = extractLastAmount(stripped);
+      if (amt !== null) netSalary = amt;
+    }
+
+    // Accumulate concept cells
+    if (inConcepts && line.includes("│")) {
+      const cells = line.split("│");
+      conceptCells.push(...cells);
+    }
+  }
+
+  // ── 2. Rebuild logical concept lines from cells ──────────
+  const conceptLines = rebuildConceptLines(conceptCells);
+  for (const cl of conceptLines) {
+    parseConceptLineType2(cl, concepts);
+  }
+
+  // ── 3. Extract totals ────────────────────────────────────
+  const summaryTotals = extractType2SummaryTotals(lines, netSalary);
+  grossSalary = summaryTotals.grossSalary;
+  totalDeductions = summaryTotals.totalDeductions;
+
+  // ── 4. Fallbacks ─────────────────────────────────────────
+  const totalDevengos = sumConceptAmounts(concepts, "devengo");
+  const totalConceptDeductions = sumConceptAmounts(concepts, "deduccion");
+  const conceptNetSalary = Math.round((totalDevengos - totalConceptDeductions) * 100) / 100;
+
+  if (
+    totalDevengos > 0 &&
+    (grossSalary === null || grossSalary <= 0 || (netSalary !== null && Math.abs(conceptNetSalary - netSalary) < 1 && Math.abs(grossSalary - totalDevengos) > 1))
+  ) {
+    grossSalary = totalDevengos;
+  }
+
+  if (netSalary === null && grossSalary !== null) {
+    const resolvedDeductions = totalDeductions ?? totalConceptDeductions;
+    if (resolvedDeductions > 0) {
+      netSalary = Math.round((grossSalary - resolvedDeductions) * 100) / 100;
+    } else {
+      netSalary = grossSalary;
+    }
+  }
+
+  // Period and company use the cleaned (box-stripped) text
+  const cleanedForMeta = stripBoxDrawingChars(rawText.replace(/\r\n/g, "\n"));
+  const period = extractPeriod(cleanedForMeta);
+  const company = sanitizeCompanyCandidate(extractCompany(cleanedForMeta));
 
   return {
     periodMonth: period.month,

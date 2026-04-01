@@ -12,11 +12,13 @@ import {
   deletePayslip,
   reprocessPayslip,
   updatePayslipConcepts,
+  updatePayslipType,
   exportData,
   type Payslip,
   type PayslipConcept,
 } from "../lib/api";
 import { Providers } from "./Providers";
+import { formatCurrency } from "../lib/format";
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   pending: { label: "Procesando", cls: "bg-accent-50 text-accent-700" },
@@ -24,13 +26,6 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   error: { label: "Error", cls: "bg-danger-50 text-danger-700" },
   review: { label: "Revisar", cls: "bg-accent-50 text-accent-700" },
 };
-
-function formatCurrency(n: number | null): string {
-  if (n == null) return "—";
-  return new Intl.NumberFormat("es-ES", {
-    style: "currency", currency: "EUR", minimumFractionDigits: 2,
-  }).format(n);
-}
 
 function formatPeriod(m: number | null, y: number | null): string {
   if (!m || !y) return "Sin fecha";
@@ -51,22 +46,35 @@ function PayslipsList() {
   const [searchFilter, setSearchFilter] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [monthFilter, setMonthFilter] = useState<string>("");
+  const [typeFilter, setTypeFilter] = useState<string>("");
   const [sortField, setSortField] = useState<"period" | "gross" | "net">("period");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(1);
 
   const profileId = selectedProfile ?? profiles[0]?.id;
 
-  const { data: payslips = [], isLoading } = useQuery({
-    queryKey: ["payslips", profileId, yearFilter, searchFilter],
+  const { data: payslipsData, isLoading } = useQuery({
+    queryKey: ["payslips", profileId, yearFilter, searchFilter, statusFilter, typeFilter, page],
     queryFn: () =>
-      getPayslips(profileId, yearFilter ? Number(yearFilter) : undefined, searchFilter || undefined),
+      getPayslips({
+        profileId,
+        year: yearFilter ? Number(yearFilter) : undefined,
+        search: searchFilter || undefined,
+        status: statusFilter || undefined,
+        type: (typeFilter as "ordinal" | "extra") || undefined,
+        page,
+        limit: 20,
+      }),
     enabled: !!profileId,
   });
 
-  // Client-side filters for month and status (already fetched)
+  const payslips = payslipsData?.data ?? [];
+  const totalPayslips = payslipsData?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalPayslips / 20));
+
+  // Client-side filters for month (status is now server-side)
   const filteredPayslips = payslips
     .filter((p) => {
-      if (statusFilter && p.parsingStatus !== statusFilter) return false;
       if (monthFilter && p.periodMonth !== Number(monthFilter)) return false;
       return true;
     })
@@ -160,7 +168,7 @@ function PayslipsList() {
           {profiles.map((p) => (
             <button
               key={p.id}
-              onClick={() => { setSelectedProfile(p.id); setSelectedPayslip(null); }}
+              onClick={() => { setSelectedProfile(p.id); setSelectedPayslip(null); setPage(1); }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer ${
                 profileId === p.id
                   ? "bg-white shadow-card border border-surface-200 text-surface-900"
@@ -185,7 +193,7 @@ function PayslipsList() {
             type="text"
             placeholder="Buscar por archivo o empresa..."
             value={searchFilter}
-            onChange={(e) => setSearchFilter(e.target.value)}
+            onChange={(e) => { setSearchFilter(e.target.value); setPage(1); }}
             className="input text-xs pl-9 py-2"
           />
         </div>
@@ -194,7 +202,7 @@ function PayslipsList() {
           <div className="relative">
             <select
               value={yearFilter}
-              onChange={(e) => setYearFilter(e.target.value)}
+              onChange={(e) => { setYearFilter(e.target.value); setPage(1); }}
               className="input text-xs pr-8 py-2 appearance-none cursor-pointer w-auto"
             >
               <option value="">Año</option>
@@ -223,7 +231,7 @@ function PayslipsList() {
         <div className="relative">
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
             className="input text-xs pr-8 py-2 appearance-none cursor-pointer w-auto"
           >
             <option value="">Estado</option>
@@ -231,6 +239,19 @@ function PayslipsList() {
             <option value="pending">Procesando</option>
             <option value="review">Revisar</option>
             <option value="error">Error</option>
+          </select>
+          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400 pointer-events-none" />
+        </div>
+
+        <div className="relative">
+          <select
+            value={typeFilter}
+            onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
+            className="input text-xs pr-8 py-2 appearance-none cursor-pointer w-auto"
+          >
+            <option value="">Tipo</option>
+            <option value="ordinal">Mensual</option>
+            <option value="extra">Paga Extra</option>
           </select>
           <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400 pointer-events-none" />
         </div>
@@ -254,9 +275,9 @@ function PayslipsList() {
           {sortDir === "asc" ? "↑" : "↓"}
         </button>
 
-        {(searchFilter || yearFilter || monthFilter || statusFilter) && (
+        {(searchFilter || yearFilter || monthFilter || statusFilter || typeFilter) && (
           <button
-            onClick={() => { setSearchFilter(""); setYearFilter(""); setMonthFilter(""); setStatusFilter(""); }}
+            onClick={() => { setSearchFilter(""); setYearFilter(""); setMonthFilter(""); setStatusFilter(""); setTypeFilter(""); setPage(1); }}
             className="btn-ghost text-xs py-2 px-3 text-danger-600 hover:bg-danger-50"
           >
             <X className="w-3 h-3" /> Limpiar
@@ -341,6 +362,9 @@ function PayslipsList() {
                   >
                     <td className="px-5 py-3.5">
                       <span className="text-sm font-semibold text-surface-900">{formatPeriod(p.periodMonth, p.periodYear)}</span>
+                      {p.payslipType === "extra" && (
+                        <span className="ml-2 badge bg-accent-50 text-accent-700 text-[10px]">Extra</span>
+                      )}
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2">
@@ -358,6 +382,34 @@ function PayslipsList() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 text-sm">
+          <p className="text-surface-500 text-xs">
+            {totalPayslips} nómina{totalPayslips !== 1 ? "s" : ""} en total
+          </p>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="btn-ghost text-xs px-2 py-1 disabled:opacity-30"
+            >
+              Anterior
+            </button>
+            <span className="text-xs text-surface-600 px-2">
+              {page} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="btn-ghost text-xs px-2 py-1 disabled:opacity-30"
+            >
+              Siguiente
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -402,6 +454,14 @@ function PayslipDetail({
       }),
     onSuccess: () => {
       setEditing(false);
+      queryClient.invalidateQueries({ queryKey: ["payslip", payslip.id] });
+      queryClient.invalidateQueries({ queryKey: ["payslips"] });
+    },
+  });
+
+  const typeMut = useMutation({
+    mutationFn: (type: "ordinal" | "extra") => updatePayslipType(payslip.id, type),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payslip", payslip.id] });
       queryClient.invalidateQueries({ queryKey: ["payslips"] });
     },
@@ -458,6 +518,14 @@ function PayslipDetail({
                     ? `${payslip.periodMonth}/${payslip.periodYear}`
                     : "Sin fecha"}
                 </span>
+                <button
+                  onClick={() => typeMut.mutate(payslip.payslipType === "extra" ? "ordinal" : "extra")}
+                  disabled={typeMut.isPending}
+                  className={`badge text-[10px] cursor-pointer transition-colors ${payslip.payslipType === "extra" ? "bg-accent-50 text-accent-700 hover:bg-accent-100" : "bg-surface-100 text-surface-500 hover:bg-surface-200"}`}
+                  title="Haz clic para cambiar el tipo"
+                >
+                  {payslip.payslipType === "extra" ? "Paga Extra" : "Mensual"}
+                </button>
               </div>
             </div>
           </div>

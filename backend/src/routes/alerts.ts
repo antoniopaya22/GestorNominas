@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "../db/index.js";
 import { alertRules, alertHistory } from "../db/schema.js";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";
 
 export const alertsRouter = Router();
@@ -14,9 +14,12 @@ const ruleSchema = z.object({
 });
 
 // List alert rules
-alertsRouter.get("/rules", async (_req, res, next) => {
+alertsRouter.get("/rules", async (req, res, next) => {
   try {
-    const rules = await db.select().from(alertRules).orderBy(desc(alertRules.createdAt));
+    const { userId } = req.user!;
+    const rules = await db.select().from(alertRules)
+      .where(eq(alertRules.userId, userId))
+      .orderBy(desc(alertRules.createdAt));
     res.json(rules.map((r) => ({ ...r, config: JSON.parse(r.config) })));
   } catch (err) {
     next(err);
@@ -26,12 +29,13 @@ alertsRouter.get("/rules", async (_req, res, next) => {
 // Create alert rule
 alertsRouter.post("/rules", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const parsed = ruleSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
     const [rule] = await db
       .insert(alertRules)
-      .values({ ...parsed.data, config: JSON.stringify(parsed.data.config) })
+      .values({ ...parsed.data, config: JSON.stringify(parsed.data.config), userId })
       .returning();
     res.status(201).json({ ...rule, config: JSON.parse(rule.config) });
   } catch (err) {
@@ -42,6 +46,7 @@ alertsRouter.post("/rules", async (req, res, next) => {
 // Update alert rule
 alertsRouter.put("/rules/:id", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const id = Number(req.params.id);
     const parsed = ruleSchema.partial().safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
@@ -49,7 +54,9 @@ alertsRouter.put("/rules/:id", async (req, res, next) => {
     const data: Record<string, unknown> = { ...parsed.data };
     if (data.config) data.config = JSON.stringify(data.config);
 
-    const [updated] = await db.update(alertRules).set(data).where(eq(alertRules.id, id)).returning();
+    const [updated] = await db.update(alertRules).set(data)
+      .where(and(eq(alertRules.id, id), eq(alertRules.userId, userId)))
+      .returning();
     if (!updated) return res.status(404).json({ error: "Regla no encontrada" });
     res.json({ ...updated, config: JSON.parse(updated.config) });
   } catch (err) {
@@ -60,8 +67,11 @@ alertsRouter.put("/rules/:id", async (req, res, next) => {
 // Delete alert rule
 alertsRouter.delete("/rules/:id", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const id = Number(req.params.id);
-    const [deleted] = await db.delete(alertRules).where(eq(alertRules.id, id)).returning();
+    const [deleted] = await db.delete(alertRules)
+      .where(and(eq(alertRules.id, id), eq(alertRules.userId, userId)))
+      .returning();
     if (!deleted) return res.status(404).json({ error: "Regla no encontrada" });
     res.json({ ok: true });
   } catch (err) {

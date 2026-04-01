@@ -15,6 +15,9 @@ export const users = sqliteTable("users", {
 // ─── Profiles ───────────────────────────────────────────────────
 export const profiles = sqliteTable("profiles", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   color: text("color").notNull().default("#6366f1"),
   createdAt: text("created_at")
@@ -40,6 +43,11 @@ export const payslips = sqliteTable("payslips", {
   })
     .notNull()
     .default("pending"),
+  payslipType: text("payslip_type", {
+    enum: ["ordinal", "extra"],
+  })
+    .notNull()
+    .default("ordinal"),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(datetime('now'))`),
@@ -75,7 +83,10 @@ export const payslipNotes = sqliteTable("payslip_notes", {
 // ─── Tags (document organization) ──────────────────────────────
 export const tags = sqliteTable("tags", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull().unique(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
   color: text("color").notNull().default("#6366f1"),
 });
 
@@ -92,6 +103,9 @@ export const payslipTags = sqliteTable("payslip_tags", {
 // ─── Alert Rules (automation) ───────────────────────────────────
 export const alertRules = sqliteTable("alert_rules", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   type: text("type", {
     enum: ["salary_drop", "missing_payslip", "concept_change", "custom_threshold"],

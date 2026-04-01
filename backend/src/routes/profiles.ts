@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "../db/index.js";
 import { profiles } from "../db/schema.js";
-import { eq, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 
 export const profilesRouter = Router();
@@ -14,17 +14,20 @@ const profileSchema = z.object({
 // List all profiles (with optional pagination)
 profilesRouter.get("/", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
     const offset = (page - 1) * limit;
 
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)` })
-      .from(profiles);
+      .from(profiles)
+      .where(eq(profiles.userId, userId));
 
     const result = await db
       .select()
       .from(profiles)
+      .where(eq(profiles.userId, userId))
       .orderBy(profiles.name)
       .limit(limit)
       .offset(offset);
@@ -38,11 +41,12 @@ profilesRouter.get("/", async (req, res, next) => {
 // Get single profile
 profilesRouter.get("/:id", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const id = Number(req.params.id);
     const [profile] = await db
       .select()
       .from(profiles)
-      .where(eq(profiles.id, id));
+      .where(and(eq(profiles.id, id), eq(profiles.userId, userId)));
     if (!profile) return res.status(404).json({ error: "Perfil no encontrado" });
     res.json(profile);
   } catch (err) {
@@ -53,13 +57,14 @@ profilesRouter.get("/:id", async (req, res, next) => {
 // Create profile
 profilesRouter.post("/", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const parsed = profileSchema.safeParse(req.body);
     if (!parsed.success)
       return res.status(400).json({ error: parsed.error.flatten() });
 
     const [profile] = await db
       .insert(profiles)
-      .values(parsed.data)
+      .values({ ...parsed.data, userId })
       .returning();
     res.status(201).json(profile);
   } catch (err) {
@@ -70,6 +75,7 @@ profilesRouter.post("/", async (req, res, next) => {
 // Update profile
 profilesRouter.put("/:id", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const id = Number(req.params.id);
     const parsed = profileSchema.safeParse(req.body);
     if (!parsed.success)
@@ -78,7 +84,7 @@ profilesRouter.put("/:id", async (req, res, next) => {
     const [updated] = await db
       .update(profiles)
       .set(parsed.data)
-      .where(eq(profiles.id, id))
+      .where(and(eq(profiles.id, id), eq(profiles.userId, userId)))
       .returning();
     if (!updated) return res.status(404).json({ error: "Perfil no encontrado" });
     res.json(updated);
@@ -90,10 +96,11 @@ profilesRouter.put("/:id", async (req, res, next) => {
 // Delete profile
 profilesRouter.delete("/:id", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const id = Number(req.params.id);
     const [deleted] = await db
       .delete(profiles)
-      .where(eq(profiles.id, id))
+      .where(and(eq(profiles.id, id), eq(profiles.userId, userId)))
       .returning();
     if (!deleted) return res.status(404).json({ error: "Perfil no encontrado" });
     res.json({ ok: true });

@@ -103,8 +103,24 @@
   .dark .input {
     @apply bg-surface-800 border-surface-700 text-surface-100 placeholder:text-surface-500;
   }
+  .dark .btn-primary {
+    @apply bg-primary-500 hover:bg-primary-400;
+  }
   .dark .btn-secondary {
     @apply bg-surface-800 text-surface-200 hover:bg-surface-700;
+  }
+  .dark .btn-danger {
+    @apply text-danger-400;
+    background-color: rgb(127 29 29 / 0.3);
+  }
+  .dark .btn-danger:hover {
+    background-color: rgb(127 29 29 / 0.5);
+  }
+  .dark .btn-ghost {
+    @apply text-surface-300 hover:bg-surface-800;
+  }
+  .dark .badge {
+    @apply opacity-90;
   }
   .dark .skeleton {
     @apply bg-surface-700;

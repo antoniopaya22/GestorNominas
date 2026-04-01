@@ -12,9 +12,10 @@ const tagSchema = z.object({
 });
 
 // List all tags
-tagsRouter.get("/", async (_req, res, next) => {
+tagsRouter.get("/", async (req, res, next) => {
   try {
-    const allTags = await db.select().from(tags).orderBy(tags.name);
+    const { userId } = req.user!;
+    const allTags = await db.select().from(tags).where(eq(tags.userId, userId)).orderBy(tags.name);
     res.json(allTags);
   } catch (err) {
     next(err);
@@ -24,10 +25,11 @@ tagsRouter.get("/", async (_req, res, next) => {
 // Create tag
 tagsRouter.post("/", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const parsed = tagSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    const [tag] = await db.insert(tags).values(parsed.data).returning();
+    const [tag] = await db.insert(tags).values({ ...parsed.data, userId }).returning();
     res.status(201).json(tag);
   } catch (err) {
     next(err);
@@ -37,8 +39,9 @@ tagsRouter.post("/", async (req, res, next) => {
 // Delete tag
 tagsRouter.delete("/:id", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const id = Number(req.params.id);
-    const [deleted] = await db.delete(tags).where(eq(tags.id, id)).returning();
+    const [deleted] = await db.delete(tags).where(and(eq(tags.id, id), eq(tags.userId, userId))).returning();
     if (!deleted) return res.status(404).json({ error: "Etiqueta no encontrada" });
     res.json({ ok: true });
   } catch (err) {

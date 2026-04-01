@@ -11,8 +11,11 @@ const dbPath = resolve(__dirname, "../../", env.DATABASE_PATH);
 
 mkdirSync(dirname(dbPath), { recursive: true });
 
-const sqlite = new Database(dbPath);
+import type BetterSqlite3 from "better-sqlite3";
+
+const sqlite: BetterSqlite3.Database = new Database(dbPath);
 sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
 
+export { sqlite };
 export const db = drizzle(sqlite, { schema });

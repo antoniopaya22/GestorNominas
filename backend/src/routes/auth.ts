@@ -86,13 +86,12 @@ authRouter.post("/login", async (req, res, next) => {
 // Get current user
 authRouter.get("/me", authMiddleware, async (req, res, next) => {
   try {
-    const authReq = req as typeof req & { user: { userId: number } };
-    if (!authReq.user) return res.status(401).json({ error: "No autenticado" });
+    if (!req.user) return res.status(401).json({ error: "No autenticado" });
 
     const [user] = await db
       .select({ id: users.id, email: users.email, name: users.name, createdAt: users.createdAt })
       .from(users)
-      .where(eq(users.id, authReq.user.userId));
+      .where(eq(users.id, req.user.userId));
 
     if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
     res.json(user);

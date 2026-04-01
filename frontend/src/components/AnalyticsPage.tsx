@@ -13,34 +13,10 @@ import {
   type AnalyticsData, type Profile,
 } from "../lib/api";
 import { Providers } from "./Providers";
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat("es-ES", {
-    style: "currency", currency: "EUR", minimumFractionDigits: 2,
-  }).format(n);
-}
-
-function formatMonthLabel(m: string): string {
-  const names = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-  const [y, mo] = m.split("-");
-  return `${names[Number(mo) - 1]} ${y?.slice(2)}`;
-}
-
-function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-surface-900 text-white px-4 py-3 rounded-xl shadow-lg text-sm border border-surface-700">
-      <p className="font-semibold text-surface-300 mb-1.5">{label}</p>
-      {payload.map((entry, i) => (
-        <div key={i} className="flex items-center gap-2 py-0.5">
-          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
-          <span className="text-surface-400 min-w-[80px]">{entry.name}:</span>
-          <span className="font-mono font-semibold">{formatCurrency(entry.value)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
+import { formatCurrency, formatMonthLabel } from "../lib/format";
+import { ChartTooltip } from "./ui/ChartTooltip";
+import { ProfileSelector } from "./ui/ProfileSelector";
+import { EmptyState } from "./ui/EmptyState";
 
 const SEVERITY_STYLES = {
   info: "bg-primary-50 border-primary-200 text-primary-700",
@@ -53,6 +29,62 @@ const SEVERITY_ICONS = {
   warning: AlertTriangle,
   critical: AlertTriangle,
 } as const;
+
+type SalaryEvolutionDatum = {
+  month: string;
+  Bruto: number;
+  Neto: number;
+};
+
+function toMonthIndex(month: string): number | null {
+  const [yearPart, monthPart] = month.split("-");
+  const year = Number(yearPart);
+  const monthNumber = Number(monthPart);
+
+  if (!Number.isInteger(year) || !Number.isInteger(monthNumber) || monthNumber < 1 || monthNumber > 12) {
+    return null;
+  }
+
+  return year * 12 + (monthNumber - 1);
+}
+
+function fromMonthIndex(monthIndex: number): string {
+  const year = Math.floor(monthIndex / 12);
+  const monthNumber = (monthIndex % 12) + 1;
+  return `${year}-${String(monthNumber).padStart(2, "0")}`;
+}
+
+function buildSalaryEvolutionData(trends: AnalyticsData["trends"]): SalaryEvolutionDatum[] {
+  const grossByMonth = new Map(trends.gross.map((point) => [point.month, point.value]));
+  const netByMonth = new Map(trends.net.map((point) => [point.month, point.value]));
+
+  const monthIndices = Array.from(
+    new Set(
+      [...grossByMonth.keys(), ...netByMonth.keys()]
+        .map(toMonthIndex)
+        .filter((value): value is number => value !== null),
+    ),
+  ).sort((left, right) => left - right);
+
+  if (monthIndices.length === 0) {
+    return [];
+  }
+
+  const salaryEvolution: SalaryEvolutionDatum[] = [];
+  const firstMonth = monthIndices[0];
+  const lastMonth = monthIndices[monthIndices.length - 1];
+
+  for (let monthIndex = firstMonth; monthIndex <= lastMonth; monthIndex += 1) {
+    const monthKey = fromMonthIndex(monthIndex);
+    salaryEvolution.push({
+      month: formatMonthLabel(monthKey),
+      Bruto: grossByMonth.get(monthKey) ?? 0,
+      Neto: netByMonth.get(monthKey) ?? 0,
+    });
+  }
+
+  return salaryEvolution;
+}
 
 function AnalyticsView() {
   const { data: profiles = [] } = useQuery({
@@ -75,6 +107,8 @@ function AnalyticsView() {
     enabled: !!selectedProfile,
   });
 
+  const salaryEvolutionData = analytics ? buildSalaryEvolutionData(analytics.trends) : [];
+
   const handleExport = async (format: "csv" | "json") => {
     if (!selectedProfile) return;
     try {
@@ -86,19 +120,14 @@ function AnalyticsView() {
 
   if (profiles.length === 0) {
     return (
-      <div className="text-center py-20 animate-fade-in">
-        <div className="w-20 h-20 rounded-2xl bg-surface-100 flex items-center justify-center mx-auto mb-5">
-          <Activity className="w-10 h-10 text-surface-300" />
-        </div>
-        <h3 className="text-lg font-semibold text-surface-900 mb-1.5">Sin datos</h3>
-        <p className="text-surface-500 text-sm max-w-sm mx-auto mb-6">
-          Crea un perfil y sube nóminas para ver la analítica avanzada.
-        </p>
-        <a href="/upload" className="btn-primary">
-          <FileText className="w-4 h-4" />
-          Subir nóminas
-        </a>
-      </div>
+      <EmptyState
+        icon={Activity}
+        title="Sin datos"
+        description="Crea un perfil y sube nóminas para ver la analítica avanzada."
+        actionLabel="Subir nóminas"
+        actionHref="/upload"
+        actionIcon={FileText}
+      />
     );
   }
 
@@ -126,23 +155,11 @@ function AnalyticsView() {
 
       {/* Profile selector */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        {profiles.map((p) => (
-          <button
-            key={p.id}
-            onClick={() => setSelectedProfile(p.id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-              selectedProfile === p.id
-                ? "bg-white shadow-card border border-surface-200 text-surface-900"
-                : "text-surface-400 hover:text-surface-600 hover:bg-surface-100"
-            }`}
-          >
-            <div
-              className={`w-2.5 h-2.5 rounded-full ${selectedProfile === p.id ? "opacity-100" : "opacity-40"}`}
-              style={{ backgroundColor: p.color }}
-            />
-            {p.name}
-          </button>
-        ))}
+        <ProfileSelector
+          profiles={profiles}
+          value={selectedProfile ?? profiles[0]?.id ?? 0}
+          onChange={(v) => setSelectedProfile(v as number)}
+        />
       </div>
 
       {isLoading && (
@@ -176,13 +193,9 @@ function AnalyticsView() {
               </div>
             </div>
 
-            {analytics.trends.gross.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={analytics.trends.gross.map((g, i) => ({
-                  month: formatMonthLabel(g.month),
-                  Bruto: g.value,
-                  Neto: analytics.trends.net[i]?.value ?? 0,
-                }))}>
+            {salaryEvolutionData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={340}>
+                <AreaChart data={salaryEvolutionData}>
                   <defs>
                     <linearGradient id="gradBruto" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#1e40af" stopOpacity={0.15} />
@@ -194,9 +207,19 @@ function AnalyticsView() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="#9ca3af" />
+                  <XAxis
+                    dataKey="month"
+                    interval={0}
+                    minTickGap={0}
+                    height={56}
+                    angle={-35}
+                    textAnchor="end"
+                    tickMargin={12}
+                    tick={{ fontSize: 11 }}
+                    stroke="#9ca3af"
+                  />
                   <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<ChartTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Area type="monotone" dataKey="Bruto" stroke="#1e40af" strokeWidth={2} fill="url(#gradBruto)" />
                   <Area type="monotone" dataKey="Neto" stroke="#10b981" strokeWidth={2} fill="url(#gradNeto)" />
@@ -259,7 +282,7 @@ function AnalyticsView() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="#9ca3af" />
                   <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<ChartTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Line type="monotone" dataKey="Bruto" stroke="#1e40af" strokeWidth={2} dot={{ r: 3 }} />
                   <Line type="monotone" dataKey="Neto" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
@@ -293,7 +316,7 @@ function AnalyticsView() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="#9ca3af" />
                   <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<ChartTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Bar dataKey="Año actual" fill="#1e40af" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Año anterior" fill="#93c5fd" radius={[4, 4, 0, 0]} />
@@ -374,6 +397,41 @@ function AnalyticsView() {
               </div>
               <h3 className="font-semibold text-surface-900 text-sm">Todo en orden</h3>
               <p className="text-xs text-surface-400 mt-1">No se han detectado anomalías ni alertas en tus nóminas</p>
+            </div>
+          )}
+
+          {/* Extras Summary */}
+          {analytics.extras && analytics.extras.length > 0 && (
+            <div className="card p-6">
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-accent-50 flex items-center justify-center">
+                  <Target className="w-4 h-4 text-accent-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-surface-900 text-sm">Pagas Extra</h3>
+                  <p className="text-xs text-surface-400">Resumen de pagas extra por año</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {analytics.extras.map((e) => (
+                  <div key={e.year} className="flex items-center justify-between border border-accent-100 rounded-xl p-4 bg-accent-50/20">
+                    <div>
+                      <span className="text-sm font-bold text-surface-900">{e.year}</span>
+                      <span className="text-xs text-surface-400 ml-2">{e.count} paga{e.count > 1 ? "s" : ""}</span>
+                    </div>
+                    <div className="flex gap-6">
+                      <div className="text-right">
+                        <p className="text-[10px] text-surface-400 uppercase">Bruto</p>
+                        <p className="text-sm font-mono font-semibold text-surface-900">{formatCurrency(e.totalGross)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] text-surface-400 uppercase">Neto</p>
+                        <p className="text-sm font-mono font-semibold text-success-700">{formatCurrency(e.totalNet)}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

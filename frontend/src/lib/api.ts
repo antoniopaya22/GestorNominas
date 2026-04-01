@@ -134,25 +134,40 @@ export interface Payslip {
   grossSalary: number | null;
   netSalary: number | null;
   parsingStatus: string;
+  payslipType: "ordinal" | "extra";
   createdAt: string;
   concepts?: PayslipConcept[];
 }
 
-export const getPayslips = (profileId?: number, year?: number, search?: string) => {
+export interface PayslipFilters {
+  profileId?: number;
+  year?: number;
+  search?: string;
+  status?: string;
+  type?: "ordinal" | "extra";
+  page?: number;
+  limit?: number;
+}
+
+export const getPayslips = (filters: PayslipFilters = {}) => {
   const params = new URLSearchParams();
-  if (profileId) params.set("profileId", String(profileId));
-  if (year) params.set("year", String(year));
-  if (search) params.set("search", search);
-  params.set("limit", "200");
-  return request<Paginated<Payslip>>(`/payslips?${params}`).then((r) => r.data);
+  if (filters.profileId) params.set("profileId", String(filters.profileId));
+  if (filters.year) params.set("year", String(filters.year));
+  if (filters.search) params.set("search", filters.search);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.type) params.set("type", filters.type);
+  params.set("page", String(filters.page ?? 1));
+  params.set("limit", String(filters.limit ?? 20));
+  return request<Paginated<Payslip>>(`/payslips?${params}`);
 };
 
 export const getPayslip = (id: number) =>
   request<Payslip & { concepts: PayslipConcept[] }>(`/payslips/${id}`);
 
-export const uploadPayslips = async (profileId: number, files: File[]) => {
+export const uploadPayslips = async (profileId: number, files: File[], payslipType: "ordinal" | "extra" = "ordinal") => {
   const formData = new FormData();
   formData.append("profileId", String(profileId));
+  formData.append("payslipType", payslipType);
   files.forEach((f) => formData.append("files", f));
 
   const token = getAuthToken();
@@ -202,6 +217,12 @@ export const reprocessPayslip = (id: number) =>
 export const deletePayslip = (id: number) =>
   request<{ ok: boolean }>(`/payslips/${id}`, { method: "DELETE" });
 
+export const updatePayslipType = (id: number, type: "ordinal" | "extra") =>
+  request<Payslip>(`/payslips/${id}/type`, {
+    method: "PATCH",
+    body: JSON.stringify({ type }),
+  });
+
 // ─── Dashboard ──────────────────────────────────────────────────
 export interface AnnualSummary {
   year: number;
@@ -215,6 +236,8 @@ export interface AnnualSummary {
   projectedAnnualGross: number;
   projectedAnnualNet: number;
   pagasExtra: number;
+  extraGross: number;
+  extraNet: number;
   retentionRate: number;
 }
 
@@ -226,6 +249,9 @@ export interface DashboardData {
     totalGrossYear: number;
     totalNetYear: number;
     avgIrpf: number;
+    extrasCount: number;
+    extrasTotalGross: number;
+    extrasTotalNet: number;
   };
   evolution: Record<string, Array<{ month: string; gross: number | null; net: number | null }>>;
   conceptBreakdown: Array<{
@@ -271,6 +297,12 @@ export interface AnalyticsData {
     type: string;
     severity: "info" | "warning" | "critical";
     message: string;
+  }>;
+  extras: Array<{
+    year: number;
+    count: number;
+    totalGross: number;
+    totalNet: number;
   }>;
 }
 

@@ -15,6 +15,20 @@
       "when": 1773059059148,
       "tag": "0001_talented_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1774915200000,
+      "tag": "0002_add_user_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1774894647369,
+      "tag": "0003_bored_deadpool",
+      "breakpoints": true
     }
   ]
 }

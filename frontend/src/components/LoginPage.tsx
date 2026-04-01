@@ -1,28 +1,29 @@
 import { useState, type FormEvent } from "react";
 import { useAuth } from "./AuthProvider";
+import { useToast } from "./Toast";
 
 export default function LoginPage() {
   const { login, register } = useAuth();
+  const { toast } = useToast();
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
     try {
       if (isRegister) {
         await register(email, password, name);
+        toast("Cuenta creada correctamente", "success");
       } else {
         await login(email, password);
       }
       window.location.href = "/";
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error de autenticación");
+      toast(err instanceof Error ? err.message : "Error de autenticación", "error");
     } finally {
       setLoading(false);
     }
@@ -94,12 +95,6 @@ export default function LoginPage() {
             />
           </div>
 
-          {error && (
-            <div className="text-sm text-danger-600 bg-danger-50 border border-danger-200 rounded-xl px-3 py-2">
-              {error}
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={loading}
@@ -110,10 +105,7 @@ export default function LoginPage() {
 
           <button
             type="button"
-            onClick={() => {
-              setIsRegister(!isRegister);
-              setError("");
-            }}
+            onClick={() => setIsRegister(!isRegister)}
             className="w-full text-xs text-primary-600 hover:text-primary-700 font-medium py-1"
           >
             {isRegister ? "¿Ya tienes cuenta? Inicia sesión" : "¿No tienes cuenta? Regístrate"}
