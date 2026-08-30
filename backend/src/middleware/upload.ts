@@ -76,7 +76,8 @@ const csvFilter = (
     file.mimetype === "text/csv" ||
     file.mimetype === "text/tab-separated-values" ||
     file.mimetype === "application/vnd.ms-excel" ||
-    file.originalname.toLowerCase().endsWith(".csv");
+    file.originalname.toLowerCase().endsWith(".csv") ||
+    file.originalname.toLowerCase().endsWith(".tsv");
   if (allowed) {
     cb(null, true);
   } else {

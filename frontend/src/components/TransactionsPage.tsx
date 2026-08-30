@@ -1169,7 +1169,7 @@ function TransactionsView() {
           title="Sin transacciones"
           description={selectedAccount ? `No hay transacciones en ${selectedAccount.name}.` : "Añade tu primera transacción o importa datos."}
           actionLabel="Importar"
-          actionHref="/import"
+          actionHref="/settings?tab=finanzas"
         />
       ) : (
         <div className="card overflow-hidden">

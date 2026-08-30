@@ -26,15 +26,12 @@ function isActivePath(href: string, exact = false): boolean {
 const navItems = [
   { href: "/", label: "Inicio", icon: "home" },
   { href: "/finance", label: "Dashboard", icon: "wallet", section: "Finanzas", exact: true },
-  { href: "/finance/analytics", label: "Analítica", icon: "analytics" },
   { href: "/accounts", label: "Cuentas", icon: "landmark" },
-  { href: "/categories", label: "Categorías", icon: "tags" },
+  { href: "/plan", label: "Plan", icon: "tags" },
   { href: "/transactions", label: "Transacciones", icon: "receipt" },
-  { href: "/import", label: "Importar", icon: "import" },
   { href: "/payroll", label: "Dashboard", icon: "chart", section: "Nóminas" },
   { href: "/upload", label: "Subir Nóminas", icon: "upload" },
   { href: "/payslips", label: "Mis Nóminas", icon: "file" },
-  { href: "/analytics", label: "Analítica", icon: "analytics" },
   { href: "/profiles", label: "Perfiles", icon: "users" },
   { href: "/settings", label: "Ajustes", icon: "settings", section: "Sistema" },
 ];
@@ -55,6 +52,15 @@ const mobileNavItems = [
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title} | Gestor Financiero</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script is:inline>
+      (function () {
+        var theme = localStorage.getItem("theme") || "system";
+        var isDark =
+          theme === "dark" ||
+          (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.toggle("dark", isDark);
+      })();
+    </script>
   </head>
   <body class="min-h-screen bg-surface-50">
     <div class="flex min-h-screen">
@@ -109,11 +115,6 @@ const mobileNavItems = [
                   {item.icon === "receipt" && (
                     <svg class:list={["w-[18px] h-[18px] transition-colors", isActive ? "text-primary-600" : "text-surface-400 group-hover:text-surface-600"]} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>
-                    </svg>
-                  )}
-                  {item.icon === "import" && (
-                    <svg class:list={["w-[18px] h-[18px] transition-colors", isActive ? "text-primary-600" : "text-surface-400 group-hover:text-surface-600"]} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M8 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4"/>
                     </svg>
                   )}
                   {item.icon === "chart" && (

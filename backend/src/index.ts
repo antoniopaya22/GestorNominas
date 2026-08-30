@@ -18,6 +18,7 @@ import { notesRouter } from "./routes/notes.js";
 import { tagsRouter } from "./routes/tags.js";
 import { accountsRouter } from "./routes/accounts.js";
 import { categoriesRouter } from "./routes/categories.js";
+import { planRouter } from "./routes/plan.js";
 import { transactionsRouter } from "./routes/transactions.js";
 import { recurringTransactionsRouter } from "./routes/recurring-transactions.js";
 import { importRouter } from "./routes/import.js";
@@ -56,14 +57,6 @@ const globalLimiter = rateLimit({
 });
 app.use("/api", globalLimiter);
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Demasiados intentos de login, intenta más tarde" },
-});
-
 // ─── Public routes ──────────────────────────────────────────────
 app.get("/api/health", (_req, res) => {
   try {
@@ -74,7 +67,7 @@ app.get("/api/health", (_req, res) => {
   }
 });
 
-app.use("/api/auth", authLimiter, authRouter);
+app.use("/api/auth", authRouter);
 
 // ─── Authenticated file serving ─────────────────────────────────
 app.get("/uploads/:filename", authMiddleware, async (req, res, next) => {
@@ -111,6 +104,7 @@ app.use("/api/dashboard", authMiddleware, dashboardRouter);
 app.use("/api/analytics", authMiddleware, analyticsRouter);
 app.use("/api/accounts", authMiddleware, accountsRouter);
 app.use("/api/categories", authMiddleware, categoriesRouter);
+app.use("/api/plan", authMiddleware, planRouter);
 app.use("/api/recurring-transactions", authMiddleware, recurringTransactionsRouter);
 app.use("/api/transactions", authMiddleware, transactionsRouter);
 app.use("/api/import", authMiddleware, importRouter);

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { AuthProvider } from "./AuthProvider";
+import { AuthProvider, useAuth } from "./AuthProvider";
 import { ToastProvider } from "./Toast";
 import { ErrorBoundary } from "./ErrorBoundary";
 
@@ -10,13 +10,26 @@ const queryClient = new QueryClient({
   },
 });
 
+function AuthGate({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) return null;
+
+  if (!user) {
+    if (typeof window !== "undefined") window.location.href = "/login";
+    return null;
+  }
+
+  return <>{children}</>;
+}
+
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <ToastProvider>
-            {children}
+            <AuthGate>{children}</AuthGate>
           </ToastProvider>
         </AuthProvider>
       </QueryClientProvider>

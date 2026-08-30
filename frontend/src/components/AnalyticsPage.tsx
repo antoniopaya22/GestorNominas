@@ -12,7 +12,6 @@ import {
   getProfiles, getAnalytics, exportData,
   type AnalyticsData, type Profile,
 } from "../lib/api";
-import { Providers } from "./Providers";
 import { formatCurrency, formatMonthLabel } from "../lib/format";
 import { ChartTooltip } from "./ui/ChartTooltip";
 import { ProfileSelector } from "./ui/ProfileSelector";
@@ -86,7 +85,7 @@ function buildSalaryEvolutionData(trends: AnalyticsData["trends"]): SalaryEvolut
   return salaryEvolution;
 }
 
-function AnalyticsView() {
+export function AnalyticsView() {
   const { data: profiles = [] } = useQuery({
     queryKey: ["profiles"],
     queryFn: getProfiles,
@@ -474,10 +473,3 @@ function AnalyticsView() {
   );
 }
 
-export default function AnalyticsPage() {
-  return (
-    <Providers>
-      <AnalyticsView />
-    </Providers>
-  );
-}

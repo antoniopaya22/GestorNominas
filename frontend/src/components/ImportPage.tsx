@@ -6,10 +6,9 @@ import {
   AlertTriangle, Eye,
 } from "lucide-react";
 import { importYnab, type ImportResult } from "../lib/api";
-import { Providers } from "./Providers";
 import { useToast } from "./Toast";
 
-function ImportView() {
+export function ImportView() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const [file, setFile] = useState<File | null>(null);
@@ -273,30 +272,51 @@ function ImportView() {
         <ol className="space-y-2 text-sm text-surface-600">
           <li className="flex gap-2">
             <span className="font-bold text-primary-600">1.</span>
-            Abre YNAB y ve a la sección de tu presupuesto
+            En YNAB, haz clic en tu nombre de usuario (arriba a la izquierda) y elige &laquo;Export Plan&raquo;
           </li>
           <li className="flex gap-2">
             <span className="font-bold text-primary-600">2.</span>
-            En la cuenta o en &laquo;Todas las cuentas&raquo;, haz clic en exportar
+            YNAB descarga un .zip con <strong>dos ficheros .tsv</strong>: uno terminado en &laquo;Plan&raquo; y otro en &laquo;Register&raquo;
           </li>
           <li className="flex gap-2">
             <span className="font-bold text-primary-600">3.</span>
-            Selecciona formato CSV y descarga el archivo
-          </li>
-          <li className="flex gap-2">
-            <span className="font-bold text-primary-600">4.</span>
-            Sube el archivo aquí para importar tus datos automáticamente
+            Descomprime el .zip y sube <strong>únicamente el fichero &laquo;Register&raquo;</strong> aquí (ver diferencia abajo)
           </li>
         </ol>
+      </div>
+
+      {/* Which file to upload */}
+      <div className="card p-5">
+        <h3 className="font-semibold text-surface-900 text-sm mb-3">¿Qué fichero subo? Plan vs Register</h3>
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-success-50 border border-success-200">
+            <CheckCircle2 className="w-5 h-5 text-success-600 flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-semibold text-success-800">
+                &laquo;... - Register.tsv&raquo; &mdash; sube este
+              </p>
+              <p className="text-sm text-success-700 mt-0.5">
+                El histórico de movimientos: cuenta, fecha, beneficiario, categoría, importe y si está
+                conciliado. Es lo que esta app necesita para crear tus cuentas, categorías y transacciones.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 p-3 rounded-xl bg-surface-100 border border-surface-200">
+            <AlertCircle className="w-5 h-5 text-surface-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-semibold text-surface-700">
+                &laquo;... - Plan.tsv&raquo; &mdash; no se usa
+              </p>
+              <p className="text-sm text-surface-600 mt-0.5">
+                El presupuesto mensual por categoría (cuánto asignaste, cuánto gastaste y cuánto queda
+                disponible cada mes). Esta app no importa presupuestos, solo transacciones reales, así
+                que este fichero se puede ignorar.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-export default function ImportPage() {
-  return (
-    <Providers>
-      <ImportView />
-    </Providers>
-  );
-}

@@ -53,7 +53,6 @@ import {
   type FinanceAnalyticsPayeeItem,
   type FinanceAnalyticsWeekdayItem,
 } from "../lib/api";
-import { Providers } from "./Providers";
 import { formatCompact, formatCurrency, formatMonthLabel, formatPercent } from "../lib/format";
 import { EmptyState } from "./ui/EmptyState";
 import { ChartTooltip } from "./ui/ChartTooltip";
@@ -468,7 +467,7 @@ function MatrixHeatmap({
   );
 }
 
-function FinanceAnalyticsView() {
+export function FinanceAnalyticsView() {
   const defaultRange = useMemo(() => getPresetRange(DEFAULT_PERIOD_PRESET), []);
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>(DEFAULT_PERIOD_PRESET);
   const [from, setFrom] = useState(defaultRange.from ?? "");
@@ -1013,7 +1012,7 @@ function FinanceAnalyticsView() {
         title="Sin datos financieros"
         description="Importa tus datos desde YNAB o crea cuentas y movimientos para activar la analítica."
         actionLabel="Importar datos"
-        actionHref="/import"
+        actionHref="/settings?tab=finanzas"
       />
     );
   }
@@ -2194,10 +2193,3 @@ function FinanceAnalyticsView() {
   );
 }
 
-export default function FinanceAnalyticsPage() {
-  return (
-    <Providers>
-      <FinanceAnalyticsView />
-    </Providers>
-  );
-}

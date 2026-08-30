@@ -262,7 +262,7 @@ function AccountsView() {
           title="Sin cuentas"
           description="Crea tu primera cuenta o importa datos desde YNAB para empezar."
           actionLabel="Importar YNAB"
-          actionHref="/import"
+          actionHref="/settings?tab=finanzas"
         />
       ) : (
         <div className="space-y-3">

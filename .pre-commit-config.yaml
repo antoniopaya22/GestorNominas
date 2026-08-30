@@ -1,0 +1,29 @@
+repos:
+  # ===========================================
+  # Hooks genéricos de higiene (todo el repo)
+  # ===========================================
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^backend/src/db/migrations/
+      - id: end-of-file-fixer
+        exclude: ^backend/src/db/migrations/
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: detect-private-key
+
+  # ===========================================
+  # TypeScript (backend Express + frontend Astro/React)
+  # ===========================================
+  - repo: local
+    hooks:
+      - id: typecheck
+        name: tsc --noEmit (backend + frontend)
+        entry: npm run typecheck
+        language: system
+        pass_filenames: false
+        files: ^(backend|frontend)/.*\.(ts|tsx)$
