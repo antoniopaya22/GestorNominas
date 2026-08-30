@@ -24,7 +24,7 @@ export function KpiCard({ label, value, subValue, icon: Icon, trend, trendValue,
     <div className="card p-5 animate-fade-in">
       <div className="flex items-start justify-between mb-3">
         <div className={`w-10 h-10 rounded-xl ${c.bg} ring-1 ${c.ring} flex items-center justify-center`}>
-          <Icon className={`w-5 h-5 ${c.icon}`} />
+          <Icon className={`w-5 h-5 ${c.icon}`} aria-hidden="true" />
         </div>
         {trend && trendValue && (
           <div className={`flex items-center gap-0.5 text-xs font-semibold px-2 py-1 rounded-full ${

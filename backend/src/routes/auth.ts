@@ -99,3 +99,64 @@ authRouter.get("/me", authMiddleware, async (req, res, next) => {
     next(err);
   }
 });
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(100),
+});
+
+// Change password
+authRouter.post("/change-password", authMiddleware, async (req, res, next) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: "No autenticado" });
+
+    const parsed = changePasswordSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: parsed.error.flatten() });
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, req.user.userId));
+    if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    const valid = await bcrypt.compare(parsed.data.currentPassword, user.passwordHash);
+    if (!valid) return res.status(401).json({ error: "Contraseña actual incorrecta" });
+
+    const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
+    await db
+      .update(users)
+      .set({ passwordHash })
+      .where(eq(users.id, req.user.userId));
+
+    res.json({ ok: true, message: "Contraseña actualizada correctamente" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const updateProfileSchema = z.object({
+  name: z.string().min(1).max(100),
+});
+
+// Update user profile (name)
+authRouter.put("/me", authMiddleware, async (req, res, next) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: "No autenticado" });
+
+    const parsed = updateProfileSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: parsed.error.flatten() });
+
+    const [updated] = await db
+      .update(users)
+      .set({ name: parsed.data.name })
+      .where(eq(users.id, req.user.userId))
+      .returning({ id: users.id, email: users.email, name: users.name, createdAt: users.createdAt });
+
+    if (!updated) return res.status(404).json({ error: "Usuario no encontrado" });
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});

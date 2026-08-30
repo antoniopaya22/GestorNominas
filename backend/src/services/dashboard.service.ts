@@ -164,24 +164,26 @@ export function buildAnnualSummaries(filtered: Payslip[], allConcepts: Concept[]
       const regular = ps.filter((p) => p.payslipType !== "extra");
       const extras = ps.filter((p) => p.payslipType === "extra");
 
-      const totalGross = regular.reduce((s, p) => s + (p.grossSalary ?? 0), 0);
-      const totalNet = regular.reduce((s, p) => s + (p.netSalary ?? 0), 0);
+      const regularGross = regular.reduce((s, p) => s + (p.grossSalary ?? 0), 0);
+      const regularNet = regular.reduce((s, p) => s + (p.netSalary ?? 0), 0);
+      const extraGross = extras.reduce((s, p) => s + (p.grossSalary ?? 0), 0);
+      const extraNet = extras.reduce((s, p) => s + (p.netSalary ?? 0), 0);
+
+      const totalGross = regularGross + extraGross;
+      const totalNet = regularNet + extraNet;
       const totalDeductions = totalGross - totalNet;
       const months = regular.length;
       const currentMonth = new Date().getMonth() + 1;
       const currentFullYear = new Date().getFullYear();
       const isCurrentYear = year === currentFullYear;
       const projectedMonths = isCurrentYear ? Math.max(months, currentMonth) : 12;
-      const monthlyAvgGross = months > 0 ? totalGross / months : 0;
-      const monthlyAvgNet = months > 0 ? totalNet / months : 0;
+      const monthlyAvgGross = months > 0 ? regularGross / months : 0;
+      const monthlyAvgNet = months > 0 ? regularNet / months : 0;
 
-      const yearPayslipIds = new Set(regular.map((p) => p.id));
+      const yearPayslipIds = new Set(ps.map((p) => p.id));
       const yearIrpf = allConcepts
         .filter((c) => yearPayslipIds.has(c.payslipId) && c.name.toLowerCase().includes("irpf"))
         .reduce((s, c) => s + c.amount, 0);
-
-      const extraGross = extras.reduce((s, p) => s + (p.grossSalary ?? 0), 0);
-      const extraNet = extras.reduce((s, p) => s + (p.netSalary ?? 0), 0);
 
       return {
         year,

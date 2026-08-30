@@ -472,6 +472,45 @@ function extractType1ContributionBase(text: string): number | null {
   return null;
 }
 
+function recoverType1PostFooterDeductions(
+  lines: string[],
+  concepts: ParsedConcept[],
+  deductionRates: Map<string, number>,
+): void {
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const code = extractType1ConceptCode(trimmed);
+    if (code < 995 || code > 999) continue;
+
+    const amounts = findAllAmounts(trimmed);
+    const lastAmount = amounts.length > 0 ? amounts[amounts.length - 1] : null;
+    if (lastAmount === null || lastAmount <= 0) continue;
+
+    let conceptName: string | null = null;
+    for (const { regex, name } of NAME_PATTERNS) {
+      if (regex.test(trimmed)) {
+        conceptName = name;
+        break;
+      }
+    }
+
+    if (!conceptName || !isType1DeductionName(conceptName)) continue;
+
+    if (amounts.length >= 2) {
+      const rateCandidate = amounts[0];
+      if (rateCandidate > 0 && rateCandidate <= 50) {
+        deductionRates.set(conceptName, rateCandidate);
+      }
+    }
+
+    if (!concepts.some((concept) => concept.category === "deduccion" && concept.name === conceptName)) {
+      concepts.push({ category: "deduccion", name: conceptName, amount: lastAmount, isPercentage: false });
+    }
+  }
+}
+
 // ─── Payslip type detection ─────────────────────────────────────
 
 /**
@@ -674,6 +713,8 @@ function matchConceptsType1(rawText: string): ParsedPayslip {
       }
     }
   }
+
+  recoverType1PostFooterDeductions(lines, concepts, deductionRates);
 
   // ─── Fallback pass: NAME_PATTERNS matching when section detection failed ──
   if (concepts.length === 0) {

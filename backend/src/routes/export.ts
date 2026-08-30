@@ -1,8 +1,16 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { payslips, payslipConcepts, profiles } from "../db/schema.js";
-import { eq, and, sql } from "drizzle-orm";
+import {
+  payslips,
+  payslipConcepts,
+  profiles,
+  transactions,
+  accounts,
+  categories,
+  categoryGroups,
+} from "../db/schema.js";
+import { eq, and, sql, gte, lte, like, desc, asc } from "drizzle-orm";
 
 export const exportRouter = Router();
 
@@ -141,6 +149,121 @@ exportRouter.get("/", async (req, res, next) => {
     } else {
       res.status(400).json({ error: "Formato no soportado. Usa csv o json" });
     }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Transaction Export ─────────────────────────────────────────
+const transactionExportSchema = z.object({
+  format: z.enum(["csv", "json"]).default("csv"),
+  accountId: z.coerce.number().int().positive().optional(),
+  categoryId: z.coerce.number().int().positive().optional(),
+  groupId: z.coerce.number().int().positive().optional(),
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  type: z.enum(["expense", "income", "transfer"]).optional(),
+  cleared: z.enum(["true", "false"]).optional(),
+  search: z.string().optional(),
+});
+
+exportRouter.get("/transactions", async (req, res, next) => {
+  try {
+    const { userId } = req.user!;
+    const parsed = transactionExportSchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Parámetros de exportación inválidos",
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const { format, accountId, categoryId, groupId, from, to, type, cleared, search } = parsed.data;
+
+    const conditions = [eq(transactions.userId, userId)];
+    if (accountId) conditions.push(eq(transactions.accountId, accountId));
+    if (categoryId) conditions.push(eq(transactions.categoryId, categoryId));
+    if (groupId) {
+      conditions.push(
+        sql`${transactions.categoryId} IN (
+          SELECT ${categories.id} FROM ${categories}
+          WHERE ${categories.groupId} = ${groupId}
+        )`,
+      );
+    }
+    if (from) conditions.push(gte(transactions.date, from));
+    if (to) conditions.push(lte(transactions.date, to));
+    if (type) conditions.push(eq(transactions.type, type));
+    if (cleared === "true") conditions.push(eq(transactions.cleared, true));
+    if (cleared === "false") conditions.push(eq(transactions.cleared, false));
+    if (search) {
+      conditions.push(
+        sql`(${transactions.payee} LIKE ${"%" + search + "%"} OR ${transactions.memo} LIKE ${"%" + search + "%"})`,
+      );
+    }
+
+    const rows = await db
+      .select({
+        id: transactions.id,
+        date: transactions.date,
+        type: transactions.type,
+        amount: transactions.amount,
+        payee: transactions.payee,
+        memo: transactions.memo,
+        cleared: transactions.cleared,
+        accountName: accounts.name,
+        categoryName: sql<string>`coalesce(${categories.name}, '')`,
+        groupName: sql<string>`coalesce(${categoryGroups.name}, '')`,
+      })
+      .from(transactions)
+      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+      .leftJoin(categories, eq(transactions.categoryId, categories.id))
+      .leftJoin(categoryGroups, eq(categories.groupId, categoryGroups.id))
+      .where(and(...conditions))
+      .orderBy(asc(transactions.date), asc(transactions.id));
+
+    const exportRows = rows.map((r) => ({
+      Fecha: r.date,
+      Tipo: r.type === "expense" ? "Gasto" : r.type === "income" ? "Ingreso" : "Transferencia",
+      Importe: r.amount,
+      Beneficiario: r.payee ?? "",
+      Cuenta: r.accountName,
+      Grupo: r.groupName,
+      Categoría: r.categoryName,
+      Nota: r.memo ?? "",
+      Estado: r.cleared ? "Liquidada" : "Pendiente",
+    }));
+
+    if (format === "json") {
+      res.setHeader("Content-Disposition", 'attachment; filename="transacciones.json"');
+      return res.json(exportRows);
+    }
+
+    if (exportRows.length === 0) {
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", 'attachment; filename="transacciones.csv"');
+      return res.send("Sin datos");
+    }
+
+    const headers = Object.keys(exportRows[0]);
+    const csvLines = [
+      headers.join(","),
+      ...exportRows.map((row) =>
+        headers
+          .map((h) => {
+            const val = String(row[h as keyof typeof row] ?? "");
+            if (val.includes(",") || val.includes('"') || val.includes("\n")) {
+              return `"${val.replace(/"/g, '""')}"`;
+            }
+            return val;
+          })
+          .join(","),
+      ),
+    ];
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="transacciones.csv"');
+    res.send("\uFEFF" + csvLines.join("\n"));
   } catch (err) {
     next(err);
   }

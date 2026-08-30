@@ -129,3 +129,117 @@ export const alertHistory = sqliteTable("alert_history", {
     .notNull()
     .default(sql`(datetime('now'))`),
 });
+
+// ─── Financial Accounts ─────────────────────────────────────────
+export const accounts = sqliteTable("accounts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  type: text("type", {
+    enum: ["bank", "credit_card", "cash", "investment", "other"],
+  })
+    .notNull()
+    .default("bank"),
+  currency: text("currency").notNull().default("EUR"),
+  initialBalance: real("initial_balance").notNull().default(0),
+  color: text("color").notNull().default("#6366f1"),
+  icon: text("icon"),
+  archived: integer("archived", { mode: "boolean" }).notNull().default(false),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+// ─── Category Groups ────────────────────────────────────────────
+export const categoryGroups = sqliteTable("category_groups", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  icon: text("icon"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+export const categories = sqliteTable("categories", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  groupId: integer("group_id")
+    .notNull()
+    .references(() => categoryGroups.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+// ─── Financial Transactions ─────────────────────────────────────
+export const transactions = sqliteTable("transactions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  accountId: integer("account_id")
+    .notNull()
+    .references(() => accounts.id, { onDelete: "cascade" }),
+  categoryId: integer("category_id").references(() => categories.id, {
+    onDelete: "set null",
+  }),
+  type: text("type", {
+    enum: ["expense", "income", "transfer"],
+  }).notNull(),
+  amount: real("amount").notNull(),
+  date: text("date").notNull(),
+  recurringTransactionId: integer("recurring_transaction_id").references(
+    () => recurringTransactions.id,
+    { onDelete: "set null" },
+  ),
+  scheduledFor: text("scheduled_for"),
+  payee: text("payee"),
+  memo: text("memo"),
+  cleared: integer("cleared", { mode: "boolean" }).notNull().default(false),
+  transferId: integer("transfer_id"),
+  flag: text("flag"),
+  importedFrom: text("imported_from"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+// ─── Recurring Transactions ────────────────────────────────────
+export const recurringTransactions = sqliteTable("recurring_transactions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  accountId: integer("account_id")
+    .notNull()
+    .references(() => accounts.id, { onDelete: "cascade" }),
+  categoryId: integer("category_id").references(() => categories.id, {
+    onDelete: "set null",
+  }),
+  type: text("type", {
+    enum: ["expense", "income"],
+  }).notNull(),
+  amount: real("amount").notNull(),
+  cadence: text("cadence", {
+    enum: ["weekly", "monthly", "yearly"],
+  })
+    .notNull()
+    .default("monthly"),
+  intervalCount: integer("interval_count").notNull().default(1),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date"),
+  payee: text("payee"),
+  memo: text("memo"),
+  flag: text("flag"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});

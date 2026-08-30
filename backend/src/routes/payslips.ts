@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "../db/index.js";
 import { payslips, payslipConcepts, profiles } from "../db/schema.js";
-import { eq, and, desc, like, gte, lte, sql } from "drizzle-orm";
+import { eq, and, asc, desc, like, gte, lte, sql } from "drizzle-orm";
 import { upload, validatePdfMagicBytes } from "../middleware/upload.js";
 import { parsePayslip } from "../parsers/parser-engine.js";
 import { z } from "zod";
@@ -85,6 +85,8 @@ const payslipListQuerySchema = z.object({
   search: z.string().max(200).optional(),
   status: z.enum(["pending", "parsed", "error", "review"]).optional(),
   type: z.enum(["ordinal", "extra"]).optional(),
+  sortBy: z.enum(["period", "fileName", "grossSalary", "netSalary", "parsingStatus"]).default("period"),
+  sortDir: z.enum(["asc", "desc"]).default("desc"),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
@@ -105,7 +107,7 @@ payslipsRouter.get("/", async (req, res, next) => {
     if (userProfileIds.length === 0)
       return res.json({ data: [], total: 0, page: 1, limit: 50 });
 
-    const { profileId, year, search, status, type, page, limit } = parsed.data;
+    const { profileId, year, search, status, type, sortBy, sortDir, page, limit } = parsed.data;
     const offset = (page - 1) * limit;
 
     const conditions = [
@@ -126,6 +128,16 @@ payslipsRouter.get("/", async (req, res, next) => {
     }
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const sortOrder = sortDir === "asc" ? asc : desc;
+    const orderByClauses = sortBy === "period"
+      ? [sortOrder(payslips.periodYear), sortOrder(payslips.periodMonth), desc(payslips.id)]
+      : sortBy === "fileName"
+      ? [sortOrder(payslips.fileName), desc(payslips.periodYear), desc(payslips.periodMonth), desc(payslips.id)]
+      : sortBy === "grossSalary"
+      ? [sortOrder(payslips.grossSalary), desc(payslips.periodYear), desc(payslips.periodMonth), desc(payslips.id)]
+      : sortBy === "netSalary"
+      ? [sortOrder(payslips.netSalary), desc(payslips.periodYear), desc(payslips.periodMonth), desc(payslips.id)]
+      : [sortOrder(payslips.parsingStatus), desc(payslips.periodYear), desc(payslips.periodMonth), desc(payslips.id)];
 
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)` })
@@ -136,7 +148,7 @@ payslipsRouter.get("/", async (req, res, next) => {
       .select()
       .from(payslips)
       .where(where)
-      .orderBy(desc(payslips.periodYear), desc(payslips.periodMonth))
+      .orderBy(...orderByClauses)
       .limit(limit)
       .offset(offset);
 

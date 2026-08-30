@@ -60,3 +60,32 @@ export function validatePdfMagicBytes(req: Request, _res: Response, next: NextFu
 }
 
 export const upload = multerUpload;
+
+// ─── CSV Upload (for YNAB import) ───────────────────────────────
+const csvStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadsDir),
+  filename: (_req, _file, cb) => cb(null, `import-${randomUUID()}.csv`),
+});
+
+const csvFilter = (
+  _req: Express.Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
+  const allowed =
+    file.mimetype === "text/csv" ||
+    file.mimetype === "text/tab-separated-values" ||
+    file.mimetype === "application/vnd.ms-excel" ||
+    file.originalname.toLowerCase().endsWith(".csv");
+  if (allowed) {
+    cb(null, true);
+  } else {
+    cb(new Error("Solo se permiten archivos CSV"));
+  }
+};
+
+export const uploadCsv = multer({
+  storage: csvStorage,
+  fileFilter: csvFilter,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+});

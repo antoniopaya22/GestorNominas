@@ -237,4 +237,54 @@ describe("matchConcepts type1 APG OCR", () => {
     expect(discountInKind?.amount).toBe(0.23);
     expect(commonContingencies?.amount).toBe(77.48);
   });
+
+  it("recovers worker deductions that only appear after the footer on a second page", () => {
+    const rawText = [
+      "PAYA GONZALEZ ANTONIO",
+      "THENEXTPANGEA SL",
+      "MENS 01 SEP 25 a 30 SEP 25",
+      "CONCEPTO DEVENGOS DEDUCCIONES",
+      "1 *Salario Base 1.869,33",
+      "2 *Plus Convenio 207,79",
+      "3 *Antigüedad 93,47",
+      "4 *Mejora Voluntaria 1.267,14",
+      "140 *poliza seguro salud 36,60",
+      "144 *poliza seguro vida 5,12",
+      "166 *catering 26,40",
+      "167 *retribucion flexible 88,00",
+      "168 *retribucion flexible 28,62",
+      "169 *Ajuste Nomina 1,24",
+      "715 abono trabajador 9,15",
+      "719 abono catering 16,80",
+      "720 devolucion poliza 116,62",
+      "789 Dcto.Conceptos en Especie 68,12",
+      "790 Imp. Ingr. Cuenta 1,24",
+      "995 COTIZACION CONT.COMU 4,70 198,10",
+      "998 MEI 0,09 5,48",
+      "996 COTIZACION FORMACION 0,10 4,21",
+      "LIQUIDO A PERCIBIR",
+      "2.296,68",
+      "IBAN: ES11 1111 1111 1111 1111 1111",
+      "SWIFT/BIC: TESTESMM111 COSTE EMPRESA: 4.618,45",
+      "CONCEPTO BASE TIPO APORTACION EMPRESARIAL",
+      "1. Contingencias comunes 4.214,98 23,60 994,74",
+      "DESEMPLEO 4.214,98 5,50 231,82",
+      "997 COTIZACION DESEMPLEO 1,55 65,33",
+      "999 TRIBUTACION I.R.P.F.24,29 841,98",
+    ].join("\n");
+
+    const parsed = matchConcepts(rawText);
+    const unemployment = parsed.concepts.find((concept) => concept.name === "Desempleo");
+    const irpf = parsed.concepts.find((concept) => concept.name === "IRPF");
+
+    expect(parsed.periodMonth).toBe(9);
+    expect(parsed.periodYear).toBe(2025);
+    expect(parsed.grossSalary).toBe(3623.71);
+    expect(parsed.netSalary).toBe(2296.68);
+    expect(unemployment?.category).toBe("deduccion");
+    expect(unemployment?.amount).toBe(65.33);
+    expect(irpf?.category).toBe("deduccion");
+    expect(irpf?.amount).toBe(841.98);
+    expect(parsed.concepts.some((concept) => concept.amount === 231.82)).toBe(false);
+  });
 });

@@ -8,7 +8,7 @@ import {
 import {
   TrendingUp, TrendingDown, DollarSign, Percent, Calendar, FileText,
   BarChart3, PieChart as PieIcon,
-  Activity, Filter, Wallet, Shield, ChevronDown,
+  Activity, Filter, Wallet, Shield, ChevronDown, ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
 import { getDashboard, getProfiles, type DashboardData } from "../lib/api";
 import { Providers } from "./Providers";
@@ -25,6 +25,74 @@ const CHART_COLORS = [
   "#f59e0b", "#10b981", "#ef4444", "#8b5cf6",
   "#ec4899", "#14b8a6",
 ];
+
+const DEFAULT_RANGE_FROM = "2021-11";
+
+const DASHBOARD_TOOLTIP_CONTENT_STYLE = {
+  background: "#0f172a",
+  color: "#fff",
+  border: "none",
+  borderRadius: "12px",
+  fontSize: "12px",
+  padding: "8px 12px",
+};
+
+const DASHBOARD_TOOLTIP_ITEM_STYLE = {
+  color: "#fff",
+};
+
+const DASHBOARD_TOOLTIP_LABEL_STYLE = {
+  color: "#cbd5e1",
+};
+
+type ConceptBreakdownItem = DashboardData["conceptBreakdown"][number];
+type ConceptSortColumn = "name" | "category" | "average" | "total" | "count";
+type SortDirection = "asc" | "desc";
+
+const CONCEPT_CATEGORY_LABELS: Record<string, string> = {
+  devengo: "Devengo",
+  deduccion: "Deducción",
+};
+
+function getConceptCategoryLabel(category: string): string {
+  return CONCEPT_CATEGORY_LABELS[category] ?? "Otros";
+}
+
+function getConceptSortDirection(column: ConceptSortColumn): SortDirection {
+  return column === "name" || column === "category" ? "asc" : "desc";
+}
+
+function compareConceptRows(left: ConceptBreakdownItem, right: ConceptBreakdownItem, column: ConceptSortColumn): number {
+  switch (column) {
+    case "name":
+      return left.name.localeCompare(right.name, "es", { sensitivity: "base" });
+    case "category":
+      return getConceptCategoryLabel(left.category).localeCompare(getConceptCategoryLabel(right.category), "es", { sensitivity: "base" });
+    case "average":
+      return left.average - right.average;
+    case "total":
+      return left.total - right.total;
+    case "count":
+      return left.count - right.count;
+    default:
+      return 0;
+  }
+}
+
+interface SortIndicatorProps {
+  active: boolean;
+  direction: SortDirection;
+}
+
+function SortIndicator({ active, direction }: SortIndicatorProps) {
+  if (!active) {
+    return <ArrowUpDown className="w-3.5 h-3.5 opacity-60" />;
+  }
+
+  return direction === "asc"
+    ? <ArrowUp className="w-3.5 h-3.5" />
+    : <ArrowDown className="w-3.5 h-3.5" />;
+}
 
 function toMonthIndex(month: string): number | null {
   const [yearPart, monthPart] = month.split("-");
@@ -89,17 +157,20 @@ function buildAvailableMonths(evolution: DashboardData["evolution"] | undefined)
 // ─── Skeleton ───────────────────────────────────────────────────
 function DashboardSkeleton() {
   return (
-    <div className="animate-fade-in">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="card p-5">
-            <div className="skeleton w-10 h-10 rounded-xl mb-3" />
-            <div className="skeleton h-7 w-28 mb-2" />
-            <div className="skeleton h-3 w-20" />
+    <div className="animate-fade-in space-y-8">
+      <div className="card p-0 overflow-hidden">
+        <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
+        <div className="px-6 py-6 sm:px-8 sm:py-7">
+          <div className="skeleton h-4 w-32 mb-1" />
+          <div className="skeleton h-10 w-56 mb-4" />
+          <div className="flex gap-2.5">
+            <div className="skeleton h-8 w-28 rounded-lg" />
+            <div className="skeleton h-8 w-28 rounded-lg" />
+            <div className="skeleton h-8 w-28 rounded-lg" />
           </div>
-        ))}
+        </div>
       </div>
-      <div className="card p-6 mb-8">
+      <div className="card p-6">
         <div className="skeleton h-5 w-40 mb-4" />
         <div className="skeleton h-[300px] w-full rounded-xl" />
       </div>
@@ -117,8 +188,12 @@ function DashboardView() {
   const [selectedProfiles, setSelectedProfiles] = useState<number[]>([]);
   const [chartType, setChartType] = useState<"area" | "line">("area");
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeFrom, setRangeFrom] = useState(DEFAULT_RANGE_FROM);
   const [rangeTo, setRangeTo] = useState("");
+  const [conceptSort, setConceptSort] = useState<{ column: ConceptSortColumn; direction: SortDirection }>({
+    column: "total",
+    direction: "desc",
+  });
 
   const profileIds = selectedProfiles.length > 0 ? selectedProfiles : profiles.map((p) => p.id);
 
@@ -260,6 +335,40 @@ function DashboardView() {
     };
   }, [data]);
 
+  const sortedConceptBreakdown = useMemo(() => {
+    if (!data) {
+      return [] as DashboardData["conceptBreakdown"];
+    }
+
+    const directionMultiplier = conceptSort.direction === "asc" ? 1 : -1;
+
+    return [...data.conceptBreakdown].sort((left, right) => {
+      const primaryResult = compareConceptRows(left, right, conceptSort.column) * directionMultiplier;
+
+      if (primaryResult !== 0) {
+        return primaryResult;
+      }
+
+      return left.name.localeCompare(right.name, "es", { sensitivity: "base" });
+    });
+  }, [conceptSort, data]);
+
+  const handleConceptSort = (column: ConceptSortColumn) => {
+    setConceptSort((current) => {
+      if (current.column === column) {
+        return {
+          column,
+          direction: current.direction === "asc" ? "desc" : "asc",
+        };
+      }
+
+      return {
+        column,
+        direction: getConceptSortDirection(column),
+      };
+    });
+  };
+
   if (profiles.length === 0 && !profilesLoading) return <EmptyState icon={BarChart3} title="Sin datos todavía" description="Sube tus primeras nóminas para ver estadísticas, evolución salarial y desglose de conceptos." actionLabel="Subir nóminas" actionHref="/upload" actionIcon={FileText} />;
   if (isLoading || !data) return <DashboardSkeleton />;
   if (data.kpis.totalPayslips === 0) {
@@ -291,85 +400,68 @@ function DashboardView() {
     : 0;
 
   return (
-    <div className="animate-fade-in">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-surface-900">Dashboard</h2>
-          <p className="text-sm text-surface-500 mt-0.5">
-            {data.kpis.totalPayslips} nómina{data.kpis.totalPayslips !== 1 ? "s" : ""} procesada{data.kpis.totalPayslips !== 1 ? "s" : ""}
-          </p>
-        </div>
-        {profiles.length > 1 && (
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-surface-400" />
-            <ProfileSelector
-              profiles={profiles}
-              value={profileIds}
-              onChange={(v) => setSelectedProfiles(v as number[])}
-              multi
-            />
+    <div className="animate-fade-in space-y-6">
+      {/* Hero */}
+      <div className="card p-0 overflow-hidden">
+        <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
+        <div className="px-6 py-6 sm:px-8 sm:py-7">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div>
+              <p className="text-surface-400 text-xs uppercase tracking-wider mb-0.5">Salario neto medio</p>
+              <p className="text-3xl sm:text-4xl font-bold font-mono tracking-tight text-accent-700">
+                {formatCurrency(data.kpis.avgNet)}
+              </p>
+            </div>
+            {profiles.length > 1 && (
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-surface-400" aria-hidden="true" />
+                <ProfileSelector
+                  profiles={profiles}
+                  value={profileIds}
+                  onChange={(v) => setSelectedProfiles(v as number[])}
+                  multi
+                />
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* KPIs Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <KpiCard
-          icon={DollarSign}
-          label="Salario Bruto Medio"
-          value={formatCurrency(data.kpis.avgGross)}
-          color="primary"
-        />
-        <KpiCard
-          icon={TrendingUp}
-          label="Salario Neto Medio"
-          value={formatCurrency(data.kpis.avgNet)}
-          color="success"
-          trend={netTrend > 0 ? "up" : netTrend < 0 ? "down" : "neutral"}
-          trendValue={`${Math.abs(netTrend).toFixed(1)}%`}
-        />
-        <KpiCard
-          icon={Calendar}
-          label="Total Neto Acumulado"
-          value={formatCurrency(data.kpis.totalNetYear)}
-          subValue={`${data.kpis.totalPayslips} nóminas mensuales`}
-          color="accent"
-        />
-        {data.kpis.extrasCount > 0 && (
-          <KpiCard
-            icon={DollarSign}
-            label="Pagas Extra"
-            value={formatCurrency(data.kpis.extrasTotalNet)}
-            subValue={`${data.kpis.extrasCount} paga${data.kpis.extrasCount > 1 ? "s" : ""}`}
-            color="accent"
-          />
-        )}
-        {data.kpis.extrasCount === 0 && (
-        <KpiCard
-          icon={Percent}
-          label="Retención Neta"
-          value={`${retentionRate.toFixed(1)}%`}
-          subValue={`IRPF medio: ${formatCurrency(data.kpis.avgIrpf)}`}
-          color={retentionRate >= 70 ? "success" : "danger"}
-        />
-        )}
+          {/* Pills */}
+          <div className="flex flex-wrap gap-2.5 mt-5">
+            <div className="flex items-center gap-1.5 bg-accent-50 rounded-lg px-3 py-1.5">
+              <FileText className="w-3.5 h-3.5 text-accent-600" aria-hidden="true" />
+              <span className="text-xs font-bold text-accent-800 font-mono">{data.kpis.totalPayslips}</span>
+              <span className="text-xs font-medium text-accent-700">nóminas</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-primary-50 rounded-lg px-3 py-1.5">
+              <DollarSign className="w-3.5 h-3.5 text-primary-600" aria-hidden="true" />
+              <span className="text-xs font-medium text-primary-700">Bruto</span>
+              <span className="text-xs font-bold text-primary-800 font-mono">{formatCurrency(data.kpis.avgGross)}</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-danger-50 rounded-lg px-3 py-1.5">
+              <Percent className="w-3.5 h-3.5 text-danger-600" aria-hidden="true" />
+              <span className="text-xs font-medium text-danger-700">IRPF</span>
+              <span className="text-xs font-bold text-danger-800 font-mono">{formatCurrency(data.kpis.avgIrpf)}</span>
+            </div>
+            {data.kpis.extrasCount > 0 && (
+              <div className="flex items-center gap-1.5 bg-primary-50 rounded-lg px-3 py-1.5">
+                <Calendar className="w-3.5 h-3.5 text-primary-600" aria-hidden="true" />
+                <span className="text-xs font-bold text-primary-800 font-mono">{data.kpis.extrasCount}</span>
+                <span className="text-xs font-medium text-primary-700">paga{data.kpis.extrasCount > 1 ? "s" : ""} extra</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 bg-success-50 rounded-lg px-3 py-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-success-600" aria-hidden="true" />
+              <span className="text-xs font-medium text-success-700">Retención</span>
+              <span className="text-xs font-bold text-success-800 font-mono">{retentionRate.toFixed(1)}%</span>
+            </div>
+          </div>
+        </div>
       </div>
-
-      {data.kpis.extrasCount > 0 && (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <KpiCard
-          icon={Percent}
-          label="Retención Neta"
-          value={`${retentionRate.toFixed(1)}%`}
-          subValue={`IRPF medio: ${formatCurrency(data.kpis.avgIrpf)}`}
-          color={retentionRate >= 70 ? "success" : "danger"}
-        />
-      </div>
-      )}
 
       {/* Main Chart: Evolution */}
-      <div className="card p-6 mb-6">
+      <div className="card p-0 overflow-hidden">
+        <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
+        <div className="p-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between mb-4">
           <SectionHeader
             icon={Activity}
@@ -401,9 +493,10 @@ function DashboardView() {
               </div>
             )}
 
-            <div className="flex self-start sm:self-end bg-surface-100 rounded-lg p-0.5">
+            <div className="flex self-start sm:self-end bg-surface-100 rounded-lg p-0.5" role="group" aria-label="Tipo de gráfico">
               <button
                 onClick={() => setChartType("area")}
+                aria-pressed={chartType === "area"}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
                   chartType === "area" ? "bg-white shadow-sm text-surface-900" : "text-surface-500 hover:text-surface-700"
                 }`}
@@ -412,6 +505,7 @@ function DashboardView() {
               </button>
               <button
                 onClick={() => setChartType("line")}
+                aria-pressed={chartType === "line"}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
                   chartType === "line" ? "bg-white shadow-sm text-surface-900" : "text-surface-500 hover:text-surface-700"
                 }`}
@@ -532,11 +626,14 @@ function DashboardView() {
             </LineChart>
           )}
         </ResponsiveContainer>
+        </div>
       </div>
 
       {/* Second row: Bruto vs Neto bar + Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <div className="card p-6 lg:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="card p-0 overflow-hidden lg:col-span-2">
+          <div className="h-1.5 bg-gradient-to-r from-accent-500 to-amber-400" />
+          <div className="p-6">
           <SectionHeader
             icon={BarChart3}
             title="Bruto vs Deducciones"
@@ -574,9 +671,12 @@ function DashboardView() {
               ))}
             </ComposedChart>
           </ResponsiveContainer>
+          </div>
         </div>
 
-        <div className="card p-6">
+        <div className="card p-0 overflow-hidden">
+          <div className="h-1.5 bg-gradient-to-r from-accent-400 to-amber-300" />
+          <div className="p-6">
           <SectionHeader
             icon={FileText}
             title="Resumen"
@@ -595,13 +695,16 @@ function DashboardView() {
               <SummaryRow label="Retención" value={`${retentionRate.toFixed(1)}%`} color="text-primary-600" />
             </div>
           </div>
+          </div>
         </div>
       </div>
 
       {/* Third row: Devengos pie + Deducciones radar */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {topDevengos.length > 0 && (
-          <div className="card p-6">
+          <div className="card p-0 overflow-hidden">
+            <div className="h-1.5 bg-gradient-to-r from-success-500 to-success-400" />
+            <div className="p-6">
             <SectionHeader
               icon={PieIcon}
               title="Devengos"
@@ -626,10 +729,9 @@ function DashboardView() {
                 </Pie>
                 <Tooltip
                   formatter={(value: number, name: string) => [formatCurrency(value), name]}
-                  contentStyle={{
-                    background: "#0f172a", color: "#fff", border: "none",
-                    borderRadius: "12px", fontSize: "12px", padding: "8px 12px",
-                  }}
+                  contentStyle={DASHBOARD_TOOLTIP_CONTENT_STYLE}
+                  itemStyle={DASHBOARD_TOOLTIP_ITEM_STYLE}
+                  labelStyle={DASHBOARD_TOOLTIP_LABEL_STYLE}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -642,11 +744,14 @@ function DashboardView() {
                 </div>
               ))}
             </div>
+            </div>
           </div>
         )}
 
         {topDeducciones.length > 0 && (
-          <div className="card p-6">
+          <div className="card p-0 overflow-hidden">
+            <div className="h-1.5 bg-gradient-to-r from-danger-500 to-danger-400" />
+            <div className="p-6">
             <SectionHeader
               icon={TrendingDown}
               title="Deducciones"
@@ -669,10 +774,9 @@ function DashboardView() {
                     />
                     <Tooltip
                       formatter={(value: number) => formatCurrency(value)}
-                      contentStyle={{
-                        background: "#0f172a", color: "#fff", border: "none",
-                        borderRadius: "12px", fontSize: "12px", padding: "8px 12px",
-                      }}
+                      contentStyle={DASHBOARD_TOOLTIP_CONTENT_STYLE}
+                      itemStyle={DASHBOARD_TOOLTIP_ITEM_STYLE}
+                      labelStyle={DASHBOARD_TOOLTIP_LABEL_STYLE}
                     />
                   </RadarChart>
                 </ResponsiveContainer>
@@ -694,22 +798,23 @@ function DashboardView() {
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#475569" }} width={130} axisLine={false} tickLine={false} />
                   <Tooltip
                     formatter={(value: number) => formatCurrency(value)}
-                    contentStyle={{
-                      background: "#0f172a", color: "#fff", border: "none",
-                      borderRadius: "12px", fontSize: "12px", padding: "8px 12px",
-                    }}
+                    contentStyle={DASHBOARD_TOOLTIP_CONTENT_STYLE}
+                    itemStyle={DASHBOARD_TOOLTIP_ITEM_STYLE}
+                    labelStyle={DASHBOARD_TOOLTIP_LABEL_STYLE}
                   />
                   <Bar dataKey="average" fill="#ef4444" radius={[0, 6, 6, 0]} barSize={24} />
                 </BarChart>
               </ResponsiveContainer>
             )}
+            </div>
           </div>
         )}
       </div>
 
       {/* Concept detail table */}
       {data.conceptBreakdown.length > 0 && (
-        <div className="card overflow-hidden mb-6">
+        <div className="card p-0 overflow-hidden">
+          <div className="h-1.5 bg-gradient-to-r from-accent-500 to-amber-400" />
           <div className="p-6 pb-3">
             <SectionHeader
               icon={FileText}
@@ -721,17 +826,60 @@ function DashboardView() {
             <table className="w-full">
               <thead>
                 <tr className="border-y border-surface-100 bg-surface-50/50">
-                  <th className="text-left px-6 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">Concepto</th>
-                  <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">Tipo</th>
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">Promedio</th>
-                  <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">Total</th>
-                  <th className="text-right px-6 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">Apariciones</th>
+                  <th scope="col" aria-sort={conceptSort.column === "name" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"} className="text-left px-6 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                    <button
+                      type="button"
+                      onClick={() => handleConceptSort("name")}
+                      className="inline-flex items-center gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                    >
+                      <span>Concepto</span>
+                      <SortIndicator active={conceptSort.column === "name"} direction={conceptSort.direction} />
+                    </button>
+                  </th>
+                  <th scope="col" aria-sort={conceptSort.column === "category" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"} className="text-left px-4 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                    <button
+                      type="button"
+                      onClick={() => handleConceptSort("category")}
+                      className="inline-flex items-center gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                    >
+                      <span>Tipo</span>
+                      <SortIndicator active={conceptSort.column === "category"} direction={conceptSort.direction} />
+                    </button>
+                  </th>
+                  <th scope="col" aria-sort={conceptSort.column === "average" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"} className="text-right px-4 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                    <button
+                      type="button"
+                      onClick={() => handleConceptSort("average")}
+                      className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                    >
+                      <span>Promedio</span>
+                      <SortIndicator active={conceptSort.column === "average"} direction={conceptSort.direction} />
+                    </button>
+                  </th>
+                  <th scope="col" aria-sort={conceptSort.column === "total" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"} className="text-right px-4 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                    <button
+                      type="button"
+                      onClick={() => handleConceptSort("total")}
+                      className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                    >
+                      <span>Total</span>
+                      <SortIndicator active={conceptSort.column === "total"} direction={conceptSort.direction} />
+                    </button>
+                  </th>
+                  <th scope="col" aria-sort={conceptSort.column === "count" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"} className="text-right px-6 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                    <button
+                      type="button"
+                      onClick={() => handleConceptSort("count")}
+                      className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                    >
+                      <span>Apariciones</span>
+                      <SortIndicator active={conceptSort.column === "count"} direction={conceptSort.direction} />
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {data.conceptBreakdown
-                  .sort((a, b) => b.total - a.total)
-                  .map((c) => (
+                {sortedConceptBreakdown.map((c) => (
                     <tr key={c.name} className="border-b border-surface-50 hover:bg-surface-50/80 transition-colors">
                       <td className="px-6 py-3 text-sm font-medium text-surface-900">{c.name}</td>
                       <td className="px-4 py-3">
@@ -742,7 +890,7 @@ function DashboardView() {
                             ? "bg-danger-50 text-danger-700"
                             : "bg-surface-100 text-surface-600"
                         }`}>
-                          {c.category === "devengo" ? "Devengo" : c.category === "deduccion" ? "Deducción" : "Otros"}
+                          {getConceptCategoryLabel(c.category)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-right font-mono font-medium text-surface-700">{formatCurrency(c.average)}</td>
@@ -822,11 +970,11 @@ function DashboardView() {
                 {s.pagasExtra > 0 && (
                   <div className="grid grid-cols-2 gap-4 mb-5">
                     <div className="bg-accent-50/30 border border-accent-100 rounded-xl p-4">
-                      <p className="text-[11px] font-semibold text-accent-600 uppercase tracking-wider">Pagas Extra — Bruto</p>
+                      <p className="text-[11px] font-semibold text-accent-600 uppercase tracking-wider">Desglose pagas extra — Bruto</p>
                       <p className="text-lg font-bold text-accent-700 font-mono mt-1">{formatCurrency(s.extraGross)}</p>
                     </div>
                     <div className="bg-accent-50/30 border border-accent-100 rounded-xl p-4">
-                      <p className="text-[11px] font-semibold text-accent-600 uppercase tracking-wider">Pagas Extra — Neto</p>
+                      <p className="text-[11px] font-semibold text-accent-600 uppercase tracking-wider">Desglose pagas extra — Neto</p>
                       <p className="text-lg font-bold text-accent-700 font-mono mt-1">{formatCurrency(s.extraNet)}</p>
                     </div>
                   </div>
@@ -862,8 +1010,10 @@ function DashboardView() {
 
       {/* ─── IRPF & Retention Rate Evolution ─────────────────── */}
       {data.irpfEvolution && data.irpfEvolution.length > 1 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="card p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="card p-0 overflow-hidden">
+            <div className="h-1.5 bg-gradient-to-r from-danger-500 to-danger-400" />
+            <div className="p-6">
             <SectionHeader
               icon={Shield}
               title="Evolución IRPF"
@@ -881,9 +1031,12 @@ function DashboardView() {
                 <Line yAxisId="right" type="monotone" dataKey="rate" name="Tipo (%)" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3, fill: "#fff", strokeWidth: 2 }} />
               </ComposedChart>
             </ResponsiveContainer>
+            </div>
           </div>
 
-          <div className="card p-6">
+          <div className="card p-0 overflow-hidden">
+            <div className="h-1.5 bg-gradient-to-r from-success-500 to-success-400" />
+            <div className="p-6">
             <SectionHeader
               icon={Percent}
               title="Tasa de Retención Neta"
@@ -900,10 +1053,16 @@ function DashboardView() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                 <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
                 <YAxis domain={[50, 100]} tick={{ fontSize: 11, fill: "#64748b" }} tickFormatter={(v) => `${v}%`} axisLine={false} tickLine={false} width={45} />
-                <Tooltip formatter={(value: number, name: string) => [name === "Retención (%)" ? `${value}%` : formatCurrency(value), name]} contentStyle={{ background: "#0f172a", color: "#fff", border: "none", borderRadius: "12px", fontSize: "12px", padding: "8px 12px" }} />
+                <Tooltip
+                  formatter={(value: number, name: string) => [name === "Retención (%)" ? `${value}%` : formatCurrency(value), name]}
+                  contentStyle={DASHBOARD_TOOLTIP_CONTENT_STYLE}
+                  itemStyle={DASHBOARD_TOOLTIP_ITEM_STYLE}
+                  labelStyle={DASHBOARD_TOOLTIP_LABEL_STYLE}
+                />
                 <Area type="monotone" dataKey="retentionRate" name="Retención (%)" stroke="#10b981" strokeWidth={2.5} fill="url(#gradRetention)" dot={{ r: 3, fill: "#fff", strokeWidth: 2 }} activeDot={{ r: 6, strokeWidth: 2, fill: "#fff" }} />
               </AreaChart>
             </ResponsiveContainer>
+            </div>
           </div>
         </div>
       )}

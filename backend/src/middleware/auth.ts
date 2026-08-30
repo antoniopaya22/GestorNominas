@@ -1,6 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
+import { eq } from "drizzle-orm";
 import jwt from "jsonwebtoken";
 import { env } from "../config.js";
+import { db } from "../db/index.js";
+import { users } from "../db/schema.js";
 
 export interface AuthPayload {
   userId: number;
@@ -16,19 +19,24 @@ declare global {
   }
 }
 
-export function authMiddleware(req: Request, res: Response, next: NextFunction) {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Token requerido" });
-  }
+const LOCAL_AUTH_EMAIL = "antonioalfa22@gmail.com";
 
+export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   try {
-    const token = header.slice(7);
-    const payload = jwt.verify(token, env.JWT_SECRET) as AuthPayload;
-    req.user = payload;
+    // Auth deshabilitada para despliegue local — auto-login con usuario local
+    const [user] = await db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(eq(users.email, LOCAL_AUTH_EMAIL));
+
+    if (!user) {
+      return res.status(500).json({ error: `Usuario local no encontrado: ${LOCAL_AUTH_EMAIL}` });
+    }
+
+    req.user = { userId: user.id, email: user.email };
     next();
-  } catch {
-    res.status(401).json({ error: "Token inválido o expirado" });
+  } catch (err) {
+    next(err);
   }
 }
 

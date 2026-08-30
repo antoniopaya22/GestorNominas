@@ -45,15 +45,12 @@ async function request<T>(
     headers,
   });
 
-  if (res.status === 401) {
-    clearAuth();
-    window.location.href = "/login";
-    throw new Error("Sesión expirada");
-  }
-
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? `HTTP ${res.status}`);
+    if (res.status === 401) {
+      clearAuth();
+    }
+    throw new Error(body.error ?? (res.status === 401 ? "No autorizado" : `HTTP ${res.status}`));
   }
   return res.json();
 }
@@ -86,6 +83,18 @@ export const register = (email: string, password: string, name: string) =>
   });
 
 export const getMe = () => request<AuthUser>("/auth/me");
+
+export const changePassword = (currentPassword: string, newPassword: string) =>
+  request<{ ok: boolean; message: string }>("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+
+export const updateUserProfile = (data: { name: string }) =>
+  request<AuthUser>("/auth/me", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
 
 // ─── Profiles ───────────────────────────────────────────────────
 export interface Profile {
@@ -139,12 +148,17 @@ export interface Payslip {
   concepts?: PayslipConcept[];
 }
 
+export type PayslipSortField = "period" | "fileName" | "grossSalary" | "netSalary" | "parsingStatus";
+export type ApiSortDirection = "asc" | "desc";
+
 export interface PayslipFilters {
   profileId?: number;
   year?: number;
   search?: string;
   status?: string;
   type?: "ordinal" | "extra";
+  sortBy?: PayslipSortField;
+  sortDir?: ApiSortDirection;
   page?: number;
   limit?: number;
 }
@@ -156,6 +170,8 @@ export const getPayslips = (filters: PayslipFilters = {}) => {
   if (filters.search) params.set("search", filters.search);
   if (filters.status) params.set("status", filters.status);
   if (filters.type) params.set("type", filters.type);
+  if (filters.sortBy) params.set("sortBy", filters.sortBy);
+  if (filters.sortDir) params.set("sortDir", filters.sortDir);
   params.set("page", String(filters.page ?? 1));
   params.set("limit", String(filters.limit ?? 20));
   return request<Paginated<Payslip>>(`/payslips?${params}`);
@@ -179,12 +195,13 @@ export const uploadPayslips = async (profileId: number, files: File[], payslipTy
     body: formData,
     headers,
   });
-  if (res.status === 401) {
-    clearAuth();
-    window.location.href = "/login";
-    throw new Error("Sesión expirada");
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      clearAuth();
+    }
+    throw new Error(body.error ?? "Error al subir los archivos");
   }
-  if (!res.ok) throw new Error("Upload failed");
   return res.json() as Promise<Payslip[]>;
 };
 
@@ -415,3 +432,495 @@ export const markAlertRead = (id: number) =>
 
 export const markAllAlertsRead = () =>
   request<{ ok: boolean }>("/alerts/history/read-all", { method: "PUT" });
+
+// ─── Financial Accounts ─────────────────────────────────────────
+export interface Account {
+  id: number;
+  name: string;
+  type: "bank" | "credit_card" | "cash" | "investment" | "other";
+  currency: string;
+  initialBalance: number;
+  color: string;
+  icon: string | null;
+  archived: boolean;
+  balance: number;
+  createdAt: string;
+}
+
+export const getAccounts = () =>
+  request<{ data: Account[] }>("/accounts").then((r) => r.data);
+
+export const createAccount = (data: {
+  name: string;
+  type?: string;
+  currency?: string;
+  initialBalance?: number;
+  color?: string;
+  icon?: string | null;
+}) => request<Account>("/accounts", { method: "POST", body: JSON.stringify(data) });
+
+export const updateAccount = (
+  id: number,
+  data: { name: string; type?: string; color?: string; initialBalance?: number; icon?: string | null },
+) => request<Account>(`/accounts/${id}`, { method: "PUT", body: JSON.stringify(data) });
+
+export const deleteAccount = (id: number) =>
+  request<{ ok: boolean }>(`/accounts/${id}`, { method: "DELETE" });
+
+export const toggleAccountArchive = (id: number) =>
+  request<Account>(`/accounts/${id}/archive`, { method: "PATCH" });
+
+// ─── Categories ─────────────────────────────────────────────────
+export interface Category {
+  id: number;
+  groupId: number;
+  name: string;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface CategoryGroup {
+  id: number;
+  name: string;
+  icon: string | null;
+  sortOrder: number;
+  createdAt: string;
+  categories: Category[];
+}
+
+export const getCategories = () =>
+  request<{ data: CategoryGroup[] }>("/categories").then((r) => r.data);
+
+export const createCategoryGroup = (data: { name: string; icon?: string | null }) =>
+  request<CategoryGroup>("/categories/groups", { method: "POST", body: JSON.stringify(data) });
+
+export const updateCategoryGroup = (id: number, data: { name: string; icon?: string | null }) =>
+  request<CategoryGroup>(`/categories/groups/${id}`, { method: "PUT", body: JSON.stringify(data) });
+
+export const deleteCategoryGroup = (id: number) =>
+  request<{ ok: boolean }>(`/categories/groups/${id}`, { method: "DELETE" });
+
+export const createCategory = (data: { groupId: number; name: string }) =>
+  request<Category>("/categories", { method: "POST", body: JSON.stringify(data) });
+
+export const updateCategory = (id: number, data: { name?: string; groupId?: number }) =>
+  request<Category>(`/categories/${id}`, { method: "PUT", body: JSON.stringify(data) });
+
+export const deleteCategory = (id: number) =>
+  request<{ ok: boolean }>(`/categories/${id}`, { method: "DELETE" });
+
+// ─── Transactions ───────────────────────────────────────────────
+export interface Transaction {
+  id: number;
+  accountId: number;
+  accountName: string;
+  categoryId: number | null;
+  categoryName: string;
+  groupName: string;
+  type: "expense" | "income" | "transfer";
+  amount: number;
+  date: string;
+  recurringTransactionId: number | null;
+  scheduledFor: string | null;
+  payee: string | null;
+  memo: string | null;
+  cleared: boolean;
+  transferId: number | null;
+  targetAccountId: number | null;
+  targetAccountName: string;
+  transferDirection: "outflow" | "inflow" | null;
+  flag: string | null;
+  importedFrom: string | null;
+  createdAt: string;
+}
+
+export interface TransactionFilters {
+  accountId?: number;
+  categoryId?: number;
+  groupId?: number;
+  from?: string;
+  to?: string;
+  type?: "expense" | "income" | "transfer";
+  cleared?: "true" | "false";
+  payee?: string;
+  search?: string;
+  sortBy?: "date" | "payee" | "category" | "amount" | "type";
+  sortDir?: "asc" | "desc";
+  page?: number;
+  limit?: number;
+}
+
+export const getTransactions = (filters: TransactionFilters = {}) => {
+  const params = new URLSearchParams();
+  if (filters.accountId) params.set("accountId", String(filters.accountId));
+  if (filters.categoryId) params.set("categoryId", String(filters.categoryId));
+  if (filters.groupId) params.set("groupId", String(filters.groupId));
+  if (filters.from) params.set("from", filters.from);
+  if (filters.to) params.set("to", filters.to);
+  if (filters.type) params.set("type", filters.type);
+  if (filters.cleared) params.set("cleared", filters.cleared);
+  if (filters.payee) params.set("payee", filters.payee);
+  if (filters.search) params.set("search", filters.search);
+  if (filters.sortBy) params.set("sortBy", filters.sortBy);
+  if (filters.sortDir) params.set("sortDir", filters.sortDir);
+  params.set("page", String(filters.page ?? 1));
+  params.set("limit", String(filters.limit ?? 50));
+  return request<Paginated<Transaction>>(`/transactions?${params}`);
+};
+
+export const createTransaction = (data: {
+  accountId: number;
+  categoryId?: number | null;
+  type: "expense" | "income" | "transfer";
+  amount: number;
+  date: string;
+  payee?: string | null;
+  memo?: string | null;
+  cleared?: boolean;
+  flag?: string | null;
+  targetAccountId?: number;
+}) => request<Transaction>("/transactions", { method: "POST", body: JSON.stringify(data) });
+
+export const updateTransaction = (
+  id: number,
+  data: Partial<{
+    accountId: number;
+    categoryId: number | null;
+    type: "expense" | "income" | "transfer";
+    amount: number;
+    date: string;
+    payee: string | null;
+    memo: string | null;
+    cleared: boolean;
+    flag: string | null;
+    targetAccountId: number;
+  }>,
+) => request<Transaction>(`/transactions/${id}`, { method: "PUT", body: JSON.stringify(data) });
+
+export const deleteTransaction = (id: number) =>
+  request<{ ok: boolean }>(`/transactions/${id}`, { method: "DELETE" });
+
+export const toggleCleared = (id: number) =>
+  request<Transaction>(`/transactions/${id}/clear`, { method: "PATCH" });
+
+// ─── Recurring Transactions ────────────────────────────────────
+export type RecurringCadence = "weekly" | "monthly" | "yearly";
+
+export interface RecurringTransaction {
+  id: number;
+  accountId: number;
+  accountName: string;
+  categoryId: number | null;
+  categoryName: string;
+  groupName: string;
+  type: "expense" | "income";
+  amount: number;
+  cadence: RecurringCadence;
+  intervalCount: number;
+  startDate: string;
+  endDate: string | null;
+  payee: string | null;
+  memo: string | null;
+  flag: string | null;
+  active: boolean;
+  createdAt: string;
+  nextOccurrence: string | null;
+  pendingCount: number;
+}
+
+export const getRecurringTransactions = () =>
+  request<{ data: RecurringTransaction[] }>("/recurring-transactions").then((response) => response.data);
+
+export const createRecurringTransaction = (data: {
+  accountId: number;
+  categoryId?: number | null;
+  type: "expense" | "income";
+  amount: number;
+  cadence: RecurringCadence;
+  intervalCount?: number;
+  startDate: string;
+  endDate?: string | null;
+  payee?: string | null;
+  memo?: string | null;
+  flag?: string | null;
+}) =>
+  request<RecurringTransaction>("/recurring-transactions", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const setRecurringTransactionActive = (id: number, active: boolean) =>
+  request<RecurringTransaction>(`/recurring-transactions/${id}/active`, {
+    method: "PATCH",
+    body: JSON.stringify({ active }),
+  });
+
+export const deleteRecurringTransaction = (id: number) =>
+  request<{ ok: boolean }>(`/recurring-transactions/${id}`, {
+    method: "DELETE",
+  });
+
+export const updateRecurringTransaction = (
+  id: number,
+  data: {
+    accountId: number;
+    categoryId?: number | null;
+    type: "expense" | "income";
+    amount: number;
+    cadence: RecurringCadence;
+    intervalCount?: number;
+    startDate: string;
+    endDate?: string | null;
+    payee?: string | null;
+    memo?: string | null;
+    flag?: string | null;
+  },
+) =>
+  request<RecurringTransaction>(`/recurring-transactions/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+
+export const exportTransactions = async (filters: Omit<TransactionFilters, "sortBy" | "sortDir" | "page" | "limit"> & { format?: "csv" | "json" } = {}) => {
+  const params = new URLSearchParams();
+  if (filters.accountId) params.set("accountId", String(filters.accountId));
+  if (filters.categoryId) params.set("categoryId", String(filters.categoryId));
+  if (filters.groupId) params.set("groupId", String(filters.groupId));
+  if (filters.from) params.set("from", filters.from);
+  if (filters.to) params.set("to", filters.to);
+  if (filters.type) params.set("type", filters.type);
+  if (filters.cleared) params.set("cleared", filters.cleared);
+  if (filters.search) params.set("search", filters.search);
+  const fmt = filters.format ?? "csv";
+  params.set("format", fmt);
+
+  const token = getAuthToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE}/export/transactions?${params}`, { headers });
+  if (!res.ok) throw new Error("Error al exportar transacciones");
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `transacciones.${fmt}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
+
+// ─── Finance Dashboard ──────────────────────────────────────────
+export interface FinanceSummary {
+  totalBalance: number;
+  monthExpenses: number;
+  monthIncome: number;
+  monthSavings: number;
+}
+
+export interface FinanceTrend {
+  month: string;
+  income: number;
+  expenses: number;
+  savings: number;
+}
+
+export interface FinanceBreakdown {
+  categoryId: number | null;
+  categoryName: string;
+  groupName: string;
+  total: number;
+  percentage: number;
+}
+
+export interface TopPayee {
+  payee: string;
+  total: number;
+  count: number;
+}
+
+export interface FinanceAnalyticsFilters {
+  from?: string;
+  to?: string;
+  accountId?: number;
+  groupId?: number;
+  categoryId?: number;
+}
+
+export interface FinanceAnalyticsSummary {
+  totalBalance: number;
+  incomeTotal: number;
+  expenseTotal: number;
+  netTotal: number;
+  monthlyAverageIncome: number;
+  monthlyAverageExpenses: number;
+  savingsRate: number;
+  visibleMonths: number;
+  transactionCount: number;
+  topIncomeMonth: { month: string; total: number } | null;
+  topExpenseMonth: { month: string; total: number } | null;
+}
+
+export interface FinanceAnalyticsMonth {
+  month: string;
+  income: number;
+  expenses: number;
+  net: number;
+  transactionCount: number;
+}
+
+export interface FinanceAnalyticsCategoryItem {
+  bucketKey: string;
+  categoryId: number | null;
+  categoryName: string;
+  groupId: number | null;
+  groupName: string;
+  type: "income" | "expense";
+  total: number;
+  count: number;
+  percentage: number;
+}
+
+export interface FinanceAnalyticsGroupItem {
+  bucketKey: string;
+  groupId: number | null;
+  groupName: string;
+  type: "income" | "expense";
+  total: number;
+  count: number;
+  percentage: number;
+}
+
+export interface FinanceAnalyticsPayeeItem {
+  bucketKey: string;
+  payee: string;
+  type: "income" | "expense";
+  total: number;
+  count: number;
+  percentage: number;
+}
+
+export interface FinanceAnalyticsAccountItem {
+  accountId: number;
+  accountName: string;
+  color: string;
+  balance: number;
+  income: number;
+  expenses: number;
+  net: number;
+  transactionCount: number;
+}
+
+export interface FinanceAnalyticsWeekdayItem {
+  weekdayIndex: number;
+  weekdayLabel: string;
+  income: number;
+  expenses: number;
+  net: number;
+  transactionCount: number;
+}
+
+export interface FinanceAnalyticsMonthBucket {
+  month: string;
+  bucketKey: string;
+  bucketId: number | null;
+  label: string;
+  parentLabel: string | null;
+  type: "income" | "expense";
+  total: number;
+}
+
+export interface FinanceAnalyticsData {
+  summary: FinanceAnalyticsSummary;
+  monthly: FinanceAnalyticsMonth[];
+  categories: FinanceAnalyticsCategoryItem[];
+  groups: FinanceAnalyticsGroupItem[];
+  payees: FinanceAnalyticsPayeeItem[];
+  accounts: FinanceAnalyticsAccountItem[];
+  weekdays: FinanceAnalyticsWeekdayItem[];
+  monthlyCategories: FinanceAnalyticsMonthBucket[];
+  monthlyGroups: FinanceAnalyticsMonthBucket[];
+}
+
+export const getFinanceSummary = () =>
+  request<FinanceSummary>("/finance/summary");
+
+export const getFinanceTrends = (filters?: FinanceAnalyticsFilters) => {
+  const params = new URLSearchParams();
+  if (filters?.from) params.set("from", filters.from);
+  if (filters?.to) params.set("to", filters.to);
+  if (filters?.accountId) params.set("accountId", String(filters.accountId));
+  if (filters?.groupId) params.set("groupId", String(filters.groupId));
+  if (filters?.categoryId) params.set("categoryId", String(filters.categoryId));
+  return request<{ data: FinanceTrend[] }>(`/finance/trends?${params}`).then((r) => r.data);
+};
+
+export const getFinanceBreakdown = (filters?: FinanceAnalyticsFilters) => {
+  const params = new URLSearchParams();
+  if (filters?.from) params.set("from", filters.from);
+  if (filters?.to) params.set("to", filters.to);
+  if (filters?.accountId) params.set("accountId", String(filters.accountId));
+  if (filters?.groupId) params.set("groupId", String(filters.groupId));
+  if (filters?.categoryId) params.set("categoryId", String(filters.categoryId));
+  return request<{ data: FinanceBreakdown[] }>(`/finance/breakdown?${params}`).then((r) => r.data);
+};
+
+export const getTopPayees = (filters?: FinanceAnalyticsFilters) => {
+  const params = new URLSearchParams();
+  if (filters?.from) params.set("from", filters.from);
+  if (filters?.to) params.set("to", filters.to);
+  if (filters?.accountId) params.set("accountId", String(filters.accountId));
+  if (filters?.groupId) params.set("groupId", String(filters.groupId));
+  if (filters?.categoryId) params.set("categoryId", String(filters.categoryId));
+  return request<{ data: TopPayee[] }>(`/finance/by-payee?${params}`).then((r) => r.data);
+};
+
+export const getFinanceAnalytics = (filters?: FinanceAnalyticsFilters) => {
+  const params = new URLSearchParams();
+  if (filters?.from) params.set("from", filters.from);
+  if (filters?.to) params.set("to", filters.to);
+  if (filters?.accountId) params.set("accountId", String(filters.accountId));
+  if (filters?.groupId) params.set("groupId", String(filters.groupId));
+  if (filters?.categoryId) params.set("categoryId", String(filters.categoryId));
+  return request<FinanceAnalyticsData>(`/finance/analytics?${params}`);
+};
+
+// ─── Import ─────────────────────────────────────────────────────
+export interface ImportResult {
+  ok: boolean;
+  dryRun?: boolean;
+  summary: {
+    accounts: number;
+    categoryGroups: number;
+    categories: number;
+    transactions: number;
+    duplicates?: number;
+    dateRange: { from: string; to: string };
+  };
+}
+
+export const importYnab = async (file: File, dryRun = false): Promise<ImportResult> => {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const token = getAuthToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const url = dryRun ? `${BASE}/import/ynab?dryRun=true` : `${BASE}/import/ynab`;
+  const res = await fetch(url, {
+    method: "POST",
+    body: formData,
+    headers,
+  });
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearAuth();
+    }
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Error al importar");
+  }
+  return res.json();
+};

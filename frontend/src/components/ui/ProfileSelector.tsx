@@ -28,13 +28,14 @@ export function ProfileSelector({ profiles, value, onChange, multi = false }: Pr
   }
 
   return (
-    <div className="flex gap-1.5 flex-wrap">
+    <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Seleccionar perfil">
       {profiles.map((p) => {
         const isSelected = selected.includes(p.id);
         return (
           <button
             key={p.id}
             onClick={() => handleClick(p.id)}
+            aria-pressed={isSelected}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer ${
               isSelected
                 ? "bg-white shadow-card border border-surface-200 text-surface-900"

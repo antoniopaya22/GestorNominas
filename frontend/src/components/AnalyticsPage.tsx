@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import {
   TrendingUp, AlertTriangle, Bell, Download, FileText,
-  ArrowUpRight, ArrowDownRight, Activity, Target,
+  ArrowUpRight, Activity, Target,
 } from "lucide-react";
 import {
   getProfiles, getAnalytics, exportData,
@@ -109,12 +109,15 @@ function AnalyticsView() {
 
   const salaryEvolutionData = analytics ? buildSalaryEvolutionData(analytics.trends) : [];
 
+  const [exportError, setExportError] = useState<string | null>(null);
+
   const handleExport = async (format: "csv" | "json") => {
     if (!selectedProfile) return;
+    setExportError(null);
     try {
       await exportData(selectedProfile, exportYear ? Number(exportYear) : undefined, format);
     } catch {
-      // silent fail - user sees no file download
+      setExportError("Error al exportar. Inténtalo de nuevo.");
     }
   };
 
@@ -132,29 +135,39 @@ function AnalyticsView() {
   }
 
   return (
-    <div className="animate-fade-in">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-surface-900">Analítica Avanzada</h2>
-          <p className="text-sm text-surface-500 mt-0.5">
-            Tendencias, predicciones y anomalías de tus nóminas
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => handleExport("csv")} className="btn-secondary text-xs">
-            <Download className="w-3.5 h-3.5" />
-            CSV
-          </button>
-          <button onClick={() => handleExport("json")} className="btn-secondary text-xs">
-            <Download className="w-3.5 h-3.5" />
-            JSON
-          </button>
+    <div className="animate-fade-in space-y-6">
+      {/* Hero */}
+      <div className="card p-0 overflow-hidden">
+        <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
+        <div className="px-6 py-5 sm:px-8 sm:py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-surface-400 text-xs uppercase tracking-wider mb-0.5">Analítica Avanzada</p>
+              <p className="text-lg font-semibold text-surface-900">Tendencias, predicciones y anomalías</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => handleExport("csv")} className="flex items-center gap-1.5 bg-surface-100 hover:bg-surface-200 rounded-lg px-3 py-1.5 text-xs font-medium text-surface-700 transition-colors" aria-label="Exportar CSV">
+                <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                CSV
+              </button>
+              <button onClick={() => handleExport("json")} className="flex items-center gap-1.5 bg-surface-100 hover:bg-surface-200 rounded-lg px-3 py-1.5 text-xs font-medium text-surface-700 transition-colors" aria-label="Exportar JSON">
+                <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                JSON
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
+      {exportError && (
+        <div className="card border-danger-200 bg-danger-50/50 p-4 flex items-center gap-2" role="alert">
+          <AlertTriangle className="w-4 h-4 text-danger-600 flex-shrink-0" aria-hidden="true" />
+          <p className="text-sm text-danger-700">{exportError}</p>
+        </div>
+      )}
+
       {/* Profile selector */}
-      <div className="flex gap-2 mb-6 flex-wrap">
+      <div className="flex gap-2 flex-wrap">
         <ProfileSelector
           profiles={profiles}
           value={selectedProfile ?? profiles[0]?.id ?? 0}
@@ -165,9 +178,12 @@ function AnalyticsView() {
       {isLoading && (
         <div className="space-y-6">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="card p-6">
-              <div className="skeleton h-5 w-40 mb-4" />
-              <div className="skeleton h-[250px] w-full rounded-xl" />
+            <div key={i} className="card p-0 overflow-hidden">
+              <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
+              <div className="p-6">
+                <div className="skeleton h-5 w-40 mb-4" />
+                <div className="skeleton h-[250px] w-full rounded-xl" />
+              </div>
             </div>
           ))}
         </div>
@@ -182,10 +198,12 @@ function AnalyticsView() {
       {analytics && (
         <div className="space-y-6">
           {/* Trends Chart */}
-          <div className="card p-6">
+          <div className="card p-0 overflow-hidden">
+            <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
+            <div className="p-6">
             <div className="flex items-center gap-2.5 mb-4">
               <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center">
-                <TrendingUp className="w-4 h-4 text-primary-600" />
+                <TrendingUp className="w-4 h-4 text-primary-600" aria-hidden="true" />
               </div>
               <div>
                 <h3 className="font-semibold text-surface-900 text-sm">Evolución Salarial</h3>
@@ -228,14 +246,17 @@ function AnalyticsView() {
             ) : (
               <p className="text-sm text-surface-400 py-8 text-center">No hay datos de tendencia suficientes</p>
             )}
+            </div>
           </div>
 
           {/* Predictions */}
           {analytics.predictions.length > 0 && (
-            <div className="card p-6">
+            <div className="card p-0 overflow-hidden">
+              <div className="h-1.5 bg-gradient-to-r from-amber-500 to-amber-400" />
+              <div className="p-6">
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="w-8 h-8 rounded-lg bg-accent-50 flex items-center justify-center">
-                  <Target className="w-4 h-4 text-accent-600" />
+                  <Target className="w-4 h-4 text-accent-600" aria-hidden="true" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-surface-900 text-sm">Predicciones</h3>
@@ -290,15 +311,18 @@ function AnalyticsView() {
                   <Line type="monotone" dataKey="NetoEst" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} name="Neto (est.)" />
                 </LineChart>
               </ResponsiveContainer>
+              </div>
             </div>
           )}
 
           {/* Year-over-Year */}
           {analytics.trends.yoyGross.length > 0 && (
-            <div className="card p-6">
+            <div className="card p-0 overflow-hidden">
+              <div className="h-1.5 bg-gradient-to-r from-success-500 to-success-400" />
+              <div className="p-6">
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="w-8 h-8 rounded-lg bg-success-50 flex items-center justify-center">
-                  <Activity className="w-4 h-4 text-success-600" />
+                  <Activity className="w-4 h-4 text-success-600" aria-hidden="true" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-surface-900 text-sm">Comparación Interanual</h3>
@@ -322,15 +346,18 @@ function AnalyticsView() {
                   <Bar dataKey="Año anterior" fill="#93c5fd" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
+              </div>
             </div>
           )}
 
           {/* Anomalies */}
           {analytics.anomalies.length > 0 && (
-            <div className="card p-6">
+            <div className="card p-0 overflow-hidden">
+              <div className="h-1.5 bg-gradient-to-r from-danger-500 to-danger-400" />
+              <div className="p-6">
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="w-8 h-8 rounded-lg bg-danger-50 flex items-center justify-center">
-                  <AlertTriangle className="w-4 h-4 text-danger-600" />
+                  <AlertTriangle className="w-4 h-4 text-danger-600" aria-hidden="true" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-surface-900 text-sm">Anomalías Detectadas</h3>
@@ -358,15 +385,18 @@ function AnalyticsView() {
                   );
                 })}
               </div>
+              </div>
             </div>
           )}
 
           {/* Alerts */}
           {analytics.alerts.length > 0 && (
-            <div className="card p-6">
+            <div className="card p-0 overflow-hidden">
+              <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
+              <div className="p-6">
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="w-8 h-8 rounded-lg bg-accent-50 flex items-center justify-center">
-                  <Bell className="w-4 h-4 text-accent-600" />
+                  <Bell className="w-4 h-4 text-accent-600" aria-hidden="true" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-surface-900 text-sm">Alertas</h3>
@@ -386,6 +416,7 @@ function AnalyticsView() {
                   );
                 })}
               </div>
+              </div>
             </div>
           )}
 
@@ -402,10 +433,12 @@ function AnalyticsView() {
 
           {/* Extras Summary */}
           {analytics.extras && analytics.extras.length > 0 && (
-            <div className="card p-6">
+            <div className="card p-0 overflow-hidden">
+              <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
+              <div className="p-6">
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="w-8 h-8 rounded-lg bg-accent-50 flex items-center justify-center">
-                  <Target className="w-4 h-4 text-accent-600" />
+                  <Target className="w-4 h-4 text-accent-600" aria-hidden="true" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-surface-900 text-sm">Pagas Extra</h3>
@@ -431,6 +464,7 @@ function AnalyticsView() {
                     </div>
                   </div>
                 ))}
+              </div>
               </div>
             </div>
           )}

@@ -78,7 +78,13 @@ function ProfilesManager() {
   if (isLoading) {
     return (
       <div className="max-w-2xl space-y-4 animate-fade-in">
-        <div className="skeleton h-8 w-32" />
+        <div className="card p-0 overflow-hidden">
+          <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
+          <div className="px-6 py-5 sm:px-8 sm:py-6">
+            <div className="skeleton h-4 w-32 mb-1" />
+            <div className="skeleton h-5 w-56" />
+          </div>
+        </div>
         <div className="card p-6">
           <div className="skeleton h-10 w-full mb-4" />
           <div className="skeleton h-10 w-40" />
@@ -88,26 +94,38 @@ function ProfilesManager() {
   }
 
   return (
-    <div className="max-w-2xl animate-fade-in">
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-surface-900">Perfiles</h2>
-        <p className="text-sm text-surface-500 mt-0.5">
-          Gestiona los perfiles de empleados para organizar las nóminas
-        </p>
+    <div className="max-w-2xl animate-fade-in space-y-6">
+      {/* Hero */}
+      <div className="card p-0 overflow-hidden">
+        <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
+        <div className="px-6 py-5 sm:px-8 sm:py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-surface-400 text-xs uppercase tracking-wider mb-0.5">Perfiles</p>
+              <p className="text-base font-semibold text-surface-900">Gestiona los perfiles de empleados</p>
+            </div>
+            {profiles.length > 0 && (
+              <div className="bg-accent-50 rounded-lg px-3 py-1.5">
+                <span className="text-xs font-medium text-accent-700">{profiles.length} perfil{profiles.length !== 1 ? "es" : ""}</span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="card p-5 mb-8">
+      <form onSubmit={handleSubmit} className="card p-5">
         <div className="flex items-center gap-2 mb-4">
-          <UserPlus className="w-4 h-4 text-surface-500" />
+          <UserPlus className="w-4 h-4 text-surface-500" aria-hidden="true" />
           <h3 className="font-semibold text-surface-900 text-sm">
             {editingId ? "Editar perfil" : "Nuevo perfil"}
           </h3>
         </div>
         <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
           <div className="flex-1">
-            <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Nombre</label>
+            <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5" htmlFor="profile-name">Nombre</label>
             <input
+              id="profile-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -117,12 +135,14 @@ function ProfilesManager() {
           </div>
           <div>
             <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Color</label>
-            <div className="flex gap-1.5">
+            <div className="flex gap-1.5" role="group" aria-label="Seleccionar color">
               {COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => setColor(c)}
+                  aria-label={`Color ${c}`}
+                  aria-pressed={color === c}
                   className={`w-7 h-7 rounded-lg border-2 transition-all duration-150 cursor-pointer flex items-center justify-center ${
                     color === c
                       ? "border-surface-900 scale-110 shadow-sm"
@@ -174,6 +194,7 @@ function ProfilesManager() {
             <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={() => startEdit(p)}
+                aria-label={`Editar perfil ${p.name}`}
                 className="btn-ghost text-xs cursor-pointer"
               >
                 <Edit3 className="w-3.5 h-3.5" /> Editar
@@ -183,6 +204,7 @@ function ProfilesManager() {
                   if (confirm(`¿Eliminar el perfil "${p.name}" y todas sus nóminas?`))
                     deleteMut.mutate(p.id);
                 }}
+                aria-label={`Eliminar perfil ${p.name}`}
                 className="btn-ghost text-xs text-danger-600 hover:bg-danger-50 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Eliminar
@@ -193,7 +215,7 @@ function ProfilesManager() {
         {profiles.length === 0 && (
           <div className="card text-center py-14">
             <div className="w-14 h-14 rounded-2xl bg-surface-100 flex items-center justify-center mx-auto mb-4">
-              <Users className="w-7 h-7 text-surface-300" />
+              <Users className="w-7 h-7 text-surface-300" aria-hidden="true" />
             </div>
             <h3 className="font-semibold text-surface-900 text-sm mb-1">Sin perfiles</h3>
             <p className="text-xs text-surface-500">Crea tu primer perfil con el formulario de arriba.</p>

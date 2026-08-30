@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
-import { type AuthUser, getMe, login as apiLogin, register as apiRegister, setAuthToken, getAuthToken, clearAuth } from "../lib/api";
+import { type AuthUser, getMe } from "../lib/api";
 
 interface AuthContext {
   user: AuthUser | null;
@@ -11,38 +11,67 @@ interface AuthContext {
 
 const AuthCtx = createContext<AuthContext | null>(null);
 
+const AUTH_USER_KEY = "auth_user";
+
+function getStoredUser(): AuthUser | null {
+  const storedUser = localStorage.getItem(AUTH_USER_KEY);
+  if (!storedUser) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(storedUser) as AuthUser;
+  } catch {
+    localStorage.removeItem(AUTH_USER_KEY);
+    return null;
+  }
+}
+
+function setStoredUser(user: AuthUser | null) {
+  if (user) {
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    return;
+  }
+
+  localStorage.removeItem(AUTH_USER_KEY);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const loadLocalUser = useCallback(async () => {
+    const currentUser = await getMe();
+    setStoredUser(currentUser);
+    setUser(currentUser);
+  }, []);
+
   useEffect(() => {
-    const token = getAuthToken();
-    if (!token) {
+    const storedUser = getStoredUser();
+    if (storedUser) {
+      setUser(storedUser);
       setLoading(false);
       return;
     }
-    getMe()
-      .then(setUser)
-      .catch(() => clearAuth())
+
+    loadLocalUser()
+      .catch(() => {
+        setStoredUser(null);
+        setUser(null);
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [loadLocalUser]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const { token, user: u } = await apiLogin(email, password);
-    setAuthToken(token);
-    setUser(u);
-  }, []);
+  const login = useCallback(async (_email: string, _password: string) => {
+    await loadLocalUser();
+  }, [loadLocalUser]);
 
-  const register = useCallback(async (email: string, password: string, name: string) => {
-    const { token, user: u } = await apiRegister(email, password, name);
-    setAuthToken(token);
-    setUser(u);
-  }, []);
+  const register = useCallback(async (_email: string, _password: string, _name: string) => {
+    await loadLocalUser();
+  }, [loadLocalUser]);
 
   const logout = useCallback(() => {
-    clearAuth();
-    setUser(null);
-    window.location.href = "/login";
+    window.location.href = "/";
   }, []);
 
   return (

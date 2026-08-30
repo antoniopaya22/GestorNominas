@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "c24a41dc-6f0f-46af-ac33-e2b56d724b15",
-  "prevId": "4c4d8f4f-2d55-4d57-92c9-47f45f45b1f8",
+  "id": "4c4d8f4f-2d55-4d57-92c9-47f45f45b1f8",
+  "prevId": "07b0fc20-0338-4579-9296-7a1a6b74bbb9",
   "tables": {
     "alert_history": {
       "name": "alert_history",
@@ -93,7 +93,7 @@
           "name": "user_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "name": {
@@ -414,14 +414,6 @@
           "autoincrement": false,
           "default": "'pending'"
         },
-        "payslip_type": {
-          "name": "payslip_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'ordinal'"
-        },
         "created_at": {
           "name": "created_at",
           "type": "text",
@@ -465,7 +457,7 @@
           "name": "user_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "name": {
@@ -526,7 +518,7 @@
           "name": "user_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "name": {
