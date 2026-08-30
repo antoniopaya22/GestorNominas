@@ -33,7 +33,6 @@ import {
   type FinanceAnalyticsFilters,
 } from "../lib/api";
 import { formatCompact, formatCurrency, formatMonthLabel, formatPercent } from "../lib/format";
-import { Providers } from "./Providers";
 import { EmptyState } from "./ui/EmptyState";
 import { KpiCard } from "./ui/KpiCard";
 import { SectionHeader } from "./ui/SectionHeader";
@@ -97,7 +96,7 @@ function PieTooltip({
   );
 }
 
-function FinanceDashboardView() {
+export function FinanceDashboardView({ onOpenDetailed }: { onOpenDetailed?: () => void } = {}) {
   const defaultRange = useMemo(() => getPresetRange("6m"), []);
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("6m");
   const [from, setFrom] = useState(defaultRange.from);
@@ -225,7 +224,7 @@ function FinanceDashboardView() {
         title="Sin datos financieros"
         description="Crea cuentas o importa movimientos para activar el resumen financiero."
         actionLabel="Importar datos"
-        actionHref="/import"
+        actionHref="/settings?tab=finanzas"
       />
     );
   }
@@ -264,9 +263,9 @@ function FinanceDashboardView() {
                   {isFetching ? "Actualizando resumen..." : `${analytics.summary.transactionCount} movimientos procesados`}
                 </p>
               </div>
-              <a href="/finance/analytics" className="btn-primary text-sm">
+              <button type="button" onClick={onOpenDetailed} className="btn-primary text-sm">
                 Ver analítica avanzada <ArrowRight className="w-4 h-4" />
-              </a>
+              </button>
             </div>
           </div>
 
@@ -487,10 +486,3 @@ function FinanceDashboardView() {
   );
 }
 
-export default function FinanceDashboardPage() {
-  return (
-    <Providers>
-      <FinanceDashboardView />
-    </Providers>
-  );
-}

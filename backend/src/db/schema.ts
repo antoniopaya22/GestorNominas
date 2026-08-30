@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 // ─── Users ──────────────────────────────────────────────────────
@@ -176,6 +176,77 @@ export const categories = sqliteTable("categories", {
   createdAt: text("created_at")
     .notNull()
     .default(sql`(datetime('now'))`),
+});
+
+// ─── Category Budgets (monthly assigned amounts) ────────────────
+export const categoryBudgets = sqliteTable(
+  "category_budgets",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    categoryId: integer("category_id")
+      .notNull()
+      .references(() => categories.id, { onDelete: "cascade" }),
+    month: text("month").notNull(), // 'YYYY-MM'
+    assigned: real("assigned").notNull().default(0),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    uniqueIndex("category_budgets_user_category_month_idx").on(
+      table.userId,
+      table.categoryId,
+      table.month,
+    ),
+  ],
+);
+
+// ─── Category Targets (monthly funding goals) ────────────────────
+export const categoryTargets = sqliteTable(
+  "category_targets",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    categoryId: integer("category_id")
+      .notNull()
+      .references(() => categories.id, { onDelete: "cascade" }),
+    targetAmount: real("target_amount").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [uniqueIndex("category_targets_category_idx").on(table.categoryId)],
+);
+
+// ─── Budget Actions (undo/redo history for the Plan view) ───────
+export const budgetActions = sqliteTable("budget_actions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  type: text("type", { enum: ["assign", "move"] }).notNull(),
+  month: text("month").notNull(),
+  categoryId: integer("category_id").references(() => categories.id, { onDelete: "cascade" }),
+  previousAssigned: real("previous_assigned"),
+  newAssigned: real("new_assigned"),
+  fromCategoryId: integer("from_category_id").references(() => categories.id, { onDelete: "cascade" }),
+  toCategoryId: integer("to_category_id").references(() => categories.id, { onDelete: "cascade" }),
+  amount: real("amount"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+export const budgetUndoPointers = sqliteTable("budget_undo_pointers", {
+  userId: integer("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  actionId: integer("action_id").references(() => budgetActions.id, { onDelete: "set null" }),
 });
 
 // ─── Financial Transactions ─────────────────────────────────────

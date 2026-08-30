@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
-import { type AuthUser, getMe } from "../lib/api";
+import { type AuthUser, getMe, login as loginApi, register as registerApi, setAuthToken, clearAuth } from "../lib/api";
 
 interface AuthContext {
   user: AuthUser | null;
@@ -40,38 +40,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadLocalUser = useCallback(async () => {
-    const currentUser = await getMe();
-    setStoredUser(currentUser);
-    setUser(currentUser);
-  }, []);
-
   useEffect(() => {
     const storedUser = getStoredUser();
-    if (storedUser) {
-      setUser(storedUser);
+    if (!storedUser) {
       setLoading(false);
       return;
     }
 
-    loadLocalUser()
+    getMe()
+      .then((currentUser) => {
+        setStoredUser(currentUser);
+        setUser(currentUser);
+      })
       .catch(() => {
+        clearAuth();
         setStoredUser(null);
         setUser(null);
       })
       .finally(() => setLoading(false));
-  }, [loadLocalUser]);
+  }, []);
 
-  const login = useCallback(async (_email: string, _password: string) => {
-    await loadLocalUser();
-  }, [loadLocalUser]);
+  const login = useCallback(async (email: string, password: string) => {
+    const { token, user: loggedInUser } = await loginApi(email, password);
+    setAuthToken(token);
+    setStoredUser(loggedInUser);
+    setUser(loggedInUser);
+  }, []);
 
-  const register = useCallback(async (_email: string, _password: string, _name: string) => {
-    await loadLocalUser();
-  }, [loadLocalUser]);
+  const register = useCallback(async (email: string, password: string, name: string) => {
+    const { token, user: newUser } = await registerApi(email, password, name);
+    setAuthToken(token);
+    setStoredUser(newUser);
+    setUser(newUser);
+  }, []);
 
   const logout = useCallback(() => {
-    window.location.href = "/";
+    clearAuth();
+    setStoredUser(null);
+    setUser(null);
+    window.location.href = "/login";
   }, []);
 
   return (

@@ -103,7 +103,7 @@ function HomeDashboardView() {
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <a href="/import" className="card p-6 group cursor-pointer hover:shadow-card-hover transition-all duration-200 hover:border-primary-200">
+          <a href="/settings?tab=finanzas" className="card p-6 group cursor-pointer hover:shadow-card-hover transition-all duration-200 hover:border-primary-200">
             <div className="w-12 h-12 rounded-2xl bg-primary-50 ring-1 ring-primary-100 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform duration-200">
               <Download className="w-6 h-6 text-primary-600" />
             </div>
@@ -407,7 +407,7 @@ function HomeDashboardView() {
 
       {/* Quick actions */}
       <div className="flex flex-wrap gap-2">
-        <a href="/import" className="btn-ghost text-sm flex items-center gap-1.5">
+        <a href="/settings?tab=finanzas" className="btn-ghost text-sm flex items-center gap-1.5">
           <Download className="w-4 h-4" /> Importar YNAB
         </a>
         <a href="/upload" className="btn-ghost text-sm flex items-center gap-1.5">
@@ -416,7 +416,7 @@ function HomeDashboardView() {
         <a href="/transactions" className="btn-ghost text-sm flex items-center gap-1.5">
           <Receipt className="w-4 h-4" /> Transacciones
         </a>
-        <a href="/analytics" className="btn-ghost text-sm flex items-center gap-1.5">
+        <a href="/payroll?tab=predicciones" className="btn-ghost text-sm flex items-center gap-1.5">
           <TrendingUp className="w-4 h-4" /> Analítica
         </a>
       </div>

@@ -9,6 +9,9 @@ interface Toast {
 
 interface ToastContext {
   toast: (message: string, type?: ToastType) => void;
+  success: (message: string) => void;
+  error: (message: string) => void;
+  info: (message: string) => void;
 }
 
 const ToastCtx = createContext<ToastContext | null>(null);
@@ -30,8 +33,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const success = useCallback((message: string) => addToast(message, "success"), [addToast]);
+  const error = useCallback((message: string) => addToast(message, "error"), [addToast]);
+  const info = useCallback((message: string) => addToast(message, "info"), [addToast]);
+
   return (
-    <ToastCtx.Provider value={{ toast: addToast }}>
+    <ToastCtx.Provider value={{ toast: addToast, success, error, info }}>
       {children}
       {/* Toast container */}
       <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">

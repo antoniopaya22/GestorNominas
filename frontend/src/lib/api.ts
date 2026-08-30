@@ -96,6 +96,12 @@ export const updateUserProfile = (data: { name: string }) =>
     body: JSON.stringify(data),
   });
 
+export const resetAllData = (password: string) =>
+  request<{ ok: boolean; message: string }>("/auth/reset-all", {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+
 // ─── Profiles ───────────────────────────────────────────────────
 export interface Profile {
   id: number;
@@ -508,6 +514,82 @@ export const updateCategory = (id: number, data: { name?: string; groupId?: numb
 
 export const deleteCategory = (id: number) =>
   request<{ ok: boolean }>(`/categories/${id}`, { method: "DELETE" });
+
+// ─── Plan (YNAB-style budget) ─────────────────────────────────────
+export type PlanCategoryStatus = "none" | "underfunded" | "funded" | "overfunded";
+
+export interface PlanCategory {
+  id: number;
+  groupId: number;
+  name: string;
+  sortOrder: number;
+  assigned: number;
+  activity: number;
+  carryover: number;
+  available: number;
+  target: number | null;
+  status: PlanCategoryStatus;
+  fullySpent: boolean;
+}
+
+export interface PlanGroup {
+  id: number;
+  name: string;
+  icon: string | null;
+  sortOrder: number;
+  categories: PlanCategory[];
+}
+
+export interface PlanResponse {
+  month: string;
+  readyToAssign: number;
+  groups: PlanGroup[];
+}
+
+export const getPlan = (month: string) =>
+  request<PlanResponse>(`/plan?month=${month}`);
+
+export const assignToCategory = (categoryId: number, month: string, amount: number) =>
+  request<{ readyToAssign: number; category: PlanCategory }>(
+    `/plan/categories/${categoryId}/assign`,
+    { method: "PUT", body: JSON.stringify({ month, amount }) },
+  );
+
+export const moveMoney = (
+  month: string,
+  fromCategoryId: number | null,
+  toCategoryId: number | null,
+  amount: number,
+) =>
+  request<{ readyToAssign: number }>("/plan/move", {
+    method: "POST",
+    body: JSON.stringify({ month, fromCategoryId, toCategoryId, amount }),
+  });
+
+export const setTarget = (categoryId: number, amount: number | null) =>
+  request<{ target: number | null }>(`/plan/categories/${categoryId}/target`, {
+    method: "PUT",
+    body: JSON.stringify({ amount }),
+  });
+
+export const undoPlan = () => request<{ month: string }>("/plan/undo", { method: "POST" });
+export const redoPlan = () => request<{ month: string }>("/plan/redo", { method: "POST" });
+
+export interface RecentMove {
+  id: number;
+  type: "assign" | "move";
+  month: string;
+  categoryName: string | null;
+  fromCategoryName: string | null;
+  toCategoryName: string | null;
+  previousAssigned: number | null;
+  newAssigned: number | null;
+  amount: number | null;
+  createdAt: string;
+}
+
+export const getRecentMoves = (limit = 20) =>
+  request<RecentMove[]>(`/plan/recent-moves?limit=${limit}`);
 
 // ─── Transactions ───────────────────────────────────────────────
 export interface Transaction {

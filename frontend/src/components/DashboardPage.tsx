@@ -11,7 +11,6 @@ import {
   Activity, Filter, Wallet, Shield, ChevronDown, ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
 import { getDashboard, getProfiles, type DashboardData } from "../lib/api";
-import { Providers } from "./Providers";
 import { formatCurrency, formatCompact, formatMonthLabel } from "../lib/format";
 import { ChartTooltip } from "./ui/ChartTooltip";
 import { ProfileSelector } from "./ui/ProfileSelector";
@@ -179,7 +178,7 @@ function DashboardSkeleton() {
 }
 
 // ─── Main Dashboard ─────────────────────────────────────────────
-function DashboardView() {
+export function DashboardView() {
   const { data: profiles = [], isLoading: profilesLoading } = useQuery({
     queryKey: ["profiles"],
     queryFn: getProfiles,
@@ -1116,11 +1115,3 @@ function SummaryRow({ label, value, color, bold }: { label: string; value: strin
   );
 }
 
-// ─── Export ─────────────────────────────────────────────────────
-export default function DashboardPage() {
-  return (
-    <Providers>
-      <DashboardView />
-    </Providers>
-  );
-}
