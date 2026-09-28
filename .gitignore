@@ -28,3 +28,7 @@ data/
 .DS_Store
 Thumbs.db
 examples/*
+
+# Electron desktop build (generado por .github/workflows/build-desktop.yml)
+desktop/release/
+desktop/resources/node/

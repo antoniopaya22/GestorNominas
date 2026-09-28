@@ -12,6 +12,7 @@ const envSchema = z.object({
     ? z.string().min(32, "JWT_SECRET must be at least 32 characters in production")
     : z.string().min(16).default("gestor-nominas-dev-secret-change-me"),
   JWT_EXPIRES_IN: z.string().default("7d"),
+  TESSDATA_PATH: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

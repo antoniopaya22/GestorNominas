@@ -1,0 +1,53 @@
+name: Build desktop installer (Windows)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar dependencias del monorepo
+        run: npm ci
+
+      - name: Compilar backend y frontend
+        run: npm run build
+
+      - name: Instalar dependencias de producción del backend (aisladas del workspace)
+        working-directory: backend
+        run: npm ci --omit=dev --workspaces=false
+
+      - name: Descargar Node.js portátil (win-x64)
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_VERSION=20.18.1
+          curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-win-x64.zip" -o node.zip
+          unzip -q node.zip
+          mkdir -p desktop/resources/node
+          cp "node-v${NODE_VERSION}-win-x64/node.exe" desktop/resources/node/node.exe
+
+      - name: Descargar datos de idioma de Tesseract (español)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p desktop/resources/tessdata
+          curl -fsSL "https://raw.githubusercontent.com/tesseract-ocr/tessdata/main/spa.traineddata" -o desktop/resources/tessdata/spa.traineddata
+
+      - name: Instalar Electron y empaquetar el instalador
+        working-directory: desktop
+        run: |
+          npm install
+          npm run dist
+
+      - name: Subir instalador como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GestorNominas-Windows-installer
+          path: desktop/release/*.exe

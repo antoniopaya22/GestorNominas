@@ -19,7 +19,7 @@ declare global {
   }
 }
 
-const LOCAL_AUTH_EMAIL = "antonioalfa22@gmail.com";
+export const LOCAL_AUTH_EMAIL = "antonioalfa22@gmail.com";
 
 export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   try {

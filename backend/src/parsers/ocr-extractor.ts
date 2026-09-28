@@ -3,6 +3,7 @@ import { createCanvas, type Canvas, type CanvasRenderingContext2D as NodeCanvasC
 import { readFileSync } from "fs";
 import { createRequire } from "module";
 import { logger } from "../logger.js";
+import { env } from "../config.js";
 
 // pdfjs-dist v3 legacy build is CJS
 const require = createRequire(import.meta.url);
@@ -84,9 +85,15 @@ export async function extractTextWithOcr(filePath: string): Promise<string> {
 
   const pageTexts: string[] = [];
 
+  // Cuando TESSDATA_PATH está definido (app de escritorio empaquetada), se usan
+  // los datos de idioma incluidos como recurso local en vez de descargarlos.
+  const tesseractOptions = env.TESSDATA_PATH
+    ? { langPath: env.TESSDATA_PATH, cacheMethod: "readOnly" as const }
+    : undefined;
+
   for (const buf of buffers) {
     const result = await Promise.race([
-      Tesseract.recognize(buf, "spa"),
+      Tesseract.recognize(buf, "spa", tesseractOptions),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("OCR timeout")), OCR_TIMEOUT_MS)
       ),
