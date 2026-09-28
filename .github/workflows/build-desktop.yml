@@ -21,7 +21,10 @@ jobs:
 
       - name: Instalar dependencias de producción del backend (aisladas del workspace)
         working-directory: backend
-        run: npm ci --omit=dev --workspaces=false
+        # npm install (no "ci"): resuelve en caliente contra la plataforma del runner.
+        # Un lockfile propio generado en otro SO deja mal marcadas (sin "optional")
+        # dependencias anidadas de esbuild (vitest/tsx) y npm ci falla con EBADPLATFORM.
+        run: npm install --omit=dev --workspaces=false
 
       - name: Descargar Node.js portátil (win-x64)
         shell: bash
