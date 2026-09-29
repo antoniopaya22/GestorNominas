@@ -29,6 +29,8 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getDatos, crearDato } from '../lib/api';
 import { Providers } from './Providers';
+import { PageHeader, StatGrid, SectionCard, PageHeaderSkeleton, ChartCardSkeleton } from './app';
+import { EmptyState } from './ui/EmptyState';
 
 function NombreView() {
   const queryClient = useQueryClient();
@@ -37,12 +39,14 @@ function NombreView() {
     queryFn: getDatos,
   });
 
-  if (isLoading) return <div className="skeleton h-32 w-full" />;
-  if (error) return <p className="text-danger-400">Error al cargar datos</p>;
+  if (isLoading) return <><PageHeaderSkeleton /><ChartCardSkeleton /></>;
+  if (error) return <EmptyState icon={AlertTriangle} title="No se pudieron cargar los datos" description="Vuelve a intentarlo en unos segundos." />;
 
   return (
-    <div className="space-y-6">
-      {/* UI con Tailwind utility classes o componentes de shadcn (@/components/ui/*) */}
+    <div>
+      <PageHeader title="Título" description="Qué ves en esta página." actions={/* botones */ null} />
+      <StatGrid>{/* StatCard… */}</StatGrid>
+      <SectionCard className="mt-6" title="Bloque">{/* contenido */}</SectionCard>
     </div>
   );
 }
@@ -86,8 +90,9 @@ export async function uploadPayslips(profileId, files): Promise<Payslip[]>
 
 Reglas:
 - **Nunca** hacer `fetch()` directo en componentes — siempre a través de `api.ts`
-- Auth token en localStorage (`auth_token`) — se inyecta automáticamente en headers
-- Error 401 → `clearAuth()` + `window.location.href = "/login"`
+- El token es el `access_token` de la sesión de Supabase (`getAuthToken()`, async) — se inyecta automáticamente en headers; no hay nada en `localStorage` propio
+- Error 401 → `clearAuth()` (signOut de Supabase) + `window.location.href = "/login"`
+- Formato: `lib/format.ts` (`formatCurrency` agrupa siempre miles, `formatPct` → "77,7 %", `formatCompact` → "2,1k €", `formatMonthLabel` → "Sep 26"). No usar `toFixed` para mostrar porcentajes.
 - Funciones de upload y export usan `fetch` directo (no JSON body)
 
 ## Auth Flow
@@ -105,16 +110,37 @@ Login con Google vía **Supabase Auth** (`src/lib/supabase.ts`) — no hay login
 Tailwind v4 (config vía `@theme`/`@config` en `src/styles/global.css`, no solo `tailwind.config.mjs`) + componentes de shadcn/ui (`@/components/ui/*`, base **Base UI**, no Radix).
 
 - **Tokens semánticos de shadcn** (se adaptan solos a dark mode): `bg-background`, `text-foreground`, `bg-card`/`text-card-foreground`, `bg-primary`/`text-primary-foreground`, `bg-muted`/`text-muted-foreground`, `bg-destructive`/`text-destructive`, `border-border`, `border-input`, `bg-accent`/`text-accent-foreground`.
-- **Paleta de marca heredada** (`primary-{50..950}`, `accent-{50..950}`, `success-{50..950}`, `danger-{50..950}`, `surface-{50..950}` en `tailwind.config.mjs`, cargada vía `@config`): se mantiene para semántica de datos (verde=ingreso, rojo=gasto, etc.) en páginas ya existentes — no se ha sustituido por tokens de shadcn.
+- **Marca (logo)**: verde `primary-*` (500 = `#42af78`, 600 = `#2a8558` para texto blanco encima; en oscuro `--primary` = `#40d880`) + navy `brand-navy` (`#2e3a48`). Son los **únicos acentos**: nada de azul fijo. `success`/`danger`/ámbar solo para semántica de datos (ingreso/gasto/impuesto).
+- **Lienzo de la app**: `Layout.astro` pone `class="app-root"` en el body; en `global.css` esa clase redefine `--background` (panel papel `#faf9f6`), `--card` (blanco), `--sidebar` (marco cálido) y sus equivalentes oscuros con matiz navy. La landing no usa `.app-root` y no se ve afectada.
+- **Tipografía de la app**: Geist Variable. `font-mono` dentro de `.app-root` se remapea a Geist con cifras tabulares (para importes); en código nuevo usar `tabular-nums` directamente. Acento editorial opcional: clase `font-serif-accent` (Instrument Serif itálica), solo en títulos y con moderación.
 - Componentes reutilizables en `@/components/ui/`: `Button`, `Card`, `Input`, `Label`, `Badge`, `Select`, `Table`, `Tabs`, `DropdownMenu`, `Dialog`, `AlertDialog`, `Avatar`, `Separator`, `Tooltip`, `Popover`, `Checkbox`, `Switch`, `Textarea`, `Sonner` (toasts). Base UI usa la prop `render` para polimorfismo (no `asChild` de Radix); para un link con pinta de botón, usar `buttonVariants({...})` sobre una `<a>` en vez de envolver `<Button>`.
 - Clases de componente heredadas en `global.css` (`.card`, `.btn-primary/secondary/danger/ghost`, `.input`, `.badge`, `.skeleton`) siguen existiendo para las páginas de la app ya construidas — están redefinidas sobre los tokens de shadcn, no reescribir cada página para usar los componentes de `ui/` salvo que se toque esa página de todos modos.
 - **Fuentes**: `font-sans` (Fira Sans, texto general), `Geist Variable` (marca/shadcn), `font-mono` (Fira Code)
-- **Dark mode**: estrategia `class`, toggle con localStorage `theme`
+- **Dark mode**: estrategia `class`. Preferencia en `localStorage.theme` (`light`/`dark`; sin clave = sistema). Única fuente de verdad: hook `useTheme()` (`src/hooks/use-theme.ts`) — `{ preference, resolved, setPreference }`; sincroniza entre islas. El script inline de `Layout.astro`/`login.astro` aplica el tema antes de pintar.
 
 ## Layout
 
-- `src/layouts/Layout.astro` — la app (`/app/*`): sidebar fijo desktop / bottom nav mobile, iconos `lucide-react`, enlaces siempre bajo `/app/...`.
+- `src/layouts/Layout.astro` — la app (`/app/*`): renderiza `<AppShell client:load currentPath>` con la página como `children`.
+- `src/components/AppShell.tsx` — sidebar de shadcn en variante `inset` (colapsable a iconos, cookie `sidebar_state`, sheet en móvil), selector de espacio Finanzas/Nóminas, menú de usuario en el pie (avatar de Google, Ajustes, tema, cerrar sesión), cabecera fija translúcida con breadcrumbs, buscador ⌘K (`app/CommandMenu.tsx`) y acción principal contextual. El contenido va en un contenedor `max-w-7xl` con fade-in (`.app-page`).
+- `src/components/app/navigation.ts` — **única fuente de verdad** de rutas, iconos, espacios y acción principal de cada espacio. Una página nueva de la app se añade aquí (y aparece sola en sidebar, breadcrumbs y ⌘K).
 - `src/layouts/MarketingLayout.astro` — páginas públicas: header con nav a Características/Precios + CTA a `/login`, footer simple.
+
+## Sistema de diseño de la app (`src/components/app/`)
+
+Importar desde `./app` (barrel). Toda página de `/app` debe construirse con estas piezas — ver `HomeDashboardPage.tsx` y `DashboardPage.tsx` como referencia.
+
+- `PageHeader` — `title`, `accent?` (final en serif itálica), `eyebrow?`, `description?`, `actions?` (derecha), `children?` (fila de filtros). Una por página, siempre arriba.
+- `StatCard` / `StatGrid` — `label`, `value`, `icon?`, `delta?: { value, trend: "up"|"down"|"flat", tone?, label? }` (subir = positivo salvo `tone` explícito; invertir para gastos/impuestos), `hint?`, `sparkline?: number[]`, `sparklineColor?`, `emphasis?`. `StatGrid` = 1/2/4 columnas. `ui/KpiCard` queda como adaptador de compatibilidad.
+- `SectionCard` — contenedor base (card con borde fino): `title?`, `description?`, `icon?`, `action?`, `footer?`, `flush?` (sin padding, para tablas/listas). `CardLink` para "Ver todo".
+- `ChartCard` — `SectionCard` con área de gráfico de alto fijo (`height`) y `legend?`. Dentro, `<ResponsiveContainer width="100%" height="100%">`.
+- `Segmented` — selector segmentado accesible (tipo de gráfico, periodo, tema).
+- `Sparkline` — minigráfico SVG sin Recharts.
+- Skeletons: `PageHeaderSkeleton`, `StatCardSkeleton`, `ChartCardSkeleton`, `ListCardSkeleton` (misma geometría que lo real).
+- `ui/EmptyState` (`compact?`, `children` para acciones propias), `ui/ChartTooltip` (sigue el tema; `valueFormatter`), `ui/ProfileSelector` (chips), `ui/SectionHeader`.
+
+**Tema de gráficas** (`app/chart-theme.ts`): usar siempre `chartGrid`, `chartAxis`, `chartCursor`/`chartBarCursor`, `chartActiveDot`, `chartColors` (`primary` = verde marca, `secondary` = navy/pizarra, `tax` = ámbar, `income`/`expense`) y `chartPalette` para categorías. Todo va por variables CSS (`--chart-1..5`), así que funciona en claro y oscuro sin JS. Nada de colores hex de marca sueltos ni tooltips con fondo fijo.
+
+Patrón visual: bruto en navy (línea discontinua), neto en verde (área/sólido); datos multi-perfil agregados por mes antes de pintar series temporales.
 
 ## Reglas Críticas
 
