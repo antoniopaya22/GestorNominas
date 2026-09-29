@@ -34,3 +34,6 @@ desktop/release/
 desktop/resources/node/
 .vercel
 .env*
+
+# Worktrees de agentes de Claude Code
+.claude/
