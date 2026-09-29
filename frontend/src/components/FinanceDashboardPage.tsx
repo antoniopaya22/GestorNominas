@@ -307,7 +307,9 @@ function FinanceDashboardView() {
                     onValueChange={(value) => setAccountId(value === "all" ? undefined : Number(value))}
                   >
                     <SelectTrigger id="finance-dashboard-account" className="min-w-[240px]">
-                      <SelectValue />
+                      <SelectValue>
+                        {(v: string) => (v === "all" ? "Todas las cuentas" : accounts.find((a) => String(a.id) === v)?.name ?? v)}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todas las cuentas</SelectItem>

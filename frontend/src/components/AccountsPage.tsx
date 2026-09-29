@@ -213,7 +213,7 @@ function AccountsView() {
             <Label htmlFor="account-type">Tipo</Label>
             <Select value={type} onValueChange={setType}>
               <SelectTrigger id="account-type" className="w-full">
-                <SelectValue />
+                <SelectValue>{(v: string) => ACCOUNT_TYPES.find((t) => t.value === v)?.label ?? v}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {ACCOUNT_TYPES.map((t) => (

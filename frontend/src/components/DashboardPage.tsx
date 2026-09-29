@@ -940,7 +940,9 @@ function DashboardView() {
                 value={selectedYear ? String(selectedYear) : "all"}
                 onValueChange={(v) => setSelectedYear(v === "all" ? null : Number(v))}
               >
-                <SelectTrigger size="sm" className="w-auto"><SelectValue /></SelectTrigger>
+                <SelectTrigger size="sm" className="w-auto">
+                  <SelectValue>{(v: string) => (v === "all" ? "Todos los años" : v)}</SelectValue>
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los años</SelectItem>
                   {data.annualSummaries.map((s) => (
@@ -1114,7 +1116,9 @@ function MonthRangeSelect({
     <label className="block min-w-[9rem]">
       <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
       <Select value={value || "none"} onValueChange={(v) => onChange(v === "none" ? "" : v)} disabled={options.length === 0}>
-        <SelectTrigger className="min-w-[9rem]"><SelectValue placeholder={placeholder} /></SelectTrigger>
+        <SelectTrigger className="min-w-[9rem]">
+          <SelectValue placeholder={placeholder}>{(v: string) => (v === "none" ? placeholder : formatMonthLabel(v))}</SelectValue>
+        </SelectTrigger>
         <SelectContent>
           <SelectItem value="none">{placeholder}</SelectItem>
           {options.map((month) => (

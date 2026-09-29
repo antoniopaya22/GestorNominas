@@ -42,6 +42,9 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   review: { label: "Revisar", cls: "bg-accent-50 text-accent-700 dark:bg-accent-500/10 dark:text-accent-400" },
 };
 
+const MONTH_NAMES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+const TYPE_FILTER_LABELS: Record<string, string> = { ordinal: "Mensual", extra: "Paga Extra" };
+
 function formatPeriod(m: number | null, y: number | null): string {
   if (!m || !y) return "Sin fecha";
   const names = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -254,7 +257,9 @@ function PayslipsList() {
 
         {years.length > 0 && (
           <Select value={yearFilter || ALL} onValueChange={(v) => { setYearFilter(v === ALL ? "" : v); setPage(1); }}>
-            <SelectTrigger className="w-auto" size="sm"><SelectValue placeholder="Año" /></SelectTrigger>
+            <SelectTrigger className="w-auto" size="sm">
+              <SelectValue placeholder="Año">{(v: string) => (v === ALL ? "Año" : v)}</SelectValue>
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>Año</SelectItem>
               {years.map((y) => (
@@ -265,17 +270,21 @@ function PayslipsList() {
         )}
 
         <Select value={monthFilter || ALL} onValueChange={(v) => setMonthFilter(v === ALL ? "" : v)}>
-          <SelectTrigger className="w-auto" size="sm"><SelectValue placeholder="Mes" /></SelectTrigger>
+          <SelectTrigger className="w-auto" size="sm">
+            <SelectValue placeholder="Mes">{(v: string) => (v === ALL ? "Mes" : MONTH_NAMES[Number(v) - 1])}</SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Mes</SelectItem>
-            {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"].map((m, i) => (
+            {MONTH_NAMES.map((m, i) => (
               <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
         <Select value={statusFilter || ALL} onValueChange={(v) => { setStatusFilter(v === ALL ? "" : v); setPage(1); }}>
-          <SelectTrigger className="w-auto" size="sm"><SelectValue placeholder="Estado" /></SelectTrigger>
+          <SelectTrigger className="w-auto" size="sm">
+            <SelectValue placeholder="Estado">{(v: string) => (STATUS_MAP[v]?.label ?? "Estado")}</SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Estado</SelectItem>
             <SelectItem value="parsed">Procesada</SelectItem>
@@ -286,7 +295,9 @@ function PayslipsList() {
         </Select>
 
         <Select value={typeFilter || ALL} onValueChange={(v) => { setTypeFilter(v === ALL ? "" : v); setPage(1); }}>
-          <SelectTrigger className="w-auto" size="sm"><SelectValue placeholder="Tipo" /></SelectTrigger>
+          <SelectTrigger className="w-auto" size="sm">
+            <SelectValue placeholder="Tipo">{(v: string) => (TYPE_FILTER_LABELS[v] ?? "Tipo")}</SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Tipo</SelectItem>
             <SelectItem value="ordinal">Mensual</SelectItem>

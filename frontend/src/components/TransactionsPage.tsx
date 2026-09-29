@@ -62,6 +62,8 @@ const ACCOUNT_ICONS: Record<string, typeof Wallet> = {
 };
 
 const NONE = "__none__";
+const TX_TYPE_FILTER_LABELS: Record<string, string> = { expense: "Gastos", income: "Ingresos", transfer: "Transferencias" };
+const CADENCE_LABELS: Record<string, string> = { weekly: "Semanal", monthly: "Mensual", yearly: "Anual" };
 
 type SortField = "date" | "payee" | "category" | "amount" | "type";
 type SortDir = "asc" | "desc";
@@ -581,7 +583,9 @@ function TransactionsView() {
                     id="tx-account-select"
                     className="border-none bg-transparent p-0 h-auto shadow-none text-foreground font-bold text-base w-full dark:bg-transparent"
                   >
-                    <SelectValue />
+                    <SelectValue>
+                      {(v: string) => (v === "all" ? "Todas las cuentas" : activeAccounts.find((a) => String(a.id) === v)?.name ?? v)}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas las cuentas</SelectItem>
@@ -665,7 +669,9 @@ function TransactionsView() {
           <div>
             <label className="sr-only" htmlFor="tx-filter-type">Filtrar por tipo</label>
             <Select value={filterType || NONE} onValueChange={(v) => { setFilterType(v === NONE ? "" : v as typeof filterType); setPage(1); }}>
-              <SelectTrigger id="tx-filter-type" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="tx-filter-type" className="w-full">
+                <SelectValue>{(v: string) => (v === NONE ? "Tipo: Todos" : TX_TYPE_FILTER_LABELS[v] ?? v)}</SelectValue>
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NONE}>Tipo: Todos</SelectItem>
                 <SelectItem value="expense">Gastos</SelectItem>
@@ -677,7 +683,9 @@ function TransactionsView() {
           <div>
             <label className="sr-only" htmlFor="tx-filter-cleared">Filtrar por estado</label>
             <Select value={filterCleared || NONE} onValueChange={(v) => { setFilterCleared(v === NONE ? "" : v as typeof filterCleared); setPage(1); }}>
-              <SelectTrigger id="tx-filter-cleared" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="tx-filter-cleared" className="w-full">
+                <SelectValue>{(v: string) => (v === NONE ? "Estado: Todos" : v === "true" ? "Liquidadas" : "Pendientes")}</SelectValue>
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NONE}>Estado: Todos</SelectItem>
                 <SelectItem value="true">Liquidadas</SelectItem>
@@ -691,7 +699,9 @@ function TransactionsView() {
               value={filterCategoryId ? String(filterCategoryId) : NONE}
               onValueChange={(v) => { setFilterCategoryId(v === NONE ? "" : Number(v)); setPage(1); }}
             >
-              <SelectTrigger id="tx-filter-category" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="tx-filter-category" className="w-full">
+                <SelectValue>{(v: string) => (v === NONE ? "Categoría: Todas" : flatCategories.find((c) => String(c.id) === v)?.name ?? v)}</SelectValue>
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NONE}>Categoría: Todas</SelectItem>
                 {categoryGroups.map((g) => (
@@ -796,7 +806,11 @@ function TransactionsView() {
                   value={newCategoryGroupId ? String(newCategoryGroupId) : NONE}
                   onValueChange={(v) => setNewCategoryGroupId(v === NONE ? "" : Number(v))}
                 >
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona grupo" /></SelectTrigger>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecciona grupo">
+                      {(v: string) => (v === NONE ? "Selecciona grupo" : categoryGroups.find((g) => String(g.id) === v)?.name ?? v)}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NONE}>Selecciona grupo</SelectItem>
                     {categoryGroups.map((group) => (
@@ -896,7 +910,11 @@ function TransactionsView() {
               <div className="space-y-1.5">
                 <Label>Cuenta</Label>
                 <Select value={recurringAccountId ? String(recurringAccountId) : NONE} onValueChange={(v) => setRecurringAccountId(v === NONE ? "" : Number(v))}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Seleccionar...">
+                      {(v: string) => (v === NONE ? "Seleccionar..." : activeAccounts.find((a) => String(a.id) === v)?.name ?? v)}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NONE}>Seleccionar...</SelectItem>
                     {activeAccounts.map((account) => <SelectItem key={account.id} value={String(account.id)}>{account.name}</SelectItem>)}
@@ -906,7 +924,11 @@ function TransactionsView() {
               <div className="space-y-1.5">
                 <Label>Categoría</Label>
                 <Select value={recurringCategoryId ? String(recurringCategoryId) : NONE} onValueChange={(v) => setRecurringCategoryId(v === NONE ? "" : Number(v))}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Sin categoría" /></SelectTrigger>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Sin categoría">
+                      {(v: string) => (v === NONE ? "Sin categoría" : flatCategories.find((c) => String(c.id) === v)?.name ?? v)}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NONE}>Sin categoría</SelectItem>
                     {categoryGroups.map((group) => (
@@ -921,7 +943,9 @@ function TransactionsView() {
               <div className="space-y-1.5">
                 <Label>Frecuencia</Label>
                 <Select value={recurringCadence} onValueChange={(v) => setRecurringCadence(v as RecurringCadence)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full">
+                    <SelectValue>{(v: string) => CADENCE_LABELS[v] ?? v}</SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="weekly">Semanal</SelectItem>
                     <SelectItem value="monthly">Mensual</SelectItem>
@@ -1116,7 +1140,11 @@ function TransactionsView() {
               <div className="space-y-1.5">
                 <Label>Cuenta</Label>
                 <Select value={formAccountId ? String(formAccountId) : NONE} onValueChange={(v) => setFormAccountId(v === NONE ? "" : Number(v))}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Seleccionar...">
+                      {(v: string) => (v === NONE ? "Seleccionar..." : activeAccounts.find((a) => String(a.id) === v)?.name ?? v)}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NONE}>Seleccionar...</SelectItem>
                     {activeAccounts.map((a) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
@@ -1128,7 +1156,11 @@ function TransactionsView() {
               <div className="space-y-1.5">
                 <Label>Destino</Label>
                 <Select value={formTargetAccountId ? String(formTargetAccountId) : NONE} onValueChange={(v) => setFormTargetAccountId(v === NONE ? "" : Number(v))}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Seleccionar...">
+                      {(v: string) => (v === NONE ? "Seleccionar..." : activeAccounts.find((a) => String(a.id) === v)?.name ?? v)}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NONE}>Seleccionar...</SelectItem>
                     {activeAccounts.filter((a) => a.id !== (formAccountId || selectedAccountId)).map((a) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
@@ -1151,7 +1183,11 @@ function TransactionsView() {
                   </Button>
                 </div>
                 <Select value={formCategoryId ? String(formCategoryId) : NONE} onValueChange={(v) => setFormCategoryId(v === NONE ? "" : Number(v))}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Sin categoría" /></SelectTrigger>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Sin categoría">
+                      {(v: string) => (v === NONE ? "Sin categoría" : flatCategories.find((c) => String(c.id) === v)?.name ?? v)}
+                    </SelectValue>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NONE}>Sin categoría</SelectItem>
                     {categoryGroups.map((g) => (
