@@ -230,12 +230,12 @@ function AnalyticsView() {
                 <AreaChart data={salaryEvolutionData}>
                   <defs>
                     <linearGradient id="gradBruto" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#1e40af" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#1e40af" stopOpacity={0} />
+                      <stop offset="5%" stopColor="var(--chart-2)" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="var(--chart-2)" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="gradNeto" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
@@ -253,8 +253,8 @@ function AnalyticsView() {
                   <YAxis tick={{ fontSize: 11 }} stroke={CHART_AXIS} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Area type="monotone" dataKey="Bruto" stroke="#1e40af" strokeWidth={2} fill="url(#gradBruto)" />
-                  <Area type="monotone" dataKey="Neto" stroke="#10b981" strokeWidth={2} fill="url(#gradNeto)" />
+                  <Area type="monotone" dataKey="Bruto" stroke="var(--chart-2)" strokeWidth={2} fill="url(#gradBruto)" />
+                  <Area type="monotone" dataKey="Neto" stroke="var(--chart-1)" strokeWidth={2} fill="url(#gradNeto)" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -316,10 +316,10 @@ function AnalyticsView() {
                   <YAxis tick={{ fontSize: 11 }} stroke={CHART_AXIS} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Line type="monotone" dataKey="Bruto" stroke="#1e40af" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="Neto" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="BrutoEst" stroke="#1e40af" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} name="Bruto (est.)" />
-                  <Line type="monotone" dataKey="NetoEst" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} name="Neto (est.)" />
+                  <Line type="monotone" dataKey="Bruto" stroke="var(--chart-2)" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="Neto" stroke="var(--chart-1)" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="BrutoEst" stroke="var(--chart-2)" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} name="Bruto (est.)" />
+                  <Line type="monotone" dataKey="NetoEst" stroke="var(--chart-1)" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} name="Neto (est.)" />
                 </LineChart>
               </ResponsiveContainer>
             </SectionCard>
@@ -350,8 +350,8 @@ function AnalyticsView() {
                   <YAxis tick={{ fontSize: 11 }} stroke={CHART_AXIS} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="Año actual" fill="#1e40af" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Año anterior" fill="#93c5fd" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Año actual" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Año anterior" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </SectionCard>

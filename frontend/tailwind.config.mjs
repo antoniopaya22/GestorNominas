@@ -9,18 +9,25 @@ export default {
         mono: ['"Fira Code"', "monospace"],
       },
       colors: {
+        // Verde del logo: 500 = "IA" del wordmark; 600 es el tono con
+        // contraste AA sobre texto blanco (botones, enlaces).
         primary: {
-          50: "#eff6ff",
-          100: "#dbeafe",
-          200: "#bfdbfe",
-          300: "#93c5fd",
-          400: "#60a5fa",
-          500: "#3b82f6",
-          600: "#1e40af",
-          700: "#1e3a8a",
-          800: "#1e3057",
-          900: "#172554",
-          950: "#0f172a",
+          50: "#eefaf3",
+          100: "#d6f3e3",
+          200: "#afe6c9",
+          300: "#7fd4a8",
+          400: "#52c088",
+          500: "#42af78",
+          600: "#2a8558",
+          700: "#226b47",
+          800: "#1c5539",
+          900: "#17452f",
+          950: "#0b2619",
+        },
+        // Navy del círculo y de "Sueld" en el logo.
+        brand: {
+          navy: "#2e3a48",
+          glow: "#40d880",
         },
         accent: {
           50: "#fffbeb",

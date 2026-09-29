@@ -27,12 +27,10 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center mb-3 shadow-md">
-            <svg className="w-6 h-6 text-primary-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-            </svg>
-          </div>
-          <h1 className="text-xl font-bold text-foreground">SueldIA</h1>
+          <img src="/logo-mark.svg" alt="" className="size-14 mb-3" />
+          <h1 className="text-xl font-bold text-foreground">
+            Sueld<span className="text-primary-500 dark:text-primary">IA</span>
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">Inicia sesión para continuar</p>
         </div>
 

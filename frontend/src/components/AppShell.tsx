@@ -152,22 +152,7 @@ function getBreadcrumbTrail(currentPath: string): Crumb[] {
 }
 
 function BrandMark() {
-  return (
-    <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-      <svg
-        className="size-4.5"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <line x1="12" y1="1" x2="12" y2="23" />
-        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-      </svg>
-    </div>
-  );
+  return <img src="/logo-mark.svg" alt="" className="aspect-square size-8 shrink-0" />;
 }
 
 function WorkspaceSwitcher({ active }: { active: WorkspaceMeta }) {
@@ -185,7 +170,9 @@ function WorkspaceSwitcher({ active }: { active: WorkspaceMeta }) {
           >
             <BrandMark />
             <div className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-semibold">SueldIA</span>
+              <span className="truncate font-semibold">
+                Sueld<span className="text-primary-500 dark:text-primary">IA</span>
+              </span>
               <span className="truncate text-xs text-sidebar-foreground/70">{active.label}</span>
             </div>
             <ChevronsUpDown className="ml-auto size-4 text-sidebar-foreground/50" />

@@ -32,8 +32,8 @@ import { cn } from "cn";
 
 // ─── Design tokens ──────────────────────────────────────────────
 const CHART_COLORS = [
-  "#1e40af", "#3b82f6", "#60a5fa", "#93c5fd",
-  "#f59e0b", "#10b981", "#ef4444", "#8b5cf6",
+  "var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)",
+  "#f59e0b", "#3b82f6", "#ef4444", "#8b5cf6",
   "#ec4899", "#14b8a6",
 ];
 
@@ -546,12 +546,12 @@ function DashboardView() {
             <AreaChart data={evolutionData} margin={{ top: 5, right: 10, left: 10, bottom: 20 }}>
               <defs>
                 <linearGradient id="gradBlue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#1e40af" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#1e40af" stopOpacity={0} />
+                  <stop offset="5%" stopColor="var(--chart-2)" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="var(--chart-2)" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="gradGreen" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                  <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
@@ -576,7 +576,7 @@ function DashboardView() {
                   type="monotone"
                   dataKey={`${name}_bruto`}
                   name={`${name} Bruto`}
-                  stroke="#1e40af"
+                  stroke="var(--chart-2)"
                   fill="url(#gradBlue)"
                   strokeWidth={2}
                   dot={false}
@@ -590,7 +590,7 @@ function DashboardView() {
                   type="monotone"
                   dataKey={`${name}_neto`}
                   name={`${name} Neto`}
-                  stroke="#22c55e"
+                  stroke="var(--chart-1)"
                   fill="url(#gradGreen)"
                   strokeWidth={2}
                   dot={false}
@@ -1074,8 +1074,8 @@ function DashboardView() {
               <AreaChart data={(data.monthlySavings ?? []).map((d) => ({ ...d, monthLabel: formatMonthLabel(d.month) }))} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gradRetention" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
@@ -1087,7 +1087,7 @@ function DashboardView() {
                   itemStyle={DASHBOARD_TOOLTIP_ITEM_STYLE}
                   labelStyle={DASHBOARD_TOOLTIP_LABEL_STYLE}
                 />
-                <Area type="monotone" dataKey="retentionRate" name="Retención (%)" stroke="#10b981" strokeWidth={2.5} fill="url(#gradRetention)" dot={{ r: 3, fill: "#fff", strokeWidth: 2 }} activeDot={{ r: 6, strokeWidth: 2, fill: "#fff" }} />
+                <Area type="monotone" dataKey="retentionRate" name="Retención (%)" stroke="var(--chart-1)" strokeWidth={2.5} fill="url(#gradRetention)" dot={{ r: 3, fill: "#fff", strokeWidth: 2 }} activeDot={{ r: 6, strokeWidth: 2, fill: "#fff" }} />
               </AreaChart>
             </ResponsiveContainer>
             </div>

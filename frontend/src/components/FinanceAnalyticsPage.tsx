@@ -1837,7 +1837,7 @@ function FinanceAnalyticsView() {
     <>
       <div className="space-y-8 animate-fade-in">
         <div className="card overflow-hidden p-0">
-          <div className="h-1.5 bg-gradient-to-r from-sky-500 via-cyan-400 to-emerald-400" />
+          <div className="h-1.5 bg-gradient-to-r from-primary-600 via-primary-400 to-primary-200" />
           <div className="bg-gradient-to-br from-primary-50 via-background to-accent-50 dark:from-primary-500/10 dark:via-background dark:to-accent-500/10 px-6 py-6 sm:px-8 sm:py-7">
             <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
               <div className="max-w-3xl">

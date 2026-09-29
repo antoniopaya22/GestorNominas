@@ -84,8 +84,8 @@
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
+    --primary: #2a8558;
+    --primary-foreground: #ffffff;
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
     --muted: oklch(0.97 0 0);
@@ -95,23 +95,22 @@
     --destructive: oklch(0.577 0.245 27.325);
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
+    --ring: #42af78;
+    --chart-1: #42af78;
+    --chart-2: #2e3a48;
+    --chart-3: #7fd4a8;
+    --chart-4: #64748b;
+    --chart-5: #226b47;
     --radius: 0.625rem;
-    /* Tokens del sidebar en el azul de marca (escalas primary y surface de
-       tailwind.config.mjs) en vez del gris genérico por defecto de shadcn. */
-    --sidebar: #f8fafc;
-    --sidebar-foreground: #1e293b;
-    --sidebar-primary: #3b82f6;
+    /* Sidebar con los colores del logo: verde de marca + navy. */
+    --sidebar: #f7faf8;
+    --sidebar-foreground: #2e3a48;
+    --sidebar-primary: #2a8558;
     --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #eff6ff;
-    --sidebar-accent-foreground: #1e3a8a;
-    --sidebar-border: #e2e8f0;
-    --sidebar-ring: #3b82f6;
+    --sidebar-accent: #e6f5ec;
+    --sidebar-accent-foreground: #1c5539;
+    --sidebar-border: #e3ebe6;
+    --sidebar-ring: #42af78;
   }
   .dark {
     --background: oklch(0.145 0 0);
@@ -120,8 +119,8 @@
     --card-foreground: oklch(0.985 0 0);
     --popover: oklch(0.205 0 0);
     --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
+    --primary: #40d880;
+    --primary-foreground: #0b2619;
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.269 0 0);
@@ -131,20 +130,20 @@
     --destructive: oklch(0.704 0.191 22.216);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: #0f172a;
-    --sidebar-foreground: #f8fafc;
-    --sidebar-primary: #60a5fa;
-    --sidebar-primary-foreground: #172554;
-    --sidebar-accent: #1e3057;
-    --sidebar-accent-foreground: #dbeafe;
+    --ring: #40d880;
+    --chart-1: #40d880;
+    --chart-2: #94a3b8;
+    --chart-3: #7fd4a8;
+    --chart-4: #475569;
+    --chart-5: #2a8558;
+    --sidebar: #141b24;
+    --sidebar-foreground: #e7ede9;
+    --sidebar-primary: #40d880;
+    --sidebar-primary-foreground: #0b2619;
+    --sidebar-accent: #1f2a36;
+    --sidebar-accent-foreground: #b7f0cf;
     --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: #60a5fa;
+    --sidebar-ring: #40d880;
   }
   * {
     @apply border-border outline-ring/50;

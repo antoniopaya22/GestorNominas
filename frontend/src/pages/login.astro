@@ -10,6 +10,16 @@ import LoginWrapper from "../components/LoginWrapper";
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Iniciar Sesión | SueldIA</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#2e3a48" />
+    <script is:inline>
+      try {
+        var stored = localStorage.getItem("theme");
+        var dark = stored ? stored === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.classList.toggle("dark", dark);
+      } catch (e) {}
+    </script>
   </head>
   <body class="min-h-screen bg-muted">
     <LoginWrapper client:load />

@@ -21,8 +21,8 @@ import { ConfirmModal } from "./ui/ConfirmModal";
 import { cn } from "cn";
 
 const COLORS = [
-  "#1e40af", "#3b82f6", "#6366f1", "#8b5cf6",
-  "#ec4899", "#ef4444", "#f59e0b", "#10b981",
+  "#2a8558", "#2e3a48", "#3b82f6", "#8b5cf6",
+  "#ec4899", "#ef4444", "#f59e0b", "#6366f1",
   "#14b8a6", "#06b6d4",
 ];
 
