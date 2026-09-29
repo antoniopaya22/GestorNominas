@@ -1,21 +1,29 @@
-import type { ElementType } from "react";
+import type { ElementType, ReactNode } from "react";
 
 interface SectionHeaderProps {
-  icon: ElementType;
+  icon?: ElementType;
   title: string;
   subtitle?: string;
+  action?: ReactNode;
 }
 
-export function SectionHeader({ icon: Icon, title, subtitle }: SectionHeaderProps) {
+// Cabecera de bloque dentro de una página. Para bloques en card, preferir
+// SectionCard/ChartCard (components/app), que ya incluyen su cabecera.
+export function SectionHeader({ icon: Icon, title, subtitle, action }: SectionHeaderProps) {
   return (
-    <div className="flex items-center gap-2.5 mb-4">
-      <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
-        <Icon className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+    <div className="mb-4 flex items-start justify-between gap-3">
+      <div className="flex items-start gap-3">
+        {Icon && (
+          <div className="mt-0.5 flex size-8 items-center justify-center rounded-lg border border-border bg-muted/60">
+            <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+          </div>
+        )}
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+          {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
+        </div>
       </div>
-      <div>
-        <h3 className="font-semibold text-foreground text-sm">{title}</h3>
-        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
-      </div>
+      {action}
     </div>
   );
 }

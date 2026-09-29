@@ -233,3 +233,61 @@
 .animate-slide-up {
   animation: slide-up 0.2s ease-out;
 }
+/* ─── Lienzo de la app (/app/*) ─────────────────────────────────────
+   Acotado a .app-root (body de Layout.astro) para no alterar la landing.
+   Claro: marco cálido tipo papel (sidebar) + panel inset off-white + cards
+   blancas. Oscuro: marco casi negro con matiz navy, panel y cards un punto
+   más claros para dar profundidad sin sombras. */
+.app-root {
+  --background: #faf9f6;
+  --card: #ffffff;
+  --popover: #ffffff;
+  --muted: #f2f1ed;
+  --secondary: #f2f1ed;
+  --accent: #efeee9;
+  --border: #e7e5df;
+  --input: #e1dfd8;
+  --sidebar: #f2f1ec;
+  --sidebar-foreground: #2e3a48;
+  --sidebar-accent: #e8e7e1;
+  --sidebar-accent-foreground: #1f2833;
+  --sidebar-border: #e4e2dc;
+  font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "ss01", "cv11";
+}
+.dark .app-root {
+  --background: #0f141a;
+  --card: #151b23;
+  --popover: #171e27;
+  --muted: #1c232d;
+  --secondary: #1c232d;
+  --accent: #1f2731;
+  --border: rgb(255 255 255 / 0.07);
+  --input: rgb(255 255 255 / 0.11);
+  --sidebar: #0a0d12;
+  --sidebar-foreground: #dfe5e1;
+  --sidebar-accent: #161c24;
+  --sidebar-accent-foreground: #f1f5f3;
+  --sidebar-border: rgb(255 255 255 / 0.06);
+}
+/* Importes: cifras tabulares de Geist en vez de Fira Code (sin tocar las
+   82 clases font-mono existentes). Sin capa para ganar a las utilidades. */
+.app-root .font-mono {
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.app-root .font-serif-accent {
+  font-family: "Instrument Serif", ui-serif, Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+/* Entrada suave de cada página. `backwards` (no `both`) para no dejar un
+   transform permanente que rompería elementos position:fixed de la página. */
+.app-page {
+  animation: app-page-in 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+@keyframes app-page-in {
+  from { opacity: 0; transform: translateY(6px); }
+}

@@ -5,7 +5,9 @@ const currencyFmt = new Intl.NumberFormat("es-ES", {
   currency: "EUR",
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
-});
+  // es-ES no agrupa miles en cifras de 4 dígitos por defecto ("1798,75 €").
+  useGrouping: "always",
+} as unknown as Intl.NumberFormatOptions);
 
 export function formatCurrency(n: number | null | undefined): string {
   if (n == null) return "—";
@@ -13,8 +15,17 @@ export function formatCurrency(n: number | null | undefined): string {
 }
 
 export function formatCompact(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k €`;
-  return `${n.toFixed(0)} €`;
+  const sign = n < 0 ? "−" : "";
+  const abs = Math.abs(n);
+  if (abs >= 1000) return `${sign}${(abs / 1000).toLocaleString("es-ES", { maximumFractionDigits: 1 })}k €`;
+  return `${sign}${abs.toFixed(0)} €`;
+}
+
+const pctFmt = new Intl.NumberFormat("es-ES", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/** Porcentaje a la española: "77,7 %". */
+export function formatPct(n: number): string {
+  return `${pctFmt.format(n)} %`;
 }
 
 export function formatMonthLabel(m: string): string {

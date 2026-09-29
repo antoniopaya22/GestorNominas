@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Check } from "lucide-react";
 import { cn } from "cn";
 
 interface Profile {
@@ -21,35 +21,40 @@ export function ProfileSelector({ profiles, value, onChange, multi = false }: Pr
 
   function handleClick(id: number) {
     if (multi) {
-      const next = selected.includes(id)
-        ? selected.filter((v) => v !== id)
-        : [...selected, id];
-      onChange(next);
+      const next = selected.includes(id) ? selected.filter((v) => v !== id) : [...selected, id];
+      // Nunca dejar la selección vacía: equivaldría a "ningún perfil".
+      onChange(next.length ? next : [id]);
     } else {
       onChange(id);
     }
   }
 
   return (
-    <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Seleccionar perfil">
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Seleccionar perfil">
       {profiles.map((p) => {
         const isSelected = selected.includes(p.id);
+        const initials = p.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
         return (
-          <Button
+          <button
             key={p.id}
             type="button"
-            variant={isSelected ? "secondary" : "ghost"}
-            size="sm"
             onClick={() => handleClick(p.id)}
             aria-pressed={isSelected}
-            className={cn("gap-1.5", isSelected ? "shadow-sm" : "text-muted-foreground")}
+            className={cn(
+              "inline-flex h-8 cursor-pointer items-center gap-2 rounded-full border pr-3 pl-1 text-xs font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              isSelected
+                ? "border-border bg-card text-foreground shadow-sm"
+                : "border-transparent bg-muted/60 text-muted-foreground hover:text-foreground",
+            )}
           >
-            <div
-              className={cn("w-2.5 h-2.5 rounded-full transition-opacity", isSelected ? "opacity-100" : "opacity-40")}
+            <span
+              className={cn("flex size-6 items-center justify-center rounded-full text-[10px] font-semibold text-white transition-opacity", !isSelected && "opacity-50")}
               style={{ backgroundColor: p.color }}
-            />
+            >
+              {isSelected && multi ? <Check className="size-3" /> : initials}
+            </span>
             {p.name}
-          </Button>
+          </button>
         );
       })}
     </div>
