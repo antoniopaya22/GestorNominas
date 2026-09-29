@@ -1,0 +1,108 @@
+---
+// Visual ilustrativo: un PDF de nómina convirtiéndose en conceptos estructurados.
+import { Sparkles, CheckCircle2 } from "lucide-react";
+
+const devengos = [
+  { label: "Salario base", amount: "1.980,00" },
+  { label: "Plus convenio", amount: "312,50" },
+  { label: "Antigüedad", amount: "96,20" },
+];
+const deducciones = [
+  { label: "IRPF", amount: "358,30" },
+  { label: "Contingencias comunes", amount: "112,27" },
+  { label: "Desempleo y FP", amount: "26,13" },
+];
+const pdfRows = [
+  [62, 18], [48, 14], [55, 16], [0, 0], [40, 12], [58, 14], [36, 12],
+];
+---
+
+<div class="relative grid grid-cols-1 sm:grid-cols-[minmax(0,0.72fr)_auto_minmax(0,1.28fr)] items-center gap-4 sm:gap-1">
+  <!-- Documento PDF -->
+  <div class="relative mx-auto w-[82%] sm:w-full max-w-[230px] sm:-rotate-[4deg]">
+    <div class="absolute inset-0 translate-x-2 translate-y-2 rounded-xl bg-foreground/[0.04] dark:bg-white/[0.03] ring-1 ring-border" aria-hidden="true"></div>
+    <div class="relative rounded-xl bg-white dark:bg-[#18181b] ring-1 ring-border shadow-[0_18px_40px_-18px_rgb(15_23_42/0.35)] p-4">
+      <div class="flex items-start justify-between">
+        <div class="min-w-0">
+          <p class="text-[9px] font-semibold tracking-[0.18em] text-foreground/70">NÓMINA</p>
+          <p class="mt-1 text-[9.5px] font-medium text-foreground/80 whitespace-nowrap">EMPRESA EJEMPLO SL</p>
+          <p class="text-[8.5px] text-muted-foreground whitespace-nowrap">01/04/26 – 30/04/26</p>
+        </div>
+        <span class="rounded bg-danger-600 text-white text-[8px] font-bold px-1.5 py-0.5 tracking-wider">PDF</span>
+      </div>
+      <div class="mt-3 border-t border-foreground/10 pt-2.5 space-y-2">
+        {pdfRows.map(([a, b]) =>
+          a === 0 ? (
+            <div class="border-t border-dashed border-foreground/10"></div>
+          ) : (
+            <div class="flex items-center justify-between gap-3">
+              <span class="h-1.5 rounded-full bg-foreground/15" style={`width:${a}%`}></span>
+              <span class="h-1.5 rounded-full bg-foreground/25" style={`width:${b}%`}></span>
+            </div>
+          )
+        )}
+      </div>
+      <div class="mt-3 pt-2 border-t border-foreground/10 flex justify-between">
+        <span class="h-2 w-16 rounded-full bg-foreground/20"></span>
+        <span class="h-2 w-10 rounded-full bg-foreground/35"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flujo -->
+  <div class="flex sm:flex-col items-center justify-center gap-2 text-primary-600 dark:text-primary-400" aria-hidden="true">
+    <svg class="w-16 h-6 sm:w-6 sm:h-16 rotate-90 sm:rotate-0" viewBox="0 0 24 64" fill="none">
+      <path d="M12 2 V62" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="mk-flow" opacity="0.7" />
+    </svg>
+    <span class="w-9 h-9 rounded-full bg-primary-50 dark:bg-primary-500/15 ring-1 ring-primary-200 dark:ring-primary-500/30 flex items-center justify-center">
+      <Sparkles className="w-4 h-4" />
+    </span>
+    <svg class="w-16 h-6 sm:w-6 sm:h-16 rotate-90 sm:rotate-0" viewBox="0 0 24 64" fill="none">
+      <path d="M12 2 V62" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" class="mk-flow" opacity="0.7" />
+    </svg>
+  </div>
+
+  <!-- Resultado estructurado -->
+  <div class="mk-card rounded-2xl p-4 sm:p-5">
+    <div class="flex items-start justify-between gap-2">
+      <div class="min-w-0">
+        <p class="text-[13px] font-semibold">Abril 2026</p>
+        <p class="text-[11px] text-muted-foreground truncate">Empresa Ejemplo SL</p>
+      </div>
+      <span class="shrink-0 inline-flex items-center gap-1 rounded-full bg-success-50 dark:bg-success-500/10 text-success-700 dark:text-success-500 text-[10.5px] font-medium px-2 py-0.5">
+        <CheckCircle2 className="w-3 h-3" /> Procesada
+      </span>
+    </div>
+
+    <p class="mt-4 mb-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Devengos</p>
+    <ul class="space-y-1.5">
+      {devengos.map((c) => (
+        <li class="flex justify-between gap-3 text-[12px]">
+          <span class="text-foreground/80 truncate">{c.label}</span>
+          <span class="tabular-nums font-medium whitespace-nowrap">{c.amount} €</span>
+        </li>
+      ))}
+    </ul>
+
+    <p class="mt-4 mb-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">Deducciones</p>
+    <ul class="space-y-1.5">
+      {deducciones.map((c) => (
+        <li class="flex justify-between gap-3 text-[12px]">
+          <span class="text-foreground/80 truncate">{c.label}</span>
+          <span class="tabular-nums font-medium whitespace-nowrap text-danger-600 dark:text-danger-400">−{c.amount} €</span>
+        </li>
+      ))}
+    </ul>
+
+    <div class="mt-4 pt-3 border-t border-border grid grid-cols-2 gap-3">
+      <div>
+        <p class="text-[10.5px] text-muted-foreground">Total bruto</p>
+        <p class="text-[15px] font-semibold tabular-nums">2.388,70 €</p>
+      </div>
+      <div class="text-right">
+        <p class="text-[10.5px] text-muted-foreground">Líquido a percibir</p>
+        <p class="text-[15px] font-semibold tabular-nums text-primary-700 dark:text-primary-300">1.892,00 €</p>
+      </div>
+    </div>
+  </div>
+</div>

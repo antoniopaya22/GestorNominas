@@ -1,18 +1,39 @@
 ---
 import "../styles/global.css";
-import { buttonVariants } from "../components/ui/button";
+import "@fontsource/instrument-serif/400.css";
+import "@fontsource/instrument-serif/400-italic.css";
+import BrandMark from "../components/marketing/BrandMark.astro";
 
 interface Props {
   title: string;
   description?: string;
 }
 
-const { title, description = "Gestiona y analiza tus nóminas automáticamente." } = Astro.props;
-const currentPath = Astro.url.pathname;
+const { title, description = "Sube tus nóminas en PDF y entiende al instante tu salario, tus retenciones y tus finanzas." } = Astro.props;
+const currentPath = Astro.url.pathname.replace(/\/$/, "") || "/";
 
 const navLinks = [
   { href: "/caracteristicas", label: "Características" },
   { href: "/precios", label: "Precios" },
+  { href: "/#faq", label: "FAQ" },
+];
+
+const footerColumns = [
+  {
+    title: "Producto",
+    links: [
+      { href: "/caracteristicas", label: "Características" },
+      { href: "/precios", label: "Precios" },
+      { href: "/#faq", label: "Preguntas frecuentes" },
+    ],
+  },
+  {
+    title: "Cuenta",
+    links: [
+      { href: "/login", label: "Iniciar sesión" },
+      { href: "/login", label: "Empezar gratis" },
+    ],
+  },
 ];
 ---
 
@@ -24,27 +45,36 @@ const navLinks = [
     <meta name="description" content={description} />
     <title>{title} · SueldIA</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script is:inline>
+      (function () {
+        var root = document.documentElement;
+        root.classList.add("js");
+        try {
+          var stored = localStorage.getItem("theme");
+          var dark = stored ? stored === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+          root.classList.toggle("dark", dark);
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body class="min-h-screen bg-[#faf9f6] dark:bg-background text-foreground">
-    <header class="sticky top-0 z-40 border-b border-border bg-[#faf9f6]/85 dark:bg-background/85 backdrop-blur">
-      <div class="max-w-6xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
-        <a href="/" class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center">
-            <svg class="w-4.5 h-4.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-            </svg>
-          </div>
-          <span class="font-bold text-[15px] tracking-tight">SueldIA</span>
+  <body class="mk-root min-h-screen text-foreground">
+    <header
+      id="mk-header"
+      class="sticky top-0 z-50 border-b border-transparent transition-[background-color,border-color,box-shadow] duration-300"
+    >
+      <div class="max-w-6xl mx-auto px-5 md:px-8 h-16 flex items-center justify-between gap-4">
+        <a href="/" class="shrink-0" aria-label="SueldIA, inicio">
+          <BrandMark />
         </a>
 
-        <nav class="hidden md:flex items-center gap-1">
+        <nav class="hidden md:flex items-center gap-0.5 text-sm" aria-label="Principal">
           {navLinks.map((link) => (
             <a
               href={link.href}
               class:list={[
-                "px-3.5 py-2 rounded-md text-sm font-medium transition-colors",
+                "px-3.5 py-2 rounded-full transition-colors",
                 currentPath === link.href
-                  ? "text-foreground"
+                  ? "text-foreground bg-foreground/[0.05]"
                   : "text-muted-foreground hover:text-foreground",
               ]}
             >
@@ -53,41 +83,241 @@ const navLinks = [
           ))}
         </nav>
 
-        <div class="flex items-center gap-2">
-          <a href="/login" class={buttonVariants({ variant: "ghost", size: "sm" })}>Iniciar sesión</a>
-          <a
-            href="/login"
-            class="inline-flex items-center justify-center rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium h-8 px-3.5 transition-colors"
-          >
+        <div class="flex items-center gap-1.5">
+          <a href="/login" class="hidden sm:inline-flex h-9 items-center px-3.5 rounded-full text-sm text-muted-foreground hover:text-foreground transition-colors">
+            Iniciar sesión
+          </a>
+          <a href="/login" class="mk-btn mk-btn-primary h-9 px-4 text-sm rounded-full">
             Empezar gratis
           </a>
         </div>
       </div>
     </header>
 
-    <main>
+    <main class="-mt-16">
       <slot />
     </main>
 
-    <footer class="border-t border-border mt-24">
-      <div class="max-w-6xl mx-auto px-4 md:px-8 py-12 flex flex-col md:flex-row items-center md:items-start justify-between gap-8">
-        <div class="flex items-center gap-2.5">
-          <div class="w-7 h-7 rounded-md bg-primary-600 flex items-center justify-center">
-            <svg class="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-            </svg>
-          </div>
+    <footer class="relative border-t border-border/70">
+      <div class="max-w-6xl mx-auto px-5 md:px-8 pt-16 pb-10">
+        <div class="grid gap-10 md:grid-cols-[1.5fr_1fr_1fr]">
           <div>
-            <p class="text-sm font-semibold leading-tight">SueldIA</p>
-            <p class="text-xs text-muted-foreground leading-tight">© {new Date().getFullYear()}</p>
+            <a href="/" aria-label="SueldIA, inicio">
+              <BrandMark size="sm" />
+            </a>
+            <p class="mt-4 max-w-xs text-sm text-muted-foreground leading-relaxed">
+              Tus nóminas y tus finanzas personales, explicadas con claridad.
+            </p>
           </div>
+          {footerColumns.map((col) => (
+            <div>
+              <p class="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground/80">{col.title}</p>
+              <ul class="mt-4 space-y-2.5">
+                {col.links.map((link) => (
+                  <li>
+                    <a href={link.href} class="text-sm text-muted-foreground hover:text-foreground transition-colors">{link.label}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
-        <nav class="flex items-center gap-6 text-sm text-muted-foreground">
-          <a href="/caracteristicas" class="hover:text-foreground transition-colors">Características</a>
-          <a href="/precios" class="hover:text-foreground transition-colors">Precios</a>
-          <a href="/login" class="hover:text-foreground transition-colors">Iniciar sesión</a>
-        </nav>
+        <div class="mt-14 pt-6 border-t border-border/70 flex flex-col sm:flex-row gap-3 sm:items-center justify-between text-xs text-muted-foreground">
+          <p>© {new Date().getFullYear()} SueldIA</p>
+          <p>Pensado para nóminas españolas.</p>
+        </div>
       </div>
     </footer>
+
+    <script is:inline>
+      (function () {
+        var header = document.getElementById("mk-header");
+        var onScroll = function () {
+          header.toggleAttribute("data-scrolled", window.scrollY > 8);
+        };
+        onScroll();
+        window.addEventListener("scroll", onScroll, { passive: true });
+
+        var items = document.querySelectorAll(".reveal");
+        if (!("IntersectionObserver" in window)) {
+          items.forEach(function (el) { el.classList.add("is-visible"); });
+          return;
+        }
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-visible");
+              io.unobserve(entry.target);
+            }
+          });
+        }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+        items.forEach(function (el) { io.observe(el); });
+      })();
+    </script>
   </body>
 </html>
+
+<style is:global>
+  /* Cabecera: translúcida y con borde solo al hacer scroll */
+  #mk-header[data-scrolled] {
+    background: rgb(250 249 246 / 0.78);
+    border-color: var(--border);
+    backdrop-filter: saturate(160%) blur(14px);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
+  }
+  .dark #mk-header[data-scrolled] {
+    background: rgb(9 9 11 / 0.72);
+  }
+
+  @layer components {
+    .mk-root {
+      font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+      background: #faf9f6;
+      font-feature-settings: "ss01", "cv11";
+    }
+    .dark .mk-root {
+      background: #09090b;
+    }
+
+    .font-display {
+      font-family: "Instrument Serif", ui-serif, Georgia, serif;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+    }
+
+    /* Botones de marketing */
+    .mk-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      font-weight: 500;
+      white-space: nowrap;
+      transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, color 0.15s ease;
+    }
+    .mk-btn:active {
+      transform: translateY(1px);
+    }
+    .mk-btn-primary {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 0.18),
+        0 1px 2px rgb(15 23 42 / 0.2),
+        0 6px 18px -6px color-mix(in oklab, var(--primary) 70%, transparent);
+    }
+    .mk-btn-primary:hover {
+      background: color-mix(in oklab, var(--primary) 88%, black);
+    }
+    .dark .mk-btn-primary {
+      box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 0.3),
+        0 6px 22px -6px color-mix(in oklab, var(--primary) 55%, transparent);
+    }
+    .dark .mk-btn-primary:hover {
+      background: color-mix(in oklab, var(--primary) 85%, white);
+    }
+    .mk-btn-secondary {
+      background: var(--card);
+      color: var(--foreground);
+      box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(15 23 42 / 0.05);
+    }
+    .mk-btn-secondary:hover {
+      background: var(--muted);
+    }
+
+    /* Fondo de puntos con desvanecido radial */
+    .mk-dots {
+      background-image: radial-gradient(circle at 1px 1px, color-mix(in oklab, var(--foreground) 16%, transparent) 1px, transparent 0);
+      background-size: 22px 22px;
+      -webkit-mask-image: radial-gradient(ellipse 65% 55% at 50% 35%, #000 30%, transparent 100%);
+      mask-image: radial-gradient(ellipse 65% 55% at 50% 35%, #000 30%, transparent 100%);
+    }
+    .dark .mk-dots {
+      background-image: radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.1) 1px, transparent 0);
+    }
+
+    .mk-halo {
+      background: radial-gradient(ellipse 50% 60% at 50% 0%, color-mix(in oklab, var(--primary) 14%, transparent), transparent 70%);
+    }
+    .dark .mk-halo {
+      background: radial-gradient(ellipse 50% 60% at 50% 0%, color-mix(in oklab, var(--primary) 10%, transparent), transparent 70%);
+    }
+
+    .mk-glow {
+      background: radial-gradient(
+        closest-side,
+        color-mix(in oklab, var(--primary) 26%, transparent),
+        color-mix(in oklab, var(--primary) 7%, transparent) 55%,
+        transparent
+      );
+      filter: blur(24px);
+    }
+    .dark .mk-glow {
+      background: radial-gradient(
+        closest-side,
+        color-mix(in oklab, var(--primary) 22%, transparent),
+        color-mix(in oklab, var(--primary) 6%, transparent) 55%,
+        transparent
+      );
+    }
+
+    /* Superficie de tarjeta de marketing */
+    .mk-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+    }
+    .dark .mk-card {
+      background: #111113;
+      box-shadow: none;
+    }
+
+    .mk-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted-foreground);
+    }
+
+    /* Aparición al hacer scroll (solo con JS y sin reduced-motion) */
+    .js .reveal {
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity 0.8s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+    .js .reveal.is-visible {
+      opacity: 1;
+      transform: none;
+    }
+    .js .reveal[data-delay="1"] { transition-delay: 0.08s; }
+    .js .reveal[data-delay="2"] { transition-delay: 0.16s; }
+    .js .reveal[data-delay="3"] { transition-delay: 0.24s; }
+
+    @keyframes mk-dash {
+      to { stroke-dashoffset: -24; }
+    }
+    .mk-flow {
+      stroke-dasharray: 4 8;
+      animation: mk-dash 1.2s linear infinite;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .js .reveal {
+        opacity: 1;
+        transform: none;
+        transition: none;
+      }
+      .mk-flow {
+        animation: none;
+      }
+      .mk-btn {
+        transition: none;
+      }
+    }
+  }
+</style>

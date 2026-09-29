@@ -1,0 +1,70 @@
+---
+// Visual ilustrativo del dashboard de nóminas: bruto = neto + retenciones.
+const data = [
+  { m: "Nov", bruto: 2310, neto: 1831 },
+  { m: "Dic", bruto: 4620, neto: 3598, extra: true },
+  { m: "Ene", bruto: 2360, neto: 1851 },
+  { m: "Feb", bruto: 2352, neto: 1846 },
+  { m: "Mar", bruto: 2378, neto: 1868 },
+  { m: "Abr", bruto: 2389, neto: 1892 },
+];
+const max = 4800;
+const H = 150;
+const barW = 26;
+const gap = 44;
+const W = data.length * barW + (data.length - 1) * gap;
+
+const stats = [
+  { label: "Neto este año", value: "7.457 €" },
+  { label: "Retención IRPF", value: "15,2 %" },
+  { label: "Próxima extra", value: "Junio" },
+];
+---
+
+<div class="mk-card rounded-2xl p-4 sm:p-6">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <p class="text-[13px] font-semibold">Bruto vs. neto</p>
+      <p class="text-[11px] text-muted-foreground">Últimos 6 meses</p>
+    </div>
+    <div class="inline-flex rounded-lg bg-muted p-0.5 text-[11px]">
+      <span class="rounded-md bg-card dark:bg-white/10 px-2.5 py-1 font-medium shadow-sm">Mensual</span>
+      <span class="px-2.5 py-1 text-muted-foreground">Anual</span>
+    </div>
+  </div>
+
+  <div class="mt-4 grid grid-cols-3 gap-2">
+    {stats.map((s) => (
+      <div class="rounded-xl bg-muted/60 dark:bg-white/[0.03] px-3 py-2.5">
+        <p class="text-[10.5px] text-muted-foreground">{s.label}</p>
+        <p class="mt-0.5 text-[14px] sm:text-[15px] font-semibold tabular-nums">{s.value}</p>
+      </div>
+    ))}
+  </div>
+
+  <svg viewBox={`-6 -18 ${W + 12} ${H + 42}`} class="mt-5 w-full h-auto" aria-hidden="true">
+    {[0.25, 0.5, 0.75, 1].map((f) => (
+      <line x1="-6" x2={W + 6} y1={H - H * f} y2={H - H * f} class="stroke-border" stroke-dasharray="3 5" />
+    ))}
+    {data.map((d, i) => {
+      const x = i * (barW + gap);
+      const hB = (d.bruto / max) * H;
+      const hN = (d.neto / max) * H;
+      return (
+        <g>
+          <rect x={x} y={H - hB} width={barW} height={hB} rx="5" class="fill-foreground/[0.09] dark:fill-white/[0.09]" />
+          <rect x={x} y={H - hN} width={barW} height={hN} rx="5" class={i === data.length - 1 ? "fill-primary-500 dark:fill-primary-400" : "fill-primary-200 dark:fill-primary-800"} />
+          <text x={x + barW / 2} y={H + 17} text-anchor="middle" font-size="11" class="fill-muted-foreground">{d.m}</text>
+          {d.extra && (
+            <text x={x + barW / 2} y={H - hB - 7} text-anchor="middle" font-size="10" class="fill-muted-foreground">+ extra</text>
+          )}
+        </g>
+      );
+    })}
+  </svg>
+
+  <div class="mt-3 flex items-center gap-4 text-[11px] text-muted-foreground">
+    <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-primary-200 dark:bg-primary-800"></span> Neto</span>
+    <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-foreground/[0.12] dark:bg-white/15"></span> Retenciones</span>
+  </div>
+</div>

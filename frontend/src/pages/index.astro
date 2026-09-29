@@ -1,139 +1,410 @@
 ---
 import MarketingLayout from "../layouts/MarketingLayout.astro";
 import ProductMockup from "../components/marketing/ProductMockup.astro";
-import { buttonVariants } from "../components/ui/button";
+import ExtractionVisual from "../components/marketing/ExtractionVisual.astro";
+import DashboardVisual from "../components/marketing/DashboardVisual.astro";
+import FinanceVisual from "../components/marketing/FinanceVisual.astro";
+import CtaBand from "../components/marketing/CtaBand.astro";
+import { Faq } from "../components/marketing/Faq";
 import {
-  FileScan, LayoutDashboard, Users, ShieldCheck, BellRing, TrendingUp,
-  Upload, Sparkles, LineChart,
+  Check, ArrowRight, BellRing, Users, FileSpreadsheet, SunMoon, RefreshCw, Building2, Landmark,
+  Upload, Sparkles, LineChart, KeyRound, FileX2, Lock, TrendingDown, CalendarX2, ShieldCheck, Moon, Sun,
 } from "lucide-react";
 
-const features = [
+const trust = ["Gratis, sin tarjeta", "Acceso con Google", "No guardamos tus PDFs", "Tus datos, aislados por cuenta"];
+
+const supports = [
+  "Nóminas de empresa privada",
+  "Nóminas de organismos públicos",
+  "PDF digital, sin OCR",
+  "Pagas extra incluidas",
+  "Varios perfiles por cuenta",
+];
+
+const showcase = [
   {
-    icon: FileScan,
-    title: "Extracción automática",
-    description: "Sube el PDF de tu nómina y en segundos tienes el bruto, el neto, el IRPF y cada concepto ya organizado — sin rellenar nada a mano.",
+    eyebrow: "01 · Extracción",
+    title: "Lee tu nómina",
+    accent: "por ti.",
+    text: "Arrastra el PDF y SueldIA reconoce el periodo, la empresa, el bruto, el neto y cada devengo y deducción por separado — en nóminas de empresa privada y de organismos públicos.",
+    bullets: [
+      "Directo del PDF digital, sin OCR",
+      "Devengos y deducciones, concepto a concepto",
+      "Reprocesa cuando mejore el motor, sin volver a subir nada",
+    ],
+    visual: "extraction",
   },
   {
-    icon: LayoutDashboard,
-    title: "Dashboard financiero",
-    description: "Evolución de tu salario mes a mes, comparativas anuales, retención de IRPF y previsión de pagas extra, todo en un vistazo.",
+    eyebrow: "02 · Análisis",
+    title: "Entiende a dónde",
+    accent: "va tu sueldo.",
+    text: "Evolución mensual y anual de tu bruto y tu neto, retención media de IRPF, comparativas con el año anterior y previsión de las pagas extra.",
+    bullets: [
+      "Comparativa interanual de bruto y neto",
+      "Proyección anual con pagas extra",
+      "Desglose de cada concepto a lo largo del tiempo",
+    ],
+    visual: "dashboard",
   },
   {
-    icon: Users,
-    title: "Varios perfiles",
-    description: "Gestiona las nóminas de toda la familia o de varias fuentes de ingresos, cada una con su propio historial y análisis.",
-  },
-  {
-    icon: BellRing,
-    title: "Alertas inteligentes",
-    description: "Te avisa si tu nómina baja de lo esperado, si falta algún mes o si un concepto cambia de golpe.",
-  },
-  {
-    icon: TrendingUp,
-    title: "Finanzas al completo",
-    description: "Cuentas, categorías, gastos e ingresos recurrentes — conecta tu nómina con el resto de tu economía personal.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Tus datos, tu cuenta",
-    description: "Cada cuenta ve solo sus propios datos. No se guarda el PDF original, solo la información ya extraída.",
+    eyebrow: "03 · Finanzas",
+    title: "Tu nómina, conectada",
+    accent: "con todo lo demás.",
+    text: "Lleva tus cuentas, ingresos y gastos en el mismo sitio, con categorías a tu medida y movimientos recurrentes — o importa tu histórico desde YNAB.",
+    bullets: [
+      "Varias cuentas: banco, ahorro, tarjeta…",
+      "Categorías y grupos personalizables",
+      "Importación de CSV desde YNAB",
+    ],
+    visual: "finance",
   },
 ];
 
 const steps = [
-  { n: "01", icon: Upload, title: "Sube tu nómina", description: "Arrastra el PDF — nada de escáneres ni fotos, solo el documento digital." },
-  { n: "02", icon: Sparkles, title: "Se procesa sola", description: "El sistema reconoce el formato y extrae cada concepto automáticamente." },
-  { n: "03", icon: LineChart, title: "Analiza y decide", description: "Consulta tu evolución salarial y tus finanzas en un dashboard claro." },
+  { icon: Upload, title: "Sube el PDF", text: "Arrastra una o varias nóminas en PDF digital. Nada de fotos ni escaneos." },
+  { icon: Sparkles, title: "Se procesa sola", text: "SueldIA detecta el formato y extrae cada concepto en segundos." },
+  { icon: LineChart, title: "Analiza y decide", text: "Consulta tu evolución, tus retenciones y tus finanzas en un solo lugar." },
+];
+
+const privacy = [
+  {
+    icon: KeyRound,
+    title: "Acceso con Google",
+    text: "Inicias sesión con tu cuenta de Google a través de Supabase Auth. Sin contraseñas que crear, recordar ni filtrar.",
+  },
+  {
+    icon: FileX2,
+    title: "El PDF no se guarda",
+    text: "Se procesa en memoria en el momento de subirlo y se descarta. Solo se conserva el texto extraído y los conceptos.",
+  },
+  {
+    icon: Lock,
+    title: "Cada cuenta, aislada",
+    text: "Tus perfiles, nóminas y movimientos solo son visibles para tu cuenta. Nadie más puede consultarlos.",
+  },
+];
+
+const faqs = [
+  {
+    q: "¿SueldIA es gratis?",
+    a: "Sí. Hoy todas las funciones están disponibles en el plan gratuito, sin tarjeta y sin límite de nóminas. Si algún día llega un plan Pro, será para extras — el plan gratuito se mantiene.",
+  },
+  {
+    q: "¿Qué nóminas puedo subir?",
+    a: "Nóminas españolas en PDF digital (el que te envía tu empresa o descargas del portal del empleado), tanto de empresa privada como de organismos públicos.",
+  },
+  {
+    q: "¿Funciona con fotos o nóminas escaneadas?",
+    a: "No. SueldIA lee el texto directamente del PDF, sin OCR, así que necesita el documento digital original. Una foto o un escaneo no se puede procesar.",
+  },
+  {
+    q: "¿Guardáis mis PDFs?",
+    a: "No. El PDF se procesa en memoria al subirlo y se descarta en ese mismo momento. Solo se guarda el texto extraído y los conceptos ya estructurados.",
+  },
+  {
+    q: "¿Cómo inicio sesión?",
+    a: "Con tu cuenta de Google, gestionada a través de Supabase Auth. No hay contraseñas propias que crear ni recordar.",
+  },
+  {
+    q: "¿Puedo gestionar las nóminas de varias personas?",
+    a: "Sí. Cada cuenta puede tener varios perfiles — por ejemplo, tú y tu pareja — y cada uno tiene su propio historial y análisis.",
+  },
+  {
+    q: "¿Y si la extracción no reconoce algún concepto?",
+    a: "Puedes revisar y editar los conceptos de cualquier nómina a mano, y volver a procesarla cuando el motor mejore sin tener que subir el PDF otra vez.",
+  },
 ];
 ---
 
-<MarketingLayout title="Inicio" description="Sube tus nóminas en PDF y consigue al instante un dashboard con tu evolución salarial, IRPF y alertas — sin rellenar nada a mano.">
-  <!-- Hero -->
-  <section class="max-w-6xl mx-auto px-4 md:px-8 pt-16 pb-20 md:pt-24 md:pb-28">
-    <div class="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-      <div>
-        <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/40 rounded-full px-3 py-1 mb-6">
-          Extracción sin OCR, directa del PDF
-        </span>
-        <h1 class="text-4xl md:text-5xl lg:text-[3.25rem] font-bold tracking-tight text-balance leading-[1.08]">
-          Tus nóminas, entendidas automáticamente
-        </h1>
-        <p class="mt-6 text-lg text-muted-foreground max-w-lg text-balance">
-          Sube el PDF de tu nómina y obtén al instante un dashboard con tu bruto, tu neto,
-          tus retenciones y su evolución — sin hojas de cálculo ni introducir nada a mano.
-        </p>
-        <div class="mt-9 flex flex-col sm:flex-row items-start gap-3">
-          <a
-            href="/login"
-            class="inline-flex items-center justify-center rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-base font-medium h-12 px-8 transition-colors"
-          >
-            Empezar gratis
-          </a>
-          <a href="/caracteristicas" class={buttonVariants({ variant: "outline" }) + " h-12 px-8 text-base"}>
-            Ver características
-          </a>
-        </div>
-        <p class="mt-5 text-sm text-muted-foreground">Gratis, sin tarjeta de crédito.</p>
+<MarketingLayout title="Tus nóminas, explicadas al instante" description="Sube tus nóminas en PDF y SueldIA extrae cada concepto, analiza tu evolución salarial e IRPF y te avisa si algo cambia. Gratis.">
+  <!-- ─── Hero ─────────────────────────────────────────────── -->
+  <section class="relative isolate">
+    <div class="absolute inset-x-0 top-0 h-[780px] mk-dots -z-10" aria-hidden="true"></div>
+    <div class="absolute inset-x-0 top-0 h-[620px] mk-halo -z-10" aria-hidden="true"></div>
+
+    <div class="max-w-6xl mx-auto px-5 md:px-8 pt-30 md:pt-40 text-center">
+      <a
+        href="#como-funciona"
+        class="reveal group inline-flex items-center gap-2 rounded-full bg-card/80 dark:bg-white/[0.04] ring-1 ring-border pl-1.5 pr-3 py-1 text-[12.5px] text-muted-foreground hover:text-foreground transition-colors backdrop-blur"
+      >
+        <span class="rounded-full bg-primary-50 dark:bg-primary-500/15 text-primary-700 dark:text-primary-300 px-2 py-0.5 text-[11px] font-medium">Sin OCR</span>
+        Del PDF a tu dashboard en segundos
+        <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+      </a>
+
+      <h1 class="reveal mt-7 text-[2.65rem] leading-[1.02] sm:text-6xl md:text-7xl lg:text-[5.25rem] font-semibold tracking-[-0.045em] text-balance max-w-4xl mx-auto" data-delay="1">
+        Tu nómina, explicada
+        <span class="font-display italic font-normal tracking-[-0.02em] text-[1.08em] text-primary-700 dark:text-primary-300">al instante.</span>
+      </h1>
+
+      <p class="reveal mt-7 text-[17px] md:text-xl text-muted-foreground max-w-2xl mx-auto text-balance leading-relaxed" data-delay="2">
+        Sube el PDF de tu nómina y SueldIA extrae cada concepto, calcula tu evolución y te avisa si algo cambia.
+        Sin hojas de cálculo, sin teclear nada.
+      </p>
+
+      <div class="reveal mt-10 flex flex-col sm:flex-row items-center justify-center gap-3" data-delay="3">
+        <a href="/login" class="mk-btn mk-btn-primary h-12 px-7 rounded-full text-[15px] w-full sm:w-auto">
+          Empezar gratis <ArrowRight className="w-4 h-4" />
+        </a>
+        <a href="#como-funciona" class="mk-btn mk-btn-secondary h-12 px-7 rounded-full text-[15px] w-full sm:w-auto">
+          Ver cómo funciona
+        </a>
       </div>
 
+      <ul class="reveal mt-9 flex flex-wrap items-center justify-center gap-x-6 gap-y-2.5 text-[13px] text-muted-foreground" data-delay="3">
+        {trust.map((t) => (
+          <li class="inline-flex items-center gap-1.5">
+            <Check className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" strokeWidth={2.5} />
+            {t}
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <div class="reveal max-w-6xl mx-auto px-3 sm:px-5 md:px-8 mt-14 md:mt-20">
       <ProductMockup />
     </div>
   </section>
 
-  <!-- Features -->
-  <section class="max-w-6xl mx-auto px-4 md:px-8 py-16 md:py-24">
-    <div class="max-w-xl mb-12">
-      <h2 class="text-3xl font-bold tracking-tight text-balance">Todo lo que necesitas para entender tu nómina</h2>
-      <p class="mt-3 text-muted-foreground">Pensado para nóminas españolas, tanto de empresa privada como de organismos públicos.</p>
+  <!-- ─── Qué soporta ──────────────────────────────────────── -->
+  <section class="max-w-6xl mx-auto px-5 md:px-8 pt-16 md:pt-20">
+    <p class="text-center text-[11.5px] font-medium uppercase tracking-[0.16em] text-muted-foreground/80">Pensado para nóminas españolas</p>
+    <ul class="mt-6 flex flex-wrap justify-center gap-2.5">
+      {supports.map((s) => (
+        <li class="rounded-full ring-1 ring-border bg-card/60 dark:bg-white/[0.02] px-4 py-2 text-[13px] text-foreground/75">{s}</li>
+      ))}
+    </ul>
+  </section>
+
+  <!-- ─── Producto ─────────────────────────────────────────── -->
+  <section id="producto" class="max-w-6xl mx-auto px-5 md:px-8 pt-24 md:pt-32">
+    <div class="reveal max-w-2xl">
+      <p class="mk-eyebrow">Producto</p>
+      <h2 class="mt-4 text-4xl md:text-5xl font-semibold tracking-[-0.04em] leading-[1.05] text-balance">
+        Del PDF a las decisiones, <span class="font-display italic font-normal tracking-normal text-[1.08em]">sin teclear nada.</span>
+      </h2>
     </div>
-    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-border rounded-2xl overflow-hidden border border-border">
-      {features.map(({ icon: Icon, title, description }) => (
-        <div class="bg-card p-6">
-          <div class="w-9 h-9 rounded-lg bg-muted flex items-center justify-center mb-4">
-            <Icon className="w-[18px] h-[18px] text-foreground" />
+
+    <div class="mt-16 md:mt-20 space-y-24 md:space-y-32">
+      {showcase.map((row, i) => (
+        <div class="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+          <div class:list={["reveal", i % 2 === 1 && "lg:order-2"]}>
+            <p class="text-[13px] font-medium text-primary-700 dark:text-primary-300">{row.eyebrow}</p>
+            <h3 class="mt-3 text-3xl md:text-[2.5rem] font-semibold tracking-[-0.035em] leading-[1.1] text-balance">
+              {row.title} <span class="font-display italic font-normal tracking-normal text-[1.08em]">{row.accent}</span>
+            </h3>
+            <p class="mt-5 text-[16.5px] text-muted-foreground leading-relaxed max-w-lg">{row.text}</p>
+            <ul class="mt-7 space-y-3">
+              {row.bullets.map((b) => (
+                <li class="flex items-start gap-3 text-[15px]">
+                  <span class="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-primary-50 dark:bg-primary-500/15 flex items-center justify-center">
+                    <Check className="w-3 h-3 text-primary-700 dark:text-primary-300" strokeWidth={3} />
+                  </span>
+                  <span class="text-foreground/85">{b}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-          <h3 class="font-semibold text-[15px]">{title}</h3>
-          <p class="mt-1.5 text-sm text-muted-foreground leading-relaxed">{description}</p>
+
+          <div class:list={["reveal relative", i % 2 === 1 && "lg:order-1"]} data-delay="1">
+            <div class="absolute inset-[8%] mk-glow -z-10 opacity-70" aria-hidden="true"></div>
+            <div class="rounded-[1.6rem] p-3 sm:p-6 bg-foreground/[0.025] dark:bg-white/[0.025] ring-1 ring-foreground/[0.05] dark:ring-white/[0.06]">
+              {row.visual === "extraction" && <ExtractionVisual />}
+              {row.visual === "dashboard" && <DashboardVisual />}
+              {row.visual === "finance" && <FinanceVisual />}
+            </div>
+          </div>
         </div>
       ))}
     </div>
   </section>
 
-  <!-- How it works -->
-  <section class="border-y border-border bg-card/50">
-    <div class="max-w-6xl mx-auto px-4 md:px-8 py-16 md:py-24">
-      <h2 class="text-3xl font-bold tracking-tight mb-12">Cómo funciona</h2>
-      <div class="grid md:grid-cols-3 gap-x-8 gap-y-10">
-        {steps.map(({ n, icon: Icon, title, description }) => (
-          <div class="relative">
-            <span
-              class="absolute top-0 left-0 text-7xl font-bold tracking-tight text-foreground/[0.06] leading-none select-none -z-10"
-              aria-hidden="true"
-            >
-              {n}
-            </span>
-            <div class="w-9 h-9 rounded-lg bg-background border border-border flex items-center justify-center mb-4 ml-1">
-              <Icon className="w-[18px] h-[18px] text-primary-600 dark:text-primary-400" />
+  <!-- ─── Bento ────────────────────────────────────────────── -->
+  <section class="max-w-6xl mx-auto px-5 md:px-8 pt-32 md:pt-40">
+    <div class="reveal max-w-2xl">
+      <p class="mk-eyebrow">Y además</p>
+      <h2 class="mt-4 text-4xl md:text-5xl font-semibold tracking-[-0.04em] leading-[1.05] text-balance">
+        Los detalles que <span class="font-display italic font-normal tracking-normal text-[1.08em]">marcan la diferencia.</span>
+      </h2>
+    </div>
+
+    <div class="mt-14 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <!-- Alertas -->
+      <div class="reveal mk-card rounded-3xl p-6 sm:p-7 sm:col-span-2 overflow-hidden flex flex-col md:flex-row gap-8 md:items-center transition-transform duration-300 hover:-translate-y-0.5">
+        <div class="md:w-[42%]">
+          <span class="w-10 h-10 rounded-xl bg-muted dark:bg-white/[0.06] flex items-center justify-center"><BellRing className="w-5 h-5" /></span>
+          <h3 class="mt-5 text-xl font-semibold tracking-tight">Alertas inteligentes</h3>
+          <p class="mt-2 text-[14.5px] text-muted-foreground leading-relaxed">Te avisa si tu nómina baja de lo esperado, si falta algún mes o si un concepto cambia de golpe.</p>
+        </div>
+        <div class="flex-1 space-y-2.5">
+          <div class="rounded-2xl ring-1 ring-border bg-background/70 dark:bg-white/[0.03] p-3.5 flex gap-3 shadow-[0_8px_24px_-12px_rgb(15_23_42/0.18)]">
+            <span class="w-8 h-8 shrink-0 rounded-lg bg-danger-50 dark:bg-danger-500/10 text-danger-600 dark:text-danger-400 flex items-center justify-center"><TrendingDown className="w-4 h-4" /></span>
+            <div>
+              <p class="text-[13px] font-medium">Neto por debajo de lo habitual</p>
+              <p class="text-[12px] text-muted-foreground">Abril es un 8 % inferior a tu media de los últimos meses.</p>
             </div>
-            <h3 class="font-semibold mb-1.5 ml-1">{title}</h3>
-            <p class="text-sm text-muted-foreground leading-relaxed max-w-[85%] ml-1">{description}</p>
           </div>
-        ))}
+          <div class="rounded-2xl ring-1 ring-border bg-background/70 dark:bg-white/[0.03] p-3.5 flex gap-3 md:ml-6">
+            <span class="w-8 h-8 shrink-0 rounded-lg bg-primary-50 dark:bg-primary-500/15 text-primary-700 dark:text-primary-300 flex items-center justify-center"><CalendarX2 className="w-4 h-4" /></span>
+            <div>
+              <p class="text-[13px] font-medium">Falta una nómina</p>
+              <p class="text-[12px] text-muted-foreground">No hay nómina de marzo en el perfil «Personal».</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Perfiles -->
+      <div class="reveal mk-card rounded-3xl p-6 sm:p-7 transition-transform duration-300 hover:-translate-y-0.5" data-delay="1">
+        <span class="w-10 h-10 rounded-xl bg-muted dark:bg-white/[0.06] flex items-center justify-center"><Users className="w-5 h-5" /></span>
+        <h3 class="mt-5 text-xl font-semibold tracking-tight">Varios perfiles</h3>
+        <p class="mt-2 text-[14.5px] text-muted-foreground leading-relaxed">Tú, tu pareja o un segundo empleo — cada uno con su historial.</p>
+        <div class="mt-6 flex items-center">
+          {[["A", "bg-primary-100 text-primary-800 dark:bg-primary-500/20 dark:text-primary-200"], ["L", "bg-muted text-foreground/80 dark:bg-white/10"], ["M", "bg-foreground/[0.07] text-foreground/70 dark:bg-white/[0.06]"]].map(([l, c], idx) => (
+            <span class:list={["w-10 h-10 rounded-full ring-[3px] ring-card dark:ring-[#111113] flex items-center justify-center text-sm font-semibold", c, idx > 0 && "-ml-2.5"]}>{l}</span>
+          ))}
+          <span class="-ml-2.5 w-10 h-10 rounded-full ring-[3px] ring-card dark:ring-[#111113] bg-card dark:bg-[#111113] border border-dashed border-border flex items-center justify-center text-muted-foreground text-lg">+</span>
+        </div>
+      </div>
+
+      <!-- YNAB -->
+      <div class="reveal mk-card rounded-3xl p-6 sm:p-7 transition-transform duration-300 hover:-translate-y-0.5">
+        <span class="w-10 h-10 rounded-xl bg-muted dark:bg-white/[0.06] flex items-center justify-center"><FileSpreadsheet className="w-5 h-5" /></span>
+        <h3 class="mt-5 text-xl font-semibold tracking-tight">Importa desde YNAB</h3>
+        <p class="mt-2 text-[14.5px] text-muted-foreground leading-relaxed">Trae tu histórico de movimientos desde un CSV, sin volver a introducirlo.</p>
+        <div class="mt-6 flex items-center gap-2 text-[12px]">
+          <span class="rounded-lg ring-1 ring-border bg-background/70 dark:bg-white/[0.03] px-2.5 py-1.5 font-mono text-[11px]">export.csv</span>
+          <span class="flex-1 h-px border-t border-dashed border-border"></span>
+          <span class="inline-flex items-center gap-1 rounded-lg bg-success-50 dark:bg-success-500/10 text-success-700 dark:text-success-500 px-2.5 py-1.5 font-medium"><Check className="w-3.5 h-3.5" /> Importado</span>
+        </div>
+      </div>
+
+      <!-- Modo oscuro -->
+      <div class="reveal mk-card rounded-3xl p-6 sm:p-7 transition-transform duration-300 hover:-translate-y-0.5" data-delay="1">
+        <span class="w-10 h-10 rounded-xl bg-muted dark:bg-white/[0.06] flex items-center justify-center"><SunMoon className="w-5 h-5" /></span>
+        <h3 class="mt-5 text-xl font-semibold tracking-tight">Claro u oscuro</h3>
+        <p class="mt-2 text-[14.5px] text-muted-foreground leading-relaxed">Una interfaz cuidada en los dos temas, para cualquier hora del día.</p>
+        <div class="mt-6 grid grid-cols-2 rounded-xl overflow-hidden ring-1 ring-border h-16">
+          <div class="bg-white p-2.5 space-y-1.5">
+            <Sun className="w-3.5 h-3.5 text-[#1e293b]" />
+            <span class="block h-1.5 w-3/4 rounded-full bg-[#e2e8f0]"></span>
+            <span class="block h-1.5 w-1/2 rounded-full bg-primary-200"></span>
+          </div>
+          <div class="bg-[#0f0f11] p-2.5 space-y-1.5">
+            <Moon className="w-3.5 h-3.5 text-[#e5e7eb]" />
+            <span class="block h-1.5 w-3/4 rounded-full bg-white/15"></span>
+            <span class="block h-1.5 w-1/2 rounded-full bg-primary-400/80"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reprocesar -->
+      <div class="reveal mk-card rounded-3xl p-6 sm:p-7 transition-transform duration-300 hover:-translate-y-0.5" data-delay="2">
+        <span class="w-10 h-10 rounded-xl bg-muted dark:bg-white/[0.06] flex items-center justify-center"><RefreshCw className="w-5 h-5" /></span>
+        <h3 class="mt-5 text-xl font-semibold tracking-tight">Reprocesa sin resubir</h3>
+        <p class="mt-2 text-[14.5px] text-muted-foreground leading-relaxed">Cuando el motor de extracción mejora, tus nóminas ya guardadas se pueden volver a analizar.</p>
+        <div class="mt-6 inline-flex items-center gap-2 rounded-lg ring-1 ring-border bg-background/70 dark:bg-white/[0.03] px-3 py-1.5 text-[12px] font-medium">
+          <RefreshCw className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" /> Reprocesar
+        </div>
+      </div>
+
+      <!-- Formatos -->
+      <div class="reveal mk-card rounded-3xl p-6 sm:p-7 sm:col-span-2 lg:col-span-3 flex flex-col md:flex-row md:items-center gap-8 transition-transform duration-300 hover:-translate-y-0.5">
+        <div class="md:w-[45%]">
+          <h3 class="text-xl font-semibold tracking-tight">Empresa privada y organismos públicos</h3>
+          <p class="mt-2 text-[14.5px] text-muted-foreground leading-relaxed">SueldIA reconoce los dos grandes formatos de nómina en España, incluidas las tablas con bordes típicas de la administración pública.</p>
+        </div>
+        <div class="flex-1 grid sm:grid-cols-2 gap-3">
+          {[{ icon: Building2, t: "Empresa privada", s: "Devengos y deducciones" }, { icon: Landmark, t: "Organismo público", s: "Tablas con bordes" }].map(({ icon: Icon, t, s }) => (
+            <div class="rounded-2xl ring-1 ring-border bg-background/70 dark:bg-white/[0.03] p-4 flex items-center gap-3">
+              <span class="w-10 h-10 shrink-0 rounded-xl bg-muted dark:bg-white/[0.06] flex items-center justify-center"><Icon className="w-5 h-5" /></span>
+              <div class="flex-1 min-w-0">
+                <p class="text-[14px] font-medium">{t}</p>
+                <p class="text-[12px] text-muted-foreground truncate">{s}</p>
+              </div>
+              <span class="w-6 h-6 shrink-0 rounded-full bg-success-50 dark:bg-success-500/10 flex items-center justify-center"><Check className="w-3.5 h-3.5 text-success-700 dark:text-success-500" strokeWidth={3} /></span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- CTA -->
-  <section class="max-w-4xl mx-auto px-4 md:px-8 py-20 md:py-28 text-center">
-    <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-balance">Empieza a entender tu nómina hoy</h2>
-    <p class="mt-4 text-muted-foreground">Gratis, sin tarjeta de crédito.</p>
-    <div class="mt-8">
-      <a
-        href="/login"
-        class="inline-flex items-center justify-center rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-base font-medium h-12 px-10 transition-colors"
-      >
-        Crear cuenta gratis
-      </a>
+  <!-- ─── Cómo funciona ────────────────────────────────────── -->
+  <section id="como-funciona" class="scroll-mt-20 max-w-6xl mx-auto px-5 md:px-8 pt-32 md:pt-40">
+    <div class="reveal text-center max-w-2xl mx-auto">
+      <p class="mk-eyebrow">Cómo funciona</p>
+      <h2 class="mt-4 text-4xl md:text-5xl font-semibold tracking-[-0.04em] leading-[1.05] text-balance">
+        Tres pasos. <span class="font-display italic font-normal tracking-normal text-[1.08em]">Ni uno más.</span>
+      </h2>
+    </div>
+
+    <div class="relative mt-16 grid md:grid-cols-3 gap-10 md:gap-8">
+      <div class="hidden md:block absolute top-7 left-[16.6%] right-[16.6%] h-px bg-gradient-to-r from-transparent via-primary-500/55 to-transparent" aria-hidden="true"></div>
+      {steps.map(({ icon: Icon, title, text }, i) => (
+        <div class="reveal relative text-center" data-delay={String(i + 1)}>
+          <div class="relative mx-auto w-14 h-14 rounded-2xl mk-card flex items-center justify-center shadow-[0_10px_30px_-12px_rgb(30_64_175/0.35)]">
+            <Icon className="w-6 h-6 text-primary-700 dark:text-primary-300" />
+            <span class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-foreground text-background text-[11px] font-semibold flex items-center justify-center">{i + 1}</span>
+          </div>
+          <h3 class="mt-6 text-lg font-semibold tracking-tight">{title}</h3>
+          <p class="mt-2 text-[14.5px] text-muted-foreground leading-relaxed max-w-[17rem] mx-auto">{text}</p>
+        </div>
+      ))}
     </div>
   </section>
+
+  <!-- ─── Privacidad ───────────────────────────────────────── -->
+  <section class="max-w-6xl mx-auto px-5 md:px-8 pt-32 md:pt-40">
+    <div class="reveal mk-card relative overflow-hidden rounded-[1.75rem] p-7 sm:p-10 md:p-14 grid lg:grid-cols-[1fr_1.15fr] gap-12 items-center">
+      <div class="absolute -left-24 -bottom-24 w-80 h-80 rounded-full mk-glow opacity-60" aria-hidden="true"></div>
+      <div class="relative">
+        <p class="mk-eyebrow"><ShieldCheck className="w-3.5 h-3.5" /> Privacidad</p>
+        <h2 class="mt-4 text-4xl md:text-5xl font-semibold tracking-[-0.04em] leading-[1.05] text-balance">
+          Tus datos son <span class="font-display italic font-normal tracking-normal text-[1.08em]">tuyos.</span>
+        </h2>
+        <p class="mt-5 text-[16px] text-muted-foreground leading-relaxed max-w-md">
+          Una nómina dice mucho de ti. Por eso SueldIA guarda lo mínimo imprescindible para funcionar y nada más.
+        </p>
+        <div class="mt-10 hidden lg:flex items-center justify-center w-40 h-40 rounded-full ring-1 ring-border" aria-hidden="true">
+          <div class="w-28 h-28 rounded-full ring-1 ring-border flex items-center justify-center">
+            <div class="w-16 h-16 rounded-2xl bg-brand-navy text-primary-400 ring-1 ring-white/10 flex items-center justify-center shadow-[0_12px_30px_-8px_rgb(15_23_42/0.5)]">
+              <Lock className="w-7 h-7" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <ul class="relative divide-y divide-border rounded-2xl ring-1 ring-border bg-background/60 dark:bg-white/[0.02]">
+        {privacy.map(({ icon: Icon, title, text }) => (
+          <li class="flex gap-4 p-5 sm:p-6">
+            <span class="w-10 h-10 shrink-0 rounded-xl bg-primary-50 dark:bg-primary-500/15 text-primary-700 dark:text-primary-300 flex items-center justify-center"><Icon className="w-5 h-5" /></span>
+            <div>
+              <h3 class="font-semibold text-[15.5px]">{title}</h3>
+              <p class="mt-1 text-[14px] text-muted-foreground leading-relaxed">{text}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <!-- ─── FAQ ──────────────────────────────────────────────── -->
+  <section id="faq" class="scroll-mt-20 max-w-6xl mx-auto px-5 md:px-8 pt-32 md:pt-40">
+    <div class="grid lg:grid-cols-[0.8fr_1.2fr] gap-10 lg:gap-16">
+      <div class="reveal">
+        <p class="mk-eyebrow">FAQ</p>
+        <h2 class="mt-4 text-4xl md:text-5xl font-semibold tracking-[-0.04em] leading-[1.05] text-balance">
+          Preguntas <span class="font-display italic font-normal tracking-normal text-[1.08em]">frecuentes.</span>
+        </h2>
+        <p class="mt-5 text-[16px] text-muted-foreground leading-relaxed max-w-sm">
+          ¿No encuentras tu respuesta? La forma más rápida de salir de dudas es probarlo: es gratis y solo necesitas tu cuenta de Google.
+        </p>
+      </div>
+      <div class="reveal" data-delay="1">
+        <Faq client:visible items={faqs} />
+      </div>
+    </div>
+  </section>
+
+  <CtaBand />
 </MarketingLayout>

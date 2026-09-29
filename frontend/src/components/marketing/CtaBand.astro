@@ -1,0 +1,42 @@
+---
+interface Props {
+  title?: string;
+  accent?: string;
+  subtitle?: string;
+}
+const {
+  title = "Tu próxima nómina,",
+  accent = "por fin clara.",
+  subtitle = "Crea tu cuenta con Google en segundos. Gratis, sin tarjeta.",
+} = Astro.props;
+---
+
+<section class="max-w-6xl mx-auto px-5 md:px-8 py-20 md:py-28">
+  <div class="reveal relative overflow-hidden rounded-[1.75rem] bg-brand-navy bg-gradient-to-br from-brand-navy via-brand-navy to-primary-950 px-6 py-16 sm:px-12 md:py-20 text-center text-white ring-1 ring-white/10 shadow-[0_40px_80px_-40px_rgb(15_23_42/0.6)]">
+    <div
+      class="absolute inset-0 opacity-[0.18] [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:20px_20px] [mask-image:radial-gradient(ellipse_70%_70%_at_50%_0%,#000,transparent)]"
+      aria-hidden="true"
+    >
+    </div>
+    <div class="absolute -top-24 left-1/2 -translate-x-1/2 w-[520px] h-[260px] rounded-full bg-primary-400/25 blur-3xl" aria-hidden="true"></div>
+
+    <div class="relative">
+      <h2 class="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-[-0.035em] text-balance leading-[1.08]">
+        {title} <span class="font-display italic font-normal text-[1.12em] text-primary-300">{accent}</span>
+      </h2>
+      <p class="mt-5 text-base sm:text-lg text-white/75 max-w-xl mx-auto text-balance">{subtitle}</p>
+      <div class="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <a
+          href="/login"
+          class="mk-btn h-12 px-7 rounded-full bg-white text-brand-navy text-[15px] shadow-[0_8px_24px_-8px_rgb(0_0_0/0.45)] hover:bg-primary-50"
+        >
+          Empezar gratis
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></svg>
+        </a>
+        <a href="/precios" class="mk-btn h-12 px-7 rounded-full text-[15px] text-white/90 ring-1 ring-white/25 hover:bg-white/10">
+          Ver precios
+        </a>
+      </div>
+    </div>
+  </div>
+</section>

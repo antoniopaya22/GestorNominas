@@ -1,73 +1,203 @@
 ---
-// Ilustración estática del producto para el hero — datos de ejemplo
-// redondos y ficticios, presentados como maqueta de interfaz, no como
-// captura real ni como testimonio de un usuario.
+// Maqueta estática de la app para el hero: replica el aspecto real (sidebar
+// con selector Finanzas/Nóminas, breadcrumbs, KPIs) con datos de ejemplo
+// ficticios. Se etiqueta como ilustración, no es una captura ni un testimonio.
+import {
+  Home, ChartColumn, Upload, FileText, PieChart, Users, Settings,
+  ChevronsUpDown, PanelLeft, ChevronRight, TrendingUp,
+} from "lucide-react";
+import { toPoints, smoothPath, areaPath } from "./chart";
+
+const nav = [
+  { icon: ChartColumn, label: "Dashboard", active: true },
+  { icon: Upload, label: "Subir nóminas" },
+  { icon: FileText, label: "Mis nóminas" },
+  { icon: PieChart, label: "Analítica" },
+  { icon: Users, label: "Perfiles" },
+];
+
+const kpis = [
+  { label: "Bruto anual", value: "33.440 €", delta: "+4,1 %", positive: true },
+  { label: "Neto medio", value: "1.892 €", delta: "+2,3 %", positive: true },
+  { label: "IRPF medio", value: "15,2 %", delta: "−0,6 pp", positive: true, hideMobile: true },
+  { label: "Pagas extra", value: "2", delta: "jun · dic", neutral: true, hideMobile: true },
+];
+
+const months = ["May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic", "Ene", "Feb", "Mar", "Abr"];
+const net = [1768, 1775, 1790, 1784, 1802, 1810, 1806, 1824, 1851, 1846, 1868, 1892];
+const W = 560;
+const H = 170;
+const pts = toPoints(net, W, H, 18);
+const line = smoothPath(pts);
+const area = areaPath(pts, H);
+const lastPt = pts[pts.length - 1];
+
 const concepts = [
-  { label: "Salario Base", value: 62, tone: "bg-foreground/70" },
-  { label: "Plus Convenio", value: 38, tone: "bg-foreground/50" },
-  { label: "Antigüedad", value: 18, tone: "bg-foreground/30" },
-  { label: "IRPF", value: -22, tone: "bg-danger-400" },
+  { label: "Salario base", amount: "1.980,00" },
+  { label: "Plus convenio", amount: "312,50" },
+  { label: "Antigüedad", amount: "96,20" },
+  { label: "IRPF", amount: "−358,30", negative: true },
+  { label: "Seguridad Social", amount: "−138,40", negative: true },
 ];
 ---
 
 <div class="relative">
-  <!-- Marca de "maqueta" sutil -->
-  <div
-    class="absolute -inset-3 md:-inset-4 rounded-[1.75rem] bg-primary-50 dark:bg-primary-950/40 -z-10"
-    aria-hidden="true"
-  >
-  </div>
+  <div class="absolute left-1/2 top-[18%] -translate-x-1/2 w-[85%] h-[70%] mk-glow -z-10" aria-hidden="true"></div>
 
-  <div class="rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
-    <!-- Barra de ventana -->
-    <div class="flex items-center gap-1.5 px-4 h-9 border-b border-border bg-muted/40">
-      <span class="w-2.5 h-2.5 rounded-full bg-border"></span>
-      <span class="w-2.5 h-2.5 rounded-full bg-border"></span>
-      <span class="w-2.5 h-2.5 rounded-full bg-border"></span>
-      <span class="ml-3 text-[11px] font-medium text-muted-foreground">Dashboard · SueldIA</span>
-    </div>
-
-    <div class="p-5 md:p-6 space-y-5">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Nómina · Abril 2026</p>
-          <p class="text-sm font-semibold mt-0.5">THENEXTPANGEA SL</p>
+  <!-- Bisel exterior -->
+  <div class="rounded-[1.35rem] p-1.5 md:p-2 bg-foreground/[0.035] dark:bg-white/[0.04] ring-1 ring-foreground/[0.06] dark:ring-white/[0.08] backdrop-blur-sm">
+    <div class="rounded-2xl overflow-hidden bg-card dark:bg-[#0f0f11] ring-1 ring-foreground/10 dark:ring-white/10 shadow-[0_40px_90px_-30px_rgb(15_23_42/0.35),0_12px_30px_-12px_rgb(15_23_42/0.15)] dark:shadow-[0_40px_100px_-30px_rgb(0_0_0/0.8)]">
+      <!-- Barra de ventana -->
+      <div class="flex items-center gap-3 px-4 h-10 border-b border-border bg-muted/40 dark:bg-white/[0.02]">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/80"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-[#febc2e]/80"></span>
+          <span class="w-2.5 h-2.5 rounded-full bg-[#28c840]/80"></span>
         </div>
-        <span class="inline-flex items-center gap-1 rounded-full bg-success-50 dark:bg-success-700/20 text-success-700 dark:text-success-500 text-[11px] font-semibold px-2.5 py-1">
-          +2,3% vs. marzo
-        </span>
+        <div class="mx-auto flex items-center gap-1.5 rounded-md bg-background/80 dark:bg-white/[0.04] ring-1 ring-border px-3 h-6 text-[11px] text-muted-foreground">
+          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+          sueldia.app/app/payroll
+        </div>
+        <div class="w-12" aria-hidden="true"></div>
       </div>
 
-      <div class="grid grid-cols-2 gap-3">
-        <div class="rounded-xl border border-border p-3.5">
-          <p class="text-[11px] text-muted-foreground">Bruto</p>
-          <p class="text-xl font-bold tracking-tight mt-0.5">2.480 €</p>
-        </div>
-        <div class="rounded-xl border border-border p-3.5">
-          <p class="text-[11px] text-muted-foreground">Neto</p>
-          <p class="text-xl font-bold tracking-tight mt-0.5 text-primary-600 dark:text-primary-400">1.890 €</p>
-        </div>
-      </div>
+      <div class="flex text-left">
+        <!-- Sidebar -->
+        <aside class="hidden md:flex w-52 shrink-0 flex-col gap-4 border-r border-border bg-sidebar p-3">
+          <div class="flex items-center gap-2.5 rounded-lg p-1.5 hover:bg-foreground/[0.03]">
+            <img src="/logo-mark.svg" alt="" class="w-7 h-7" width="28" height="28" />
+            <div class="flex-1 min-w-0">
+              <p class="text-[12px] font-bold leading-tight tracking-[-0.01em]">Sueld<span class="text-primary-500 dark:text-primary-400">IA</span></p>
+              <p class="text-[11px] text-muted-foreground leading-tight">Nóminas</p>
+            </div>
+            <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground" />
+          </div>
 
-      <div class="space-y-2.5">
-        {concepts.map((c) => (
-          <div class="flex items-center gap-3">
-            <span class="text-xs text-muted-foreground w-24 shrink-0 truncate">{c.label}</span>
-            <div class="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-              <div
-                class:list={["h-full rounded-full", c.tone]}
-                style={`width: ${Math.abs(c.value) * 1.4}%`}
-              >
+          <div class="space-y-0.5">
+            <div class="flex items-center gap-2 rounded-md px-2 py-1.5 text-[12px] text-muted-foreground">
+              <Home className="w-3.5 h-3.5" /> Inicio
+            </div>
+          </div>
+
+          <div>
+            <p class="px-2 mb-1 text-[10px] font-medium text-muted-foreground/80">Nóminas</p>
+            <div class="space-y-0.5">
+              {nav.map(({ icon: Icon, label, active }) => (
+                <div
+                  class:list={[
+                    "flex items-center gap-2 rounded-md px-2 py-1.5 text-[12px]",
+                    active
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                      : "text-muted-foreground",
+                  ]}
+                >
+                  <Icon className="w-3.5 h-3.5" /> {label}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div class="mt-auto flex items-center gap-2 rounded-md px-2 py-1.5 text-[12px] text-muted-foreground">
+            <Settings className="w-3.5 h-3.5" /> Ajustes
+          </div>
+        </aside>
+
+        <!-- Contenido -->
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 h-10 px-4 border-b border-border text-[11px] text-muted-foreground">
+            <PanelLeft className="w-3.5 h-3.5" />
+            <span class="w-px h-3.5 bg-border mx-1"></span>
+            <span>Inicio</span>
+            <ChevronRight className="w-3 h-3" />
+            <span>Nóminas</span>
+            <ChevronRight className="w-3 h-3" />
+            <span class="text-foreground">Dashboard</span>
+          </div>
+
+          <div class="p-4 md:p-5 space-y-4">
+            <div class="flex items-end justify-between gap-3">
+              <div>
+                <p class="text-[15px] md:text-base font-semibold tracking-tight">Dashboard de nóminas</p>
+                <p class="text-[11px] text-muted-foreground mt-0.5">Últimos 12 meses · Empresa Ejemplo SL</p>
+              </div>
+              <span class="hidden sm:inline-flex items-center gap-1.5 rounded-md ring-1 ring-border bg-background dark:bg-white/[0.03] px-2.5 h-7 text-[11px]">
+                <span class="w-4 h-4 rounded-full bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-200 text-[9px] font-semibold flex items-center justify-center">A</span>
+                Perfil personal
+                <ChevronsUpDown className="w-3 h-3 text-muted-foreground" />
+              </span>
+            </div>
+
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+              {kpis.map((k) => (
+                <div class:list={["rounded-xl ring-1 ring-border bg-background/60 dark:bg-white/[0.02] p-3", k.hideMobile && "hidden lg:block"]}>
+                  <p class="text-[10.5px] text-muted-foreground">{k.label}</p>
+                  <p class="mt-1 text-[17px] md:text-lg font-semibold tracking-tight tabular-nums">{k.value}</p>
+                  <p
+                    class:list={[
+                      "mt-0.5 text-[10.5px] font-medium tabular-nums",
+                      k.neutral ? "text-muted-foreground" : "text-success-700 dark:text-success-500",
+                    ]}
+                  >
+                    {k.delta}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div class="grid lg:grid-cols-[1.55fr_1fr] gap-2.5">
+              <!-- Gráfico -->
+              <div class="rounded-xl ring-1 ring-border bg-background/60 dark:bg-white/[0.02] p-3.5">
+                <div class="flex items-center justify-between">
+                  <p class="text-[12px] font-medium">Evolución del neto</p>
+                  <span class="inline-flex items-center gap-1 text-[10.5px] text-success-700 dark:text-success-500 font-medium">
+                    <TrendingUp className="w-3 h-3" /> +7 % interanual
+                  </span>
+                </div>
+                <svg viewBox={`0 -4 ${W} ${H + 26}`} class="mt-2 w-full h-auto text-primary-500 dark:text-primary-400" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="hero-area" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="currentColor" stop-opacity="0.3" />
+                      <stop offset="100%" stop-color="currentColor" stop-opacity="0" />
+                    </linearGradient>
+                  </defs>
+                  {[0.25, 0.5, 0.75].map((f) => (
+                    <line x1="0" x2={W} y1={H * f} y2={H * f} class="stroke-border" stroke-dasharray="3 5" />
+                  ))}
+                  <path d={area} fill="url(#hero-area)" />
+                  <path d={line} fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" />
+                  <circle cx={lastPt.x} cy={lastPt.y} r="7" fill="currentColor" opacity="0.2" />
+                  <circle cx={lastPt.x} cy={lastPt.y} r="3.5" fill="currentColor" class="stroke-card" stroke-width="2" />
+                  {months.map((m, i) => (
+                    <text x={pts[i].x} y={H + 18} text-anchor={i === 0 ? "start" : i === months.length - 1 ? "end" : "middle"} class="fill-muted-foreground" font-size="10">{m}</text>
+                  ))}
+                </svg>
+              </div>
+
+              <!-- Conceptos -->
+              <div class="hidden sm:block rounded-xl ring-1 ring-border bg-background/60 dark:bg-white/[0.02] p-3.5">
+                <div class="flex items-center justify-between">
+                  <p class="text-[12px] font-medium">Abril 2026</p>
+                  <span class="rounded-full bg-success-50 dark:bg-success-500/10 text-success-700 dark:text-success-500 text-[10px] font-medium px-2 py-0.5">Procesada</span>
+                </div>
+                <ul class="mt-3 space-y-2">
+                  {concepts.map((c) => (
+                    <li class="flex items-center justify-between text-[11.5px]">
+                      <span class="text-muted-foreground">{c.label}</span>
+                      <span class:list={["tabular-nums font-medium", c.negative && "text-danger-600 dark:text-danger-400"]}>{c.amount} €</span>
+                    </li>
+                  ))}
+                </ul>
+                <div class="mt-3 pt-3 border-t border-dashed border-border flex items-center justify-between">
+                  <span class="text-[11.5px] font-medium">Líquido a percibir</span>
+                  <span class="text-[13px] font-semibold tabular-nums text-primary-700 dark:text-primary-300">1.892,00 €</span>
+                </div>
               </div>
             </div>
-            <span class="text-xs font-medium tabular-nums w-12 text-right shrink-0">
-              {c.value > 0 ? "+" : ""}{c.value}%
-            </span>
           </div>
-        ))}
+        </div>
       </div>
     </div>
   </div>
 
-  <p class="mt-3 text-center text-[11px] text-muted-foreground">Ejemplo ilustrativo — no son datos reales</p>
+  <p class="mt-4 text-center text-[11px] text-muted-foreground/80">Ejemplo ilustrativo — no son datos reales</p>
 </div>
