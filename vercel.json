@@ -1,7 +1,18 @@
 {
-  "buildCommand": "npm run build && npm run db:migrate --workspace=backend",
-  "outputDirectory": "frontend/dist",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "backend": {
+      "root": "backend",
+      "framework": "express",
+      "buildCommand": "npm run db:migrate"
+    },
+    "frontend": {
+      "root": "frontend",
+      "framework": "astro"
+    }
+  },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" }
+    { "source": "/api/(.*)", "destination": { "service": "backend" } },
+    { "source": "/(.*)", "destination": { "service": "frontend" } }
   ]
 }
