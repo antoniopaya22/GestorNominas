@@ -1,473 +1,552 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, BarChart, Bar, Legend,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, ComposedChart, Line, ReferenceLine,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  TrendingUp, AlertTriangle, Bell, Download, FileText,
-  ArrowUpRight, Activity, Target,
+  Activity, AlertTriangle, Bell, CalendarRange, CheckCircle2, CircleDollarSign, Download, FileText,
+  Gift, Loader2, Sparkles, TrendingUp, Upload,
 } from "lucide-react";
-import {
-  getProfiles, getAnalytics, exportData,
-  type AnalyticsData, type Profile,
-} from "../lib/api";
+import { toast } from "sonner";
+import { exportData, getAnalytics, getProfiles, type AnalyticsData } from "../lib/api";
+import { formatCompact, formatCurrency, formatMonthLabel, formatPct } from "../lib/format";
 import { Providers } from "./Providers";
-import { formatCurrency, formatMonthLabel } from "../lib/format";
+import {
+  ChartCard, PageHeader, PageHeaderSkeleton, SectionCard, Segmented, StatCard, StatCardSkeleton, StatGrid,
+  ChartCardSkeleton, chartActiveDot, chartAxis, chartBarCursor, chartColors, chartCursor, chartGrid,
+  type StatDelta,
+} from "./app";
 import { ChartTooltip } from "./ui/ChartTooltip";
-import { ProfileSelector } from "./ui/ProfileSelector";
 import { EmptyState } from "./ui/EmptyState";
-import { Card } from "@/components/ui/card";
+import { ProfileSelector } from "./ui/ProfileSelector";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "cn";
 
-const SEVERITY_STYLES = {
-  info: "bg-primary-50 border-primary-200 text-primary-700 dark:bg-primary-500/10 dark:border-primary-500/20 dark:text-primary-400",
-  warning: "bg-accent-50 border-accent-200 text-accent-700 dark:bg-accent-500/10 dark:border-accent-500/20 dark:text-accent-400",
-  critical: "bg-danger-50 border-danger-100 text-danger-700 dark:bg-danger-500/10 dark:border-danger-500/20 dark:text-danger-400",
-} as const;
+type Range = "12" | "24" | "all";
+type Severity = "info" | "warning" | "critical";
 
-const SEVERITY_ICONS = {
-  info: Bell,
-  warning: AlertTriangle,
-  critical: AlertTriangle,
-} as const;
-
-// Colores de gráfico que se leen en tiempo de ejecución desde las custom
-// properties de Tailwind (ver global.css) — así los charts de Recharts (que
-// pintan en SVG, fuera del alcance de las clases `dark:`) siguen el tema.
-const CHART_GRID = "var(--color-border)";
-const CHART_AXIS = "var(--color-muted-foreground)";
-
-type SalaryEvolutionDatum = {
-  month: string;
-  Bruto: number;
-  Neto: number;
+const SEVERITY_META: Record<Severity, { icon: typeof Bell; label: string; className: string; dot: string }> = {
+  info: { icon: Bell, label: "Aviso", className: "text-muted-foreground bg-muted", dot: "bg-slate-400" },
+  warning: { icon: AlertTriangle, label: "Atención", className: "text-amber-700 bg-amber-500/10 dark:text-amber-400", dot: "bg-amber-500" },
+  critical: { icon: AlertTriangle, label: "Importante", className: "text-red-700 bg-red-500/10 dark:text-red-400", dot: "bg-red-500" },
 };
 
+// Los valores de estas anomalías son porcentajes, no importes.
+const PERCENT_ANOMALIES = new Set(["irpf_change", "high_retention"]);
+
 function toMonthIndex(month: string): number | null {
-  const [yearPart, monthPart] = month.split("-");
-  const year = Number(yearPart);
-  const monthNumber = Number(monthPart);
-
-  if (!Number.isInteger(year) || !Number.isInteger(monthNumber) || monthNumber < 1 || monthNumber > 12) {
-    return null;
-  }
-
-  return year * 12 + (monthNumber - 1);
+  const [y, m] = month.split("-").map(Number);
+  if (!Number.isInteger(y) || !Number.isInteger(m) || m < 1 || m > 12) return null;
+  return y * 12 + (m - 1);
 }
 
-function fromMonthIndex(monthIndex: number): string {
-  const year = Math.floor(monthIndex / 12);
-  const monthNumber = (monthIndex % 12) + 1;
-  return `${year}-${String(monthNumber).padStart(2, "0")}`;
+function fromMonthIndex(i: number): string {
+  return `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`;
 }
 
-function buildSalaryEvolutionData(trends: AnalyticsData["trends"]): SalaryEvolutionDatum[] {
-  const grossByMonth = new Map(trends.gross.map((point) => [point.month, point.value]));
-  const netByMonth = new Map(trends.net.map((point) => [point.month, point.value]));
-
-  const monthIndices = Array.from(
-    new Set(
-      [...grossByMonth.keys(), ...netByMonth.keys()]
-        .map(toMonthIndex)
-        .filter((value): value is number => value !== null),
-    ),
-  ).sort((left, right) => left - right);
-
-  if (monthIndices.length === 0) {
-    return [];
+function buildEvolution(trends: AnalyticsData["trends"]) {
+  const gross = new Map(trends.gross.map((p) => [p.month, p.value]));
+  const net = new Map(trends.net.map((p) => [p.month, p.value]));
+  const idx = [...new Set([...gross.keys(), ...net.keys()].map(toMonthIndex).filter((v): v is number => v !== null))].sort((a, b) => a - b);
+  if (!idx.length) return [];
+  const out: { month: string; label: string; bruto: number | null; neto: number | null }[] = [];
+  for (let i = idx[0]; i <= idx[idx.length - 1]; i++) {
+    const key = fromMonthIndex(i);
+    out.push({ month: key, label: formatMonthLabel(key), bruto: gross.get(key) ?? null, neto: net.get(key) ?? null });
   }
-
-  const salaryEvolution: SalaryEvolutionDatum[] = [];
-  const firstMonth = monthIndices[0];
-  const lastMonth = monthIndices[monthIndices.length - 1];
-
-  for (let monthIndex = firstMonth; monthIndex <= lastMonth; monthIndex += 1) {
-    const monthKey = fromMonthIndex(monthIndex);
-    salaryEvolution.push({
-      month: formatMonthLabel(monthKey),
-      Bruto: grossByMonth.get(monthKey) ?? 0,
-      Neto: netByMonth.get(monthKey) ?? 0,
-    });
-  }
-
-  return salaryEvolution;
+  return out;
 }
 
-function SectionCard({ gradient, children }: { gradient: string; children: React.ReactNode }) {
+function readProfileParam(): number | null {
+  if (typeof window === "undefined") return null;
+  const v = Number(new URLSearchParams(window.location.search).get("perfil"));
+  return Number.isInteger(v) && v > 0 ? v : null;
+}
+
+function LegendKey({ color, label, dashed }: { color: string; label: string; dashed?: boolean }) {
   return (
-    <Card className="p-0 overflow-hidden">
-      <div className={cn("h-1.5 bg-gradient-to-r", gradient)} />
-      <div className="p-6">{children}</div>
-    </Card>
+    <span className="inline-flex items-center gap-1.5">
+      <svg width="16" height="8" aria-hidden="true">
+        <line x1="1" y1="4" x2="15" y2="4" stroke={color} strokeWidth="2" strokeDasharray={dashed ? "4 3" : undefined} strokeLinecap="round" />
+      </svg>
+      {label}
+    </span>
+  );
+}
+
+function AnalyticsSkeleton() {
+  return (
+    <div>
+      <PageHeaderSkeleton />
+      <StatGrid>{Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}</StatGrid>
+      <ChartCardSkeleton className="mt-6" height={300} />
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <ChartCardSkeleton />
+        <ChartCardSkeleton />
+      </div>
+    </div>
   );
 }
 
 function AnalyticsView() {
-  const { data: profiles = [] } = useQuery({
-    queryKey: ["profiles"],
-    queryFn: getProfiles,
-  });
-
+  const { data: profiles = [], isLoading: profilesLoading } = useQuery({ queryKey: ["profiles"], queryFn: getProfiles });
   const [selectedProfile, setSelectedProfile] = useState<number | null>(null);
-  const [exportYear, setExportYear] = useState<string>("");
+  const [range, setRange] = useState<Range>("24");
+  const [yoyMetric, setYoyMetric] = useState<"net" | "gross">("net");
+  const [concept, setConcept] = useState<string>("");
+  const [exportYear, setExportYear] = useState<string>("all");
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
-    if (!selectedProfile && profiles.length > 0) {
-      setSelectedProfile(profiles[0].id);
-    }
+    if (selectedProfile || profiles.length === 0) return;
+    const fromUrl = readProfileParam();
+    setSelectedProfile(profiles.some((p) => p.id === fromUrl) ? fromUrl : profiles[0].id);
   }, [profiles, selectedProfile]);
 
-  const { data: analytics, isLoading, error } = useQuery({
+  const { data: analytics, isLoading, error, refetch } = useQuery({
     queryKey: ["analytics", selectedProfile],
     queryFn: () => getAnalytics(selectedProfile!),
     enabled: !!selectedProfile,
   });
 
-  const salaryEvolutionData = analytics ? buildSalaryEvolutionData(analytics.trends) : [];
+  const profile = profiles.find((p) => p.id === selectedProfile);
 
-  const [exportError, setExportError] = useState<string | null>(null);
+  const derived = useMemo(() => {
+    if (!analytics) return null;
+    const evolution = buildEvolution(analytics.trends);
+    const years = [...new Set(evolution.map((e) => Number(e.month.slice(0, 4))))].sort((a, b) => b - a);
+    const netValues = analytics.trends.net.map((p) => p.value);
+    const lastNet = netValues.at(-1);
+    const prevNet = netValues.at(-2);
+    let netDelta: StatDelta | undefined;
+    if (lastNet != null && prevNet) {
+      const change = ((lastNet - prevNet) / prevNet) * 100;
+      const trend = Math.abs(change) < 0.05 ? "flat" : change > 0 ? "up" : "down";
+      netDelta = { value: `${change > 0 ? "+" : ""}${formatPct(change)}`, trend, label: "vs. mes anterior" };
+    }
+    const yoy = yoyMetric === "net" ? analytics.trends.yoyNet : analytics.trends.yoyGross;
+    const yoyAvg = analytics.trends.yoyNet.length
+      ? analytics.trends.yoyNet.reduce((s, d) => s + d.change, 0) / analytics.trends.yoyNet.length
+      : null;
+
+    // Proyección: últimos 6 meses reales + predicción, con un punto puente
+    // para que la línea discontinua salga del último dato real.
+    const recent = evolution.filter((e) => e.neto != null).slice(-6);
+    const projection = [
+      ...recent.map((e, i) => ({
+        label: e.label,
+        neto: e.neto,
+        bruto: e.bruto,
+        netoEst: i === recent.length - 1 ? e.neto : null,
+        brutoEst: i === recent.length - 1 ? e.bruto : null,
+      })),
+      ...analytics.predictions.map((p) => ({
+        label: formatMonthLabel(p.month),
+        neto: null,
+        bruto: null,
+        netoEst: p.predictedNet,
+        brutoEst: p.predictedGross,
+      })),
+    ];
+
+    const concepts = Object.entries(analytics.trends.conceptTrends)
+      .filter(([, series]) => series.length > 1)
+      .sort((a, b) => b[1].reduce((s, p) => s + p.value, 0) - a[1].reduce((s, p) => s + p.value, 0))
+      .map(([name]) => name);
+
+    return { evolution, years, lastNet, netDelta, yoy, yoyAvg, projection, concepts, netValues };
+  }, [analytics, yoyMetric]);
+
+  const activeConcept = derived?.concepts.includes(concept) ? concept : derived?.concepts[0] ?? "";
+  const conceptSeries = useMemo(
+    () => (analytics && activeConcept ? (analytics.trends.conceptTrends[activeConcept] ?? []).map((p) => ({ label: formatMonthLabel(p.month), value: p.value })) : []),
+    [analytics, activeConcept],
+  );
 
   const handleExport = async (format: "csv" | "json") => {
     if (!selectedProfile) return;
-    setExportError(null);
+    setExporting(true);
     try {
-      await exportData(selectedProfile, exportYear ? Number(exportYear) : undefined, format);
+      await exportData(selectedProfile, exportYear === "all" ? undefined : Number(exportYear), format);
     } catch {
-      setExportError("Error al exportar. Inténtalo de nuevo.");
+      toast.error("No se pudo exportar. Inténtalo de nuevo.");
+    } finally {
+      setExporting(false);
     }
   };
 
+  if (profilesLoading || (selectedProfile && isLoading)) return <AnalyticsSkeleton />;
+
   if (profiles.length === 0) {
     return (
-      <EmptyState
-        icon={Activity}
-        title="Sin datos"
-        description="Crea un perfil y sube nóminas para ver la analítica avanzada."
-        actionLabel="Subir nóminas"
-        actionHref="/upload"
-        actionIcon={FileText}
-      />
+      <>
+        <PageHeader title="Analítica" accent="de tus nóminas." />
+        <EmptyState
+          icon={Activity}
+          title="Aún no hay datos que analizar"
+          description="Crea un perfil y sube tus nóminas para ver tendencias, comparativas y proyecciones."
+          actionLabel="Crear perfil"
+          actionHref="/app/profiles"
+        />
+      </>
     );
   }
 
-  return (
-    <div className="animate-fade-in space-y-6">
-      {/* Hero */}
-      <Card className="p-0 overflow-hidden">
-        <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-        <div className="px-6 py-5 sm:px-8 sm:py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Analítica Avanzada</p>
-              <p className="text-lg font-semibold text-foreground">Tendencias, predicciones y anomalías</p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="secondary" size="sm" onClick={() => handleExport("csv")} className="gap-1.5" aria-label="Exportar CSV">
-                <Download className="w-3.5 h-3.5" aria-hidden="true" />
-                CSV
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => handleExport("json")} className="gap-1.5" aria-label="Exportar JSON">
-                <Download className="w-3.5 h-3.5" aria-hidden="true" />
-                JSON
-              </Button>
-            </div>
-          </div>
-        </div>
-      </Card>
+  const profileSwitcher = profiles.length > 1 && (
+    <ProfileSelector profiles={profiles} value={selectedProfile ?? profiles[0].id} onChange={(v) => setSelectedProfile(v as number)} />
+  );
 
-      {exportError && (
-        <Card className="border-destructive/20 bg-destructive/5 p-4 flex-row items-center gap-2" role="alert">
-          <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" aria-hidden="true" />
-          <p className="text-sm text-destructive">{exportError}</p>
-        </Card>
-      )}
+  if (error || !analytics || !derived) {
+    return (
+      <>
+        <PageHeader title="Analítica" accent="de tus nóminas.">{profileSwitcher}</PageHeader>
+        <EmptyState icon={AlertTriangle} title="No se pudo cargar la analítica" description="Vuelve a intentarlo en unos segundos.">
+          <Button variant="outline" onClick={() => refetch()}>Reintentar</Button>
+        </EmptyState>
+      </>
+    );
+  }
 
-      {/* Profile selector */}
-      <div className="flex gap-2 flex-wrap">
-        <ProfileSelector
-          profiles={profiles}
-          value={selectedProfile ?? profiles[0]?.id ?? 0}
-          onChange={(v) => setSelectedProfile(v as number)}
+  if (derived.evolution.length === 0) {
+    return (
+      <>
+        <PageHeader title="Analítica" accent="de tus nóminas." description={`Todavía no hay nóminas procesadas de ${profile?.name ?? "este perfil"}.`}>
+          {profileSwitcher}
+        </PageHeader>
+        <EmptyState
+          icon={FileText}
+          title="Sube tus nóminas para empezar"
+          description="Con dos o más nóminas verás aquí la evolución de tu salario, la comparativa con el año anterior y una proyección de los próximos meses."
+          actionLabel="Subir nóminas"
+          actionHref={`/app/upload?perfil=${selectedProfile}`}
+          actionIcon={Upload}
         />
+      </>
+    );
+  }
+
+  const { evolution, years, lastNet, netDelta, yoy, yoyAvg, projection, concepts, netValues } = derived;
+  const visibleEvolution = range === "all" ? evolution : evolution.slice(-Number(range));
+  const firstPrediction = analytics.predictions[0];
+  const issues = [
+    ...analytics.anomalies.map((a) => ({ ...a, kind: "anomaly" as const })),
+    ...analytics.alerts.map((a) => ({ ...a, kind: "alert" as const, month: undefined as string | undefined, value: undefined as number | undefined, expected: undefined as number | undefined })),
+  ].sort((a, b) => ({ critical: 0, warning: 1, info: 2 })[a.severity] - ({ critical: 0, warning: 1, info: 2 })[b.severity]);
+  const lastLabel = evolution.at(-1)?.label;
+  const evolutionDomain: [(min: number) => number, "auto"] = [(min) => Math.max(0, Math.floor((min * 0.85) / 100) * 100), "auto"];
+  // Conceptos casi constantes: sin esto el eje empieza en 0 y la línea sale plana.
+  const conceptDomain: [(min: number) => number, (max: number) => number] = [
+    (min) => Math.max(0, Math.floor(min * 0.9)),
+    (max) => Math.ceil(max * 1.05),
+  ];
+
+  return (
+    <div>
+      <PageHeader
+        eyebrow={
+          <span className="inline-flex items-center gap-1.5">
+            <CalendarRange className="size-3.5" />
+            {evolution[0].label} – {lastLabel}
+          </span>
+        }
+        title="Analítica"
+        accent="de tus nóminas."
+        description={`Tendencias, comparativas y proyecciones de ${profile?.name ?? "este perfil"}.`}
+        actions={
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="outline" className="gap-1.5" disabled={exporting} />}>
+              {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+              Exportar
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-52">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Periodo</DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={exportYear} onValueChange={(v) => setExportYear(String(v))}>
+                  <DropdownMenuRadioItem value="all" closeOnClick={false}>Todo el histórico</DropdownMenuRadioItem>
+                  {years.map((y) => (
+                    <DropdownMenuRadioItem key={y} value={String(y)} closeOnClick={false}>{y}</DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => handleExport("csv")}>Descargar CSV</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("json")}>Descargar JSON</DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        }
+      >
+        {profileSwitcher}
+      </PageHeader>
+
+      <StatGrid>
+        <StatCard
+          label="Último neto"
+          value={formatCurrency(lastNet)}
+          icon={CircleDollarSign}
+          delta={netDelta}
+          sparkline={netValues.slice(-12)}
+          emphasis
+        />
+        <StatCard
+          label="Vs. año anterior"
+          value={yoyAvg == null ? "—" : `${yoyAvg > 0 ? "+" : ""}${formatPct(yoyAvg)}`}
+          icon={TrendingUp}
+          hint={yoyAvg == null ? "Hace falta un año de histórico" : `Neto medio, ${analytics.trends.yoyNet.length} meses comparados`}
+        />
+        <StatCard
+          label="Proyección"
+          value={firstPrediction ? formatCurrency(firstPrediction.predictedNet) : "—"}
+          icon={Sparkles}
+          hint={firstPrediction ? `Neto estimado para ${formatMonthLabel(firstPrediction.month)}` : "Sin datos suficientes"}
+        />
+        <StatCard
+          className="hidden sm:flex"
+          label="Avisos"
+          value={issues.length}
+          icon={Bell}
+          hint={issues.length ? `${analytics.anomalies.length} ${analytics.anomalies.length === 1 ? "anomalía" : "anomalías"} · ${analytics.alerts.length} ${analytics.alerts.length === 1 ? "recordatorio" : "recordatorios"}` : "Todo en orden"}
+        />
+      </StatGrid>
+
+      <ChartCard
+        className="mt-6"
+        title="Evolución salarial"
+        description="Bruto (discontinuo) y neto de las nóminas mensuales"
+        height={300}
+        action={
+          <Segmented<Range>
+            aria-label="Rango"
+            value={range}
+            onChange={setRange}
+            options={[
+              { value: "12", label: "12 m" },
+              { value: "24", label: "24 m" },
+              { value: "all", label: "Todo" },
+            ]}
+          />
+        }
+        legend={
+          <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
+            <LegendKey color={chartColors.secondary} dashed label="Bruto" />
+            <LegendKey color={chartColors.primary} label="Neto" />
+          </div>
+        }
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={visibleEvolution} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="an-neto" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={chartColors.primary} stopOpacity={0.22} />
+                <stop offset="100%" stopColor={chartColors.primary} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid {...chartGrid} />
+            <XAxis dataKey="label" {...chartAxis} interval="preserveStartEnd" minTickGap={24} />
+            <YAxis {...chartAxis} tickFormatter={formatCompact} width={56} domain={evolutionDomain} />
+            <Tooltip content={<ChartTooltip />} cursor={chartCursor} />
+            <Area type="monotone" dataKey="bruto" name="Bruto" stroke={chartColors.secondary} strokeWidth={1.75} strokeDasharray="5 4" fill="none" dot={false} activeDot={chartActiveDot} connectNulls />
+            <Area type="monotone" dataKey="neto" name="Neto" stroke={chartColors.primary} strokeWidth={2} fill="url(#an-neto)" dot={false} activeDot={chartActiveDot} connectNulls />
+          </AreaChart>
+        </ResponsiveContainer>
+      </ChartCard>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <ChartCard
+          title="Este año frente al anterior"
+          description={yoy.length ? "Mismo mes, año actual y año anterior" : "Aparecerá cuando tengas un año de histórico"}
+          height={260}
+          action={
+            <Segmented
+              aria-label="Métrica"
+              value={yoyMetric}
+              onChange={setYoyMetric}
+              options={[
+                { value: "net", label: "Neto" },
+                { value: "gross", label: "Bruto" },
+              ]}
+            />
+          }
+          legend={
+            yoy.length > 0 && (
+              <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full" style={{ backgroundColor: chartColors.primary }} />Año actual</span>
+                <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-full opacity-50" style={{ backgroundColor: chartColors.secondary }} />Año anterior</span>
+              </div>
+            )
+          }
+        >
+          {yoy.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={yoy.map((d) => ({ label: formatMonthLabel(d.month).split(" ")[0], actual: d.current, anterior: d.previous }))} margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barGap={2}>
+                <CartesianGrid {...chartGrid} />
+                <XAxis dataKey="label" {...chartAxis} />
+                <YAxis {...chartAxis} tickFormatter={formatCompact} width={52} />
+                <Tooltip content={<ChartTooltip />} cursor={chartBarCursor} />
+                <Bar dataKey="anterior" name="Año anterior" fill={chartColors.secondary} fillOpacity={0.35} radius={[4, 4, 0, 0]} maxBarSize={16} />
+                <Bar dataKey="actual" name="Año actual" fill={chartColors.primary} radius={[4, 4, 0, 0]} maxBarSize={16} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-border text-sm text-muted-foreground">
+              Sin meses comparables todavía
+            </div>
+          )}
+        </ChartCard>
+
+        <ChartCard
+          title="Proyección"
+          description={analytics.predictions.length ? `Próximos ${analytics.predictions.length} meses por regresión lineal` : "Hace falta más histórico para estimar"}
+          height={260}
+          legend={
+            analytics.predictions.length > 0 && (
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
+                <LegendKey color={chartColors.primary} label="Neto real" />
+                <LegendKey color={chartColors.primary} dashed label="Neto estimado" />
+                <span className="ml-auto flex gap-2">
+                  {analytics.predictions.map((p) => (
+                    <span key={p.month} className="rounded-md border border-border px-2 py-1 tabular-nums">
+                      <span className="text-muted-foreground">{formatMonthLabel(p.month)}</span>{" "}
+                      <span className="font-medium text-foreground">{formatCompact(p.predictedNet)}</span>
+                    </span>
+                  ))}
+                </span>
+              </div>
+            )
+          }
+        >
+          {analytics.predictions.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={projection} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid {...chartGrid} />
+                <XAxis dataKey="label" {...chartAxis} />
+                <YAxis {...chartAxis} tickFormatter={formatCompact} width={52} domain={evolutionDomain} />
+                <Tooltip content={<ChartTooltip />} cursor={chartCursor} />
+                {lastLabel && <ReferenceLine x={lastLabel} stroke="var(--border)" strokeDasharray="3 3" />}
+                <Line type="monotone" dataKey="neto" name="Neto" stroke={chartColors.primary} strokeWidth={2} dot={{ r: 2.5, fill: chartColors.primary }} activeDot={chartActiveDot} connectNulls={false} />
+                <Line type="monotone" dataKey="netoEst" name="Neto estimado" stroke={chartColors.primary} strokeWidth={2} strokeDasharray="5 4" dot={{ r: 2.5, fill: "var(--card)", stroke: chartColors.primary }} activeDot={chartActiveDot} connectNulls />
+              </ComposedChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-border text-sm text-muted-foreground">
+              Sube al menos 3 nóminas para ver una proyección
+            </div>
+          )}
+        </ChartCard>
       </div>
 
-      {isLoading && (
-        <div className="space-y-6">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <SectionCard key={i} gradient="from-accent-500 to-accent-400">
-              <Skeleton className="h-5 w-40 mb-4" />
-              <Skeleton className="h-[250px] w-full rounded-xl" />
-            </SectionCard>
-          ))}
-        </div>
+      {concepts.length > 0 && (
+        <ChartCard
+          className="mt-6"
+          title="Evolución por concepto"
+          description="Cómo ha cambiado cada línea de tu nómina"
+          height={240}
+          action={
+            <Select value={activeConcept} onValueChange={(v) => v && setConcept(v)}>
+              <SelectTrigger size="sm" className="w-36 sm:w-52" aria-label="Concepto">
+                <SelectValue>{(v: string) => v}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {concepts.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          }
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={conceptSeries} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="an-concept" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={chartColors.secondary} stopOpacity={0.18} />
+                  <stop offset="100%" stopColor={chartColors.secondary} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid {...chartGrid} />
+              <XAxis dataKey="label" {...chartAxis} interval="preserveStartEnd" minTickGap={24} />
+              <YAxis {...chartAxis} tickFormatter={formatCompact} width={56} domain={conceptDomain} tickCount={4} allowDecimals={false} />
+              <Tooltip content={<ChartTooltip />} cursor={chartCursor} />
+              <Area type="stepAfter" dataKey="value" name={activeConcept} stroke={chartColors.secondary} strokeWidth={2} fill="url(#an-concept)" dot={false} activeDot={chartActiveDot} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </ChartCard>
       )}
 
-      {error && (
-        <Card className="border-destructive/20 bg-destructive/5 p-5">
-          <p className="text-sm text-destructive">Error cargando analítica: {(error as Error).message}</p>
-        </Card>
-      )}
-
-      {analytics && (
-        <div className="space-y-6">
-          {/* Trends Chart */}
-          <SectionCard gradient="from-accent-500 to-accent-400">
-            <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-primary-50 dark:bg-primary-500/10 flex items-center justify-center">
-                <TrendingUp className="w-4 h-4 text-primary-600 dark:text-primary-400" aria-hidden="true" />
+      <div className="mt-6 grid gap-6 lg:grid-cols-5">
+        <SectionCard
+          className="lg:col-span-3"
+          title="Avisos y anomalías"
+          description="Cambios que conviene revisar en tus nóminas"
+          flush
+        >
+          {issues.length === 0 ? (
+            <div className="flex flex-col items-center px-5 py-10 text-center">
+              <div className="flex size-11 items-center justify-center rounded-full bg-primary/10">
+                <CheckCircle2 className="size-5 text-primary-600 dark:text-primary" />
               </div>
-              <div>
-                <h3 className="font-semibold text-foreground text-sm">Evolución Salarial</h3>
-                <p className="text-xs text-muted-foreground">Tendencia de bruto y neto mensual</p>
-              </div>
+              <p className="mt-3 text-sm font-medium text-foreground">Todo en orden</p>
+              <p className="mt-1 text-xs text-muted-foreground">No hemos detectado nada fuera de lo normal.</p>
             </div>
-
-            {salaryEvolutionData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={340}>
-                <AreaChart data={salaryEvolutionData}>
-                  <defs>
-                    <linearGradient id="gradBruto" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--chart-2)" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="var(--chart-2)" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="gradNeto" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-                  <XAxis
-                    dataKey="month"
-                    interval={0}
-                    minTickGap={0}
-                    height={56}
-                    angle={-35}
-                    textAnchor="end"
-                    tickMargin={12}
-                    tick={{ fontSize: 11 }}
-                    stroke={CHART_AXIS}
-                  />
-                  <YAxis tick={{ fontSize: 11 }} stroke={CHART_AXIS} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Area type="monotone" dataKey="Bruto" stroke="var(--chart-2)" strokeWidth={2} fill="url(#gradBruto)" />
-                  <Area type="monotone" dataKey="Neto" stroke="var(--chart-1)" strokeWidth={2} fill="url(#gradNeto)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-sm text-muted-foreground py-8 text-center">No hay datos de tendencia suficientes</p>
-            )}
-          </SectionCard>
-
-          {/* Predictions */}
-          {analytics.predictions.length > 0 && (
-            <SectionCard gradient="from-accent-500 to-accent-400">
-              <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-accent-50 dark:bg-accent-500/10 flex items-center justify-center">
-                  <Target className="w-4 h-4 text-accent-600 dark:text-accent-400" aria-hidden="true" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground text-sm">Predicciones</h3>
-                  <p className="text-xs text-muted-foreground">Estimación de los próximos 3 meses basada en regresión lineal</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                {analytics.predictions.map((p) => (
-                  <div key={p.month} className="bg-accent-50/50 dark:bg-accent-500/10 border border-accent-200 dark:border-accent-500/20 rounded-xl p-4">
-                    <p className="text-xs font-medium text-accent-600 dark:text-accent-400 uppercase tracking-wider">{formatMonthLabel(p.month)}</p>
-                    <div className="mt-2 space-y-1">
-                      <div className="flex justify-between">
-                        <span className="text-xs text-muted-foreground">Bruto est.</span>
-                        <span className="text-sm font-semibold font-mono text-foreground">{formatCurrency(p.predictedGross)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-xs text-muted-foreground">Neto est.</span>
-                        <span className="text-sm font-semibold font-mono text-success-700 dark:text-success-500">{formatCurrency(p.predictedNet)}</span>
-                      </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {issues.map((a, i) => {
+                const meta = SEVERITY_META[a.severity] ?? SEVERITY_META.info;
+                const Icon = meta.icon;
+                const isPct = PERCENT_ANOMALIES.has(a.type);
+                return (
+                  <li key={i} className="flex gap-3 px-5 py-4">
+                    <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg", meta.className)}>
+                      <Icon className="size-4" />
                     </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground">{a.message}</p>
+                      <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                        {a.month && <span>{formatMonthLabel(a.month)}</span>}
+                        {a.value != null && a.expected != null && (
+                          <span className="tabular-nums">
+                            {isPct ? formatPct(a.value) : formatCurrency(a.value)}
+                            <span className="text-muted-foreground/70"> · esperado {isPct ? formatPct(a.expected) : formatCurrency(a.expected)}</span>
+                          </span>
+                        )}
+                        {a.kind === "alert" && <span>Recordatorio</span>}
+                      </p>
+                    </div>
+                    <span className={cn("hidden h-5 shrink-0 items-center rounded-md px-1.5 text-[11px] font-medium sm:inline-flex", meta.className)}>{meta.label}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </SectionCard>
+
+        <SectionCard className="lg:col-span-2" title="Pagas extra" icon={Gift} flush>
+          {analytics.extras.length === 0 ? (
+            <p className="px-5 py-4 text-sm text-muted-foreground">No hay pagas extra registradas. Márcalas al subirlas o desde el detalle de la nómina.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {analytics.extras.map((e) => (
+                <li key={e.year} className="flex items-center gap-4 px-5 py-3.5">
+                  <div>
+                    <p className="text-sm font-semibold tabular-nums text-foreground">{e.year}</p>
+                    <p className="text-xs text-muted-foreground">{e.count} {e.count === 1 ? "paga" : "pagas"}</p>
                   </div>
-                ))}
-              </div>
-
-              {/* Combined chart: actual + predicted */}
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={[
-                  ...analytics.trends.gross.slice(-6).map((g, i) => ({
-                    month: formatMonthLabel(g.month),
-                    Bruto: g.value,
-                    Neto: analytics.trends.net[analytics.trends.gross.length - 6 + i]?.value ?? 0,
-                    BrutoEst: null as number | null,
-                    NetoEst: null as number | null,
-                  })),
-                  ...analytics.predictions.map((p) => ({
-                    month: formatMonthLabel(p.month),
-                    Bruto: null as number | null,
-                    Neto: null as number | null,
-                    BrutoEst: p.predictedGross,
-                    NetoEst: p.predictedNet,
-                  })),
-                ]}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke={CHART_AXIS} />
-                  <YAxis tick={{ fontSize: 11 }} stroke={CHART_AXIS} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Line type="monotone" dataKey="Bruto" stroke="var(--chart-2)" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="Neto" stroke="var(--chart-1)" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="BrutoEst" stroke="var(--chart-2)" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} name="Bruto (est.)" />
-                  <Line type="monotone" dataKey="NetoEst" stroke="var(--chart-1)" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} name="Neto (est.)" />
-                </LineChart>
-              </ResponsiveContainer>
-            </SectionCard>
-          )}
-
-          {/* Year-over-Year */}
-          {analytics.trends.yoyGross.length > 0 && (
-            <SectionCard gradient="from-success-500 to-success-400">
-              <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-success-50 dark:bg-success-500/10 flex items-center justify-center">
-                  <Activity className="w-4 h-4 text-success-600" aria-hidden="true" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground text-sm">Comparación Interanual</h3>
-                  <p className="text-xs text-muted-foreground">Este año vs. año anterior</p>
-                </div>
-              </div>
-
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={analytics.trends.yoyGross.map((d) => ({
-                  month: formatMonthLabel(d.month),
-                  "Año actual": d.current,
-                  "Año anterior": d.previous,
-                  Cambio: d.change,
-                }))}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke={CHART_AXIS} />
-                  <YAxis tick={{ fontSize: 11 }} stroke={CHART_AXIS} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="Año actual" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Año anterior" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </SectionCard>
-          )}
-
-          {/* Anomalies */}
-          {analytics.anomalies.length > 0 && (
-            <SectionCard gradient="from-danger-500 to-danger-400">
-              <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-danger-50 dark:bg-danger-500/10 flex items-center justify-center">
-                  <AlertTriangle className="w-4 h-4 text-danger-600 dark:text-danger-400" aria-hidden="true" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground text-sm">Anomalías Detectadas</h3>
-                  <p className="text-xs text-muted-foreground">Desviaciones significativas en tus nóminas</p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {analytics.anomalies.map((a, i) => {
-                  const Icon = SEVERITY_ICONS[a.severity] ?? AlertTriangle;
-                  return (
-                    <div key={i} className={cn("border rounded-xl p-4", SEVERITY_STYLES[a.severity])}>
-                      <div className="flex items-start gap-3">
-                        <Icon className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium">{a.message}</p>
-                          <div className="flex gap-4 mt-1 text-xs opacity-80">
-                            <span>Período: {formatMonthLabel(a.month)}</span>
-                            <span>Valor: {formatCurrency(a.value)}</span>
-                            <span>Esperado: {formatCurrency(a.expected)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </SectionCard>
-          )}
-
-          {/* Alerts */}
-          {analytics.alerts.length > 0 && (
-            <SectionCard gradient="from-accent-500 to-accent-400">
-              <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-accent-50 dark:bg-accent-500/10 flex items-center justify-center">
-                  <Bell className="w-4 h-4 text-accent-600 dark:text-accent-400" aria-hidden="true" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground text-sm">Alertas</h3>
-                  <p className="text-xs text-muted-foreground">Recomendaciones y avisos automáticos</p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {analytics.alerts.map((a, i) => {
-                  const Icon = SEVERITY_ICONS[a.severity as keyof typeof SEVERITY_ICONS] ?? Bell;
-                  const styles = SEVERITY_STYLES[a.severity as keyof typeof SEVERITY_STYLES] ?? SEVERITY_STYLES.info;
-                  return (
-                    <div key={i} className={cn("border rounded-xl px-4 py-3 flex items-center gap-3", styles)}>
-                      <Icon className="w-4 h-4 flex-shrink-0" />
-                      <p className="text-sm">{a.message}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </SectionCard>
-          )}
-
-          {/* No anomalies/alerts message */}
-          {analytics.anomalies.length === 0 && analytics.alerts.length === 0 && (
-            <Card className="p-6 text-center">
-              <div className="w-12 h-12 rounded-xl bg-success-50 dark:bg-success-500/10 flex items-center justify-center mx-auto mb-3">
-                <ArrowUpRight className="w-6 h-6 text-success-600" />
-              </div>
-              <h3 className="font-semibold text-foreground text-sm">Todo en orden</h3>
-              <p className="text-xs text-muted-foreground mt-1">No se han detectado anomalías ni alertas en tus nóminas</p>
-            </Card>
-          )}
-
-          {/* Extras Summary */}
-          {analytics.extras && analytics.extras.length > 0 && (
-            <SectionCard gradient="from-accent-500 to-accent-400">
-              <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-accent-50 dark:bg-accent-500/10 flex items-center justify-center">
-                  <Target className="w-4 h-4 text-accent-600 dark:text-accent-400" aria-hidden="true" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground text-sm">Pagas Extra</h3>
-                  <p className="text-xs text-muted-foreground">Resumen de pagas extra por año</p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {analytics.extras.map((e) => (
-                  <div key={e.year} className="flex items-center justify-between border border-accent-100 dark:border-accent-500/20 rounded-xl p-4 bg-accent-50/20 dark:bg-accent-500/5">
-                    <div>
-                      <span className="text-sm font-bold text-foreground">{e.year}</span>
-                      <span className="text-xs text-muted-foreground ml-2">{e.count} paga{e.count > 1 ? "s" : ""}</span>
-                    </div>
-                    <div className="flex gap-6">
-                      <div className="text-right">
-                        <p className="text-[10px] text-muted-foreground uppercase">Bruto</p>
-                        <p className="text-sm font-mono font-semibold text-foreground">{formatCurrency(e.totalGross)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[10px] text-muted-foreground uppercase">Neto</p>
-                        <p className="text-sm font-mono font-semibold text-success-700 dark:text-success-500">{formatCurrency(e.totalNet)}</p>
-                      </div>
-                    </div>
+                  <div className="ml-auto text-right">
+                    <p className="text-sm font-semibold tabular-nums text-foreground">{formatCurrency(e.totalNet)}</p>
+                    <p className="text-xs tabular-nums text-muted-foreground">de {formatCurrency(e.totalGross)} brutos</p>
                   </div>
-                ))}
-              </div>
-            </SectionCard>
+                </li>
+              ))}
+            </ul>
           )}
-        </div>
-      )}
+        </SectionCard>
+      </div>
     </div>
   );
 }
