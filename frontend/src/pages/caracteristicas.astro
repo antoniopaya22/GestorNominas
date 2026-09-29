@@ -1,0 +1,134 @@
+---
+import MarketingLayout from "../layouts/MarketingLayout.astro";
+import { buttonVariants } from "../components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
+import {
+  FileScan, LayoutDashboard, Users, ShieldCheck, BellRing, TrendingUp,
+  FileSpreadsheet, Tags, Wallet, Repeat, KeyRound, DatabaseZap,
+} from "lucide-react";
+
+const groups = [
+  {
+    title: "Nóminas",
+    description: "El núcleo de la aplicación: convertir un PDF en datos utilizables.",
+    items: [
+      {
+        icon: FileScan,
+        title: "Extracción automática",
+        description: "Reconoce nóminas de empresa privada y de organismos públicos, y extrae periodo, empresa, salario bruto/neto y cada concepto (devengos y deducciones) por separado.",
+      },
+      {
+        icon: DatabaseZap,
+        title: "Sin guardar el PDF",
+        description: "Se procesa el archivo al subirlo y solo se guarda el texto y los conceptos ya estructurados — el PDF original no se almacena en ningún sitio.",
+      },
+      {
+        icon: Repeat,
+        title: "Reprocesar cuando quieras",
+        description: "Si mejora el motor de extracción, puedes volver a analizar tus nóminas ya guardadas sin tener que subir el PDF otra vez.",
+      },
+    ],
+  },
+  {
+    title: "Análisis",
+    description: "Convierte cada nómina en una visión clara de tu situación.",
+    items: [
+      {
+        icon: LayoutDashboard,
+        title: "Dashboard financiero",
+        description: "Evolución mensual y anual de tu bruto y tu neto, retención media de IRPF, y desglose de cada concepto a lo largo del tiempo.",
+      },
+      {
+        icon: TrendingUp,
+        title: "Comparativas y previsión",
+        description: "Compara un año con el anterior y proyecta tu salario anual, incluidas las pagas extra.",
+      },
+      {
+        icon: BellRing,
+        title: "Alertas configurables",
+        description: "Recibe un aviso si tu nómina baja de lo esperado, si falta algún mes o si un concepto cambia bruscamente.",
+      },
+    ],
+  },
+  {
+    title: "Finanzas personales",
+    description: "Tu nómina es solo el principio — conéctala con el resto de tu economía.",
+    items: [
+      {
+        icon: Wallet,
+        title: "Cuentas y movimientos",
+        description: "Lleva varias cuentas (banco, efectivo, tarjeta) con sus ingresos y gastos, todo en un mismo sitio.",
+      },
+      {
+        icon: Tags,
+        title: "Categorías personalizables",
+        description: "Organiza tus movimientos en grupos y categorías a tu medida para ver en qué se va realmente el dinero.",
+      },
+      {
+        icon: FileSpreadsheet,
+        title: "Importación desde YNAB",
+        description: "¿Ya llevas tus cuentas en YNAB? Importa tu histórico de un CSV sin volver a introducir nada a mano.",
+      },
+    ],
+  },
+  {
+    title: "Cuenta y privacidad",
+    description: "",
+    items: [
+      {
+        icon: Users,
+        title: "Varios perfiles por cuenta",
+        description: "Gestiona las nóminas de más de una persona (pareja, hijos) desde la misma cuenta, cada una con su propio historial.",
+      },
+      {
+        icon: KeyRound,
+        title: "Acceso protegido",
+        description: "Login con email y contraseña — solo tú puedes ver tus datos, cada cuenta está completamente aislada del resto.",
+      },
+      {
+        icon: ShieldCheck,
+        title: "Datos mínimos",
+        description: "No se pide ni se guarda más información de la necesaria para procesar tus nóminas y mostrarte el análisis.",
+      },
+    ],
+  },
+];
+---
+
+<MarketingLayout title="Características" description="Extracción automática de nóminas, dashboard financiero, alertas y gestión de finanzas personales — todo en Gestor de Nóminas.">
+  <section class="max-w-6xl mx-auto px-4 md:px-8 pt-20 pb-16 text-center">
+    <h1 class="text-4xl md:text-5xl font-bold tracking-tight text-balance">Todo lo que hace Gestor de Nóminas</h1>
+    <p class="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto text-balance">
+      Desde leer el PDF hasta entender tu economía completa.
+    </p>
+  </section>
+
+  {groups.map((group) => (
+    <section class="max-w-6xl mx-auto px-4 md:px-8 py-10 md:py-14">
+      <div class="mb-8">
+        <h2 class="text-2xl font-bold tracking-tight">{group.title}</h2>
+        {group.description && <p class="mt-2 text-muted-foreground">{group.description}</p>}
+      </div>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {group.items.map(({ icon: Icon, title, description }) => (
+          <Card>
+            <CardHeader>
+              <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-2">
+                <Icon className="w-5 h-5 text-primary" />
+              </div>
+              <CardTitle>{title}</CardTitle>
+              <CardDescription>{description}</CardDescription>
+            </CardHeader>
+          </Card>
+        ))}
+      </div>
+    </section>
+  ))}
+
+  <section class="max-w-4xl mx-auto px-4 md:px-8 py-20 md:py-28 text-center">
+    <h2 class="text-3xl md:text-4xl font-bold tracking-tight">¿Listo para probarlo con tu próxima nómina?</h2>
+    <div class="mt-8">
+      <a href="/login" class={buttonVariants({ size: "lg" }) + " px-10"}>Crear cuenta gratis</a>
+    </div>
+  </section>
+</MarketingLayout>

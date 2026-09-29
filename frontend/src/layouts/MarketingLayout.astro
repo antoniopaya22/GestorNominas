@@ -1,0 +1,80 @@
+---
+import "../styles/global.css";
+import { buttonVariants } from "../components/ui/button";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = "Gestiona y analiza tus nóminas automáticamente." } = Astro.props;
+const currentPath = Astro.url.pathname;
+
+const navLinks = [
+  { href: "/caracteristicas", label: "Características" },
+  { href: "/precios", label: "Precios" },
+];
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <title>{title} · Gestor de Nóminas</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body class="min-h-screen bg-background text-foreground">
+    <header class="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
+      <div class="max-w-6xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
+        <a href="/" class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+            <svg class="w-4.5 h-4.5 text-primary-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </div>
+          <span class="font-bold text-sm">Gestor de Nóminas</span>
+        </a>
+
+        <nav class="hidden md:flex items-center gap-1">
+          {navLinks.map((link) => (
+            <a
+              href={link.href}
+              class:list={[
+                "px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                currentPath === link.href
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              ]}
+            >
+              {link.label}
+            </a>
+          ))}
+        </nav>
+
+        <div class="flex items-center gap-2">
+          <a href="/login" class={buttonVariants({ variant: "ghost", size: "sm" })}>Iniciar sesión</a>
+          <a href="/login" class={buttonVariants({ size: "sm" })}>Empezar gratis</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="border-t border-border mt-24">
+      <div class="max-w-6xl mx-auto px-4 md:px-8 py-10 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>© {new Date().getFullYear()} Gestor de Nóminas</span>
+        </div>
+        <nav class="flex items-center gap-6 text-sm text-muted-foreground">
+          <a href="/caracteristicas" class="hover:text-foreground transition-colors">Características</a>
+          <a href="/precios" class="hover:text-foreground transition-colors">Precios</a>
+          <a href="/login" class="hover:text-foreground transition-colors">Iniciar sesión</a>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>
