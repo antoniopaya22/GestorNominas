@@ -389,8 +389,9 @@ function AccountsView() {
         </EmptyState>
       ) : (
         <>
-          <StatGrid>
+          <StatGrid className="grid-cols-2">
             <StatCard
+              className="col-span-2 sm:col-span-1"
               label="Saldo total"
               value={formatCurrency(stats.total)}
               icon={Wallet}
@@ -400,6 +401,7 @@ function AccountsView() {
             <StatCard label="Liquidez" value={formatCurrency(stats.liquid)} icon={Landmark} hint="Bancos y efectivo" />
             <StatCard label="Inversión" value={formatCurrency(stats.investment)} icon={PiggyBank} hint="Cuentas de inversión" />
             <StatCard
+              className="col-span-2 sm:col-span-1"
               label="Tarjetas"
               value={<span className={amountClass(stats.cards)}>{formatCurrency(stats.cards)}</span>}
               icon={CreditCard}
