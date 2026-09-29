@@ -1,330 +1,227 @@
 import { Router } from "express";
 import { db } from "../db/index.js";
 import { accounts, categoryGroups, categories, transactions } from "../db/schema.js";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { uploadCsv } from "../middleware/upload.js";
 import {
   parseYnabCsv,
   isTransfer,
   getTransferTarget,
   isInflowCategory,
+  type YnabRawRow,
 } from "../parsers/ynab-csv-parser.js";
+import { AppError } from "../middleware/error-handler.js";
 
 export const importRouter = Router();
 
-// Import YNAB CSV
+type NewTransaction = typeof transactions.$inferInsert;
+
+const INSERT_CHUNK = 500;
+
+function rowAmount(row: YnabRawRow): number {
+  return row.inflow > 0 && row.outflow === 0 ? row.inflow : row.outflow;
+}
+
+// Import YNAB CSV/TSV. Con ?dryRun=true solo calcula el resumen, sin escribir
+// nada. La importación real va en una transacción y con inserciones por lotes:
+// la BBDD está en otra región y una inserción por fila no cabe en el tiempo de
+// una función serverless con exports de miles de movimientos.
 importRouter.post("/ynab", uploadCsv.single("file"), async (req, res, next) => {
-  const file = req.file;
   try {
     const { userId } = req.user!;
     const dryRun = req.query.dryRun === "true";
+    const file = req.file;
 
     if (!file) {
       return res.status(400).json({ error: "No se ha subido ningún archivo" });
     }
 
-    const content = file.buffer.toString("utf-8");
-    const parsed = parseYnabCsv(content);
+    const parsed = parseYnabCsv(file.buffer.toString("utf-8"));
+    if (parsed.rows.length === 0) {
+      throw new AppError(400, "El archivo no contiene movimientos de YNAB");
+    }
 
-    // 1. Create accounts that don't exist
-    const existingAccounts = await db
-      .select()
-      .from(accounts)
-      .where(eq(accounts.userId, userId));
+    const existingAccounts = await db.select().from(accounts).where(eq(accounts.userId, userId));
     const accountMap = new Map(existingAccounts.map((a) => [a.name, a.id]));
 
-    for (const accName of parsed.accounts) {
-      if (!accountMap.has(accName)) {
-        const type = inferAccountType(accName);
-        const [created] = await db
-          .insert(accounts)
-          .values({ userId, name: accName, type })
-          .returning();
-        accountMap.set(accName, created.id);
-      }
-    }
-
-    // 2. Create category groups and categories that don't exist
-    const existingGroups = await db
-      .select()
-      .from(categoryGroups)
-      .where(eq(categoryGroups.userId, userId));
-    const groupMap = new Map(existingGroups.map((g) => [g.name, g.id]));
-
-    for (const [groupName, catNames] of parsed.categoryGroups) {
-      if (!groupMap.has(groupName)) {
-        const [created] = await db
-          .insert(categoryGroups)
-          .values({ userId, name: groupName })
-          .returning();
-        groupMap.set(groupName, created.id);
-      }
-    }
-
-    // Now create categories
-    const allCats = await db.select().from(categories);
-    const catMap = new Map<string, number>(); // "group|category" → id
-    for (const cat of allCats) {
-      const group = existingGroups.find((g) => g.id === cat.groupId);
-      // Also check newly created groups
-      let groupName = group?.name;
-      if (!groupName) {
-        for (const [name, id] of groupMap) {
-          if (id === cat.groupId) { groupName = name; break; }
-        }
-      }
-      if (groupName) {
-        catMap.set(`${groupName}|${cat.name}`, cat.id);
-      }
-    }
-
-    for (const [groupName, catNames] of parsed.categoryGroups) {
-      const groupId = groupMap.get(groupName)!;
-      for (const catName of catNames) {
-        const key = `${groupName}|${catName}`;
-        if (!catMap.has(key)) {
-          const [created] = await db
-            .insert(categories)
-            .values({ groupId, name: catName })
-            .returning();
-          catMap.set(key, created.id);
-        }
-      }
-    }
-
-    // 3. Detect potential duplicates
+    // Un movimiento ya existente (misma fecha, importe, cuenta y beneficiario)
+    // se omite, así se puede reimportar un export más reciente sin duplicar.
     const existingTx = await db
       .select({ date: transactions.date, amount: transactions.amount, accountId: transactions.accountId, payee: transactions.payee })
       .from(transactions)
       .where(eq(transactions.userId, userId));
+    const existingSet = new Set(existingTx.map((t) => `${t.date}|${t.amount}|${t.accountId}|${t.payee ?? ""}`));
+    const isDuplicate = (row: YnabRawRow, accountId: number | undefined) =>
+      accountId !== undefined && existingSet.has(`${row.date}|${rowAmount(row)}|${accountId}|${row.payee || ""}`);
 
-    const existingSet = new Set(
-      existingTx.map((t) => `${t.date}|${t.amount}|${t.accountId}|${t.payee ?? ""}`)
-    );
+    const baseSummary = {
+      accounts: parsed.accounts.length,
+      categoryGroups: parsed.categoryGroups.size,
+      categories: Array.from(parsed.categoryGroups.values()).reduce((sum, set) => sum + set.size, 0),
+      dateRange: parsed.dateRange,
+    };
 
-    let duplicateCount = 0;
-    function isDuplicate(date: string, amount: number, accountId: number, payee: string | null): boolean {
-      const key = `${date}|${amount}|${accountId}|${payee ?? ""}`;
-      return existingSet.has(key);
+    if (dryRun) {
+      let count = 0;
+      let duplicates = 0;
+      for (const row of parsed.rows) {
+        if (rowAmount(row) === 0) continue;
+        count++;
+        if (isDuplicate(row, accountMap.get(row.account))) duplicates++;
+      }
+      return res.json({ ok: true, dryRun: true, summary: { ...baseSummary, transactions: count, duplicates } });
     }
 
-    // If dry run, compute the preview and return without inserting
-    if (dryRun) {
-      let previewCount = 0;
-      for (const row of parsed.rows) {
-        const accountId = accountMap.get(row.account);
-        if (!accountId) continue;
-        const amount = row.inflow > 0 && row.outflow === 0 ? row.inflow : row.outflow;
-        if (amount === 0) continue;
-        previewCount++;
-        if (isDuplicate(row.date, amount, accountId, row.payee || null)) {
-          duplicateCount++;
+    const result = await db.transaction(async (tx) => {
+      // 1. Cuentas que no existan
+      const newAccounts = parsed.accounts.filter((name) => !accountMap.has(name));
+      if (newAccounts.length > 0) {
+        const created = await tx
+          .insert(accounts)
+          .values(newAccounts.map((name) => ({ userId, name, type: inferAccountType(name) })))
+          .returning({ id: accounts.id, name: accounts.name });
+        for (const a of created) accountMap.set(a.name, a.id);
+      }
+
+      // 2. Grupos y categorías que no existan
+      const existingGroups = await tx.select().from(categoryGroups).where(eq(categoryGroups.userId, userId));
+      const groupMap = new Map(existingGroups.map((g) => [g.name, g.id]));
+      const newGroups = [...parsed.categoryGroups.keys()].filter((name) => !groupMap.has(name));
+      if (newGroups.length > 0) {
+        const created = await tx
+          .insert(categoryGroups)
+          .values(newGroups.map((name) => ({ userId, name })))
+          .returning({ id: categoryGroups.id, name: categoryGroups.name });
+        for (const g of created) groupMap.set(g.name, g.id);
+      }
+
+      const groupNameById = new Map([...groupMap].map(([name, id]) => [id, name]));
+      const groupIds = [...groupMap.values()];
+      const userCats = groupIds.length
+        ? await tx.select().from(categories).where(inArray(categories.groupId, groupIds))
+        : [];
+      const catMap = new Map<string, number>(); // "grupo|categoría" → id
+      for (const cat of userCats) {
+        const groupName = groupNameById.get(cat.groupId);
+        if (groupName) catMap.set(`${groupName}|${cat.name}`, cat.id);
+      }
+
+      const newCats: { groupId: number; name: string; key: string }[] = [];
+      for (const [groupName, catNames] of parsed.categoryGroups) {
+        const groupId = groupMap.get(groupName)!;
+        for (const name of catNames) {
+          const key = `${groupName}|${name}`;
+          if (!catMap.has(key)) newCats.push({ groupId, name, key });
         }
       }
+      if (newCats.length > 0) {
+        const created = await tx
+          .insert(categories)
+          .values(newCats.map(({ groupId, name }) => ({ groupId, name })))
+          .returning({ id: categories.id });
+        created.forEach((c, i) => catMap.set(newCats[i].key, c.id));
+      }
 
-      return res.json({
-        ok: true,
-        dryRun: true,
-        summary: {
-          accounts: parsed.accounts.length,
-          categoryGroups: parsed.categoryGroups.size,
-          categories: Array.from(parsed.categoryGroups.values()).reduce(
-            (sum, s) => sum + s.size,
-            0,
-          ),
-          transactions: previewCount,
-          duplicates: duplicateCount,
-          dateRange: parsed.dateRange,
-        },
+      // 3. Movimientos (se omiten los ya existentes)
+      let skipped = 0;
+      const pending = parsed.rows.filter((row) => {
+        if (rowAmount(row) === 0 || !accountMap.has(row.account)) return false;
+        if (isDuplicate(row, accountMap.get(row.account))) {
+          skipped++;
+          return false;
+        }
+        return true;
       });
-    }
 
-    // 4. Create transactions
-    // Process non-transfer rows first, then handle transfers
-    const nonTransferRows = parsed.rows.filter((r) => !isTransfer(r.payee));
-    const transferRows = parsed.rows.filter((r) => isTransfer(r.payee));
-
-    let importedCount = 0;
-
-    // Non-transfer transactions
-    for (const row of nonTransferRows) {
-      const accountId = accountMap.get(row.account);
-      if (!accountId) continue;
-
-      let type: "expense" | "income" | "transfer" = "expense";
-      let amount = row.outflow;
-
-      if (row.inflow > 0 && row.outflow === 0) {
-        type = "income";
-        amount = row.inflow;
-      } else if (row.outflow > 0) {
-        type = "expense";
-        amount = row.outflow;
-      }
-
-      if (amount === 0) continue;
-
-      // Track duplicates
-      if (isDuplicate(row.date, amount, accountId, row.payee || null)) {
-        duplicateCount++;
-      }
-
-      let categoryId: number | null = null;
-      if (row.categoryGroup && row.category && !isInflowCategory(row.categoryGroup)) {
-        categoryId = catMap.get(`${row.categoryGroup}|${row.category}`) ?? null;
-      }
-
-      await db.insert(transactions).values({
+      const toInsert = (row: YnabRawRow, fields: Partial<NewTransaction>): NewTransaction => ({
         userId,
-        accountId,
-        categoryId,
-        type,
-        amount,
+        accountId: accountMap.get(row.account)!,
+        categoryId: null,
+        type: "transfer",
+        amount: rowAmount(row),
         date: row.date,
         payee: row.payee || null,
         memo: row.memo || null,
         cleared: row.cleared,
         flag: row.flag || null,
         importedFrom: "ynab",
+        ...fields,
       });
-      importedCount++;
-    }
 
-    // Transfer transactions — pair outflows with inflows
-    // Group by date + amount to find pairs
-    const pendingTransfers: Array<{ row: typeof transferRows[0]; side: "out" | "in" }> = [];
-    for (const row of transferRows) {
-      if (row.outflow > 0) {
-        pendingTransfers.push({ row, side: "out" });
-      } else if (row.inflow > 0) {
-        pendingTransfers.push({ row, side: "in" });
-      }
-    }
-
-    // Match pairs: outflow from account A to "Transfer : B" pairs with inflow to B from "Transfer : A"
-    const matched = new Set<number>();
-    for (let i = 0; i < pendingTransfers.length; i++) {
-      if (matched.has(i)) continue;
-      const entry = pendingTransfers[i];
-      if (entry.side !== "out") continue;
-
-      const targetName = getTransferTarget(entry.row.payee);
-      const amount = entry.row.outflow;
-
-      // Find matching inflow
-      let pairIdx = -1;
-      for (let j = 0; j < pendingTransfers.length; j++) {
-        if (matched.has(j) || i === j) continue;
-        const other = pendingTransfers[j];
-        if (
-          other.side === "in" &&
-          other.row.account === targetName &&
-          Math.abs(other.row.inflow - amount) < 0.01 &&
-          other.row.date === entry.row.date
-        ) {
-          pairIdx = j;
-          break;
-        }
+      const regular: NewTransaction[] = pending
+        .filter((row) => !isTransfer(row.payee))
+        .map((row) =>
+          toInsert(row, {
+            type: row.inflow > 0 && row.outflow === 0 ? "income" : "expense",
+            categoryId:
+              row.categoryGroup && row.category && !isInflowCategory(row.categoryGroup)
+                ? catMap.get(`${row.categoryGroup}|${row.category}`) ?? null
+                : null,
+          }),
+        );
+      for (let i = 0; i < regular.length; i += INSERT_CHUNK) {
+        await tx.insert(transactions).values(regular.slice(i, i + INSERT_CHUNK));
       }
 
-      const fromAccountId = accountMap.get(entry.row.account);
-      if (!fromAccountId) continue;
-
-      // Create outflow side
-      const [outTx] = await db
-        .insert(transactions)
-        .values({
-          userId,
-          accountId: fromAccountId,
-          categoryId: null,
-          type: "transfer",
-          amount,
-          date: entry.row.date,
-          payee: entry.row.payee || null,
-          memo: entry.row.memo || null,
-          cleared: entry.row.cleared,
-          flag: entry.row.flag || null,
-          importedFrom: "ynab",
-        })
-        .returning();
-
-      matched.add(i);
-      importedCount++;
-
-      if (pairIdx >= 0) {
-        const pair = pendingTransfers[pairIdx];
-        const toAccountId = accountMap.get(pair.row.account);
-        if (toAccountId) {
-          const [inTx] = await db
-            .insert(transactions)
-            .values({
-              userId,
-              accountId: toAccountId,
-              categoryId: null,
-              type: "transfer",
-              amount: pair.row.inflow,
-              date: pair.row.date,
-              payee: pair.row.payee || null,
-              memo: pair.row.memo || null,
-              cleared: pair.row.cleared,
-              flag: pair.row.flag || null,
-              importedFrom: "ynab",
-              transferId: outTx.id,
-            })
-            .returning();
-
-          // Link back
-          await db
-            .update(transactions)
-            .set({ transferId: inTx.id })
-            .where(eq(transactions.id, outTx.id));
-
-          matched.add(pairIdx);
-          importedCount++;
-        }
-      }
-    }
-
-    // Handle unmatched inflows (transfers where outflow is missing from export)
-    for (let i = 0; i < pendingTransfers.length; i++) {
-      if (matched.has(i)) continue;
-      const entry = pendingTransfers[i];
-      const accountId = accountMap.get(entry.row.account);
-      if (!accountId) continue;
-
-      const amount = entry.side === "in" ? entry.row.inflow : entry.row.outflow;
-      if (amount === 0) continue;
-
-      await db.insert(transactions).values({
-        userId,
-        accountId,
-        categoryId: null,
-        type: "transfer",
-        amount,
-        date: entry.row.date,
-        payee: entry.row.payee || null,
-        memo: entry.row.memo || null,
-        cleared: entry.row.cleared,
-        flag: entry.row.flag || null,
-        importedFrom: "ynab",
-        transferId: entry.side === "in" ? 0 : null, // 0 = unmatched inflow sentinel
+      // Traspasos: la salida de A a "Transfer : B" se empareja con la entrada
+      // en B desde "Transfer : A" (mismo día e importe).
+      const transfers = pending
+        .filter((row) => isTransfer(row.payee))
+        .map((row) => ({ row, side: row.outflow > 0 ? ("out" as const) : ("in" as const) }));
+      const matched = new Set<number>();
+      const pairs: { out: YnabRawRow; in: YnabRawRow | null }[] = [];
+      transfers.forEach((entry, i) => {
+        if (entry.side !== "out" || matched.has(i)) return;
+        const target = getTransferTarget(entry.row.payee);
+        const j = transfers.findIndex(
+          (other, k) =>
+            k !== i &&
+            !matched.has(k) &&
+            other.side === "in" &&
+            other.row.account === target &&
+            Math.abs(other.row.inflow - entry.row.outflow) < 0.01 &&
+            other.row.date === entry.row.date,
+        );
+        matched.add(i);
+        if (j >= 0) matched.add(j);
+        pairs.push({ out: entry.row, in: j >= 0 ? transfers[j].row : null });
       });
-      importedCount++;
-    }
+
+      for (let i = 0; i < pairs.length; i += INSERT_CHUNK) {
+        const chunk = pairs.slice(i, i + INSERT_CHUNK);
+        const outIds = await tx
+          .insert(transactions)
+          .values(chunk.map((p) => toInsert(p.out, {})))
+          .returning({ id: transactions.id });
+        const linked = chunk.map((p, k) => ({ inRow: p.in, outId: outIds[k].id })).filter((p) => p.inRow);
+        if (linked.length === 0) continue;
+        const inIds = await tx
+          .insert(transactions)
+          .values(linked.map((p) => toInsert(p.inRow!, { transferId: p.outId })))
+          .returning({ id: transactions.id });
+        const links = linked.map((p, k) => sql`(${p.outId}::int, ${inIds[k].id}::int)`);
+        await tx.execute(
+          sql`update transactions as t set transfer_id = v.in_id
+              from (values ${sql.join(links, sql`, `)}) as v(out_id, in_id)
+              where t.id = v.out_id`,
+        );
+      }
+
+      // Entradas sin su salida en el export (0 = centinela de entrada huérfana)
+      const orphans = transfers
+        .filter((entry, i) => !matched.has(i))
+        .map((entry) => toInsert(entry.row, { transferId: entry.side === "in" ? 0 : null }));
+      for (let i = 0; i < orphans.length; i += INSERT_CHUNK) {
+        await tx.insert(transactions).values(orphans.slice(i, i + INSERT_CHUNK));
+      }
+
+      const imported = regular.length + pairs.length + pairs.filter((p) => p.in).length + orphans.length;
+      return { imported, skipped };
+    });
 
     res.status(201).json({
       ok: true,
-      summary: {
-        accounts: parsed.accounts.length,
-        categoryGroups: parsed.categoryGroups.size,
-        categories: Array.from(parsed.categoryGroups.values()).reduce(
-          (sum, s) => sum + s.size,
-          0,
-        ),
-        transactions: importedCount,
-        duplicates: duplicateCount,
-        dateRange: parsed.dateRange,
-      },
+      summary: { ...baseSummary, transactions: result.imported, duplicates: result.skipped },
     });
   } catch (err) {
     next(err);

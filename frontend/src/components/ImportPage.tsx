@@ -93,11 +93,11 @@ function DuplicatesNote({ count, done }: { count: number; done: boolean }) {
       <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
       <p className="text-sm text-amber-900 dark:text-amber-200">
         {done ? (
-          <>Se importaron <strong>{count}</strong> transacciones que podrían estar duplicadas.</>
+          <>Se omitieron <strong>{count}</strong> movimientos que ya tenías importados.</>
         ) : (
           <>
-            Hay <strong>{count}</strong> posibles duplicados (misma fecha, importe, cuenta y beneficiario que movimientos ya existentes).
-            Se importarán igualmente.
+            <strong>{count}</strong> movimientos ya existen (misma fecha, importe, cuenta y beneficiario) y se omitirán, así
+            que puedes reimportar un export más reciente sin duplicar.
           </>
         )}
       </p>
@@ -333,7 +333,7 @@ function ImportView() {
           <SectionCard title="Qué se importa">
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>Las cuentas y categorías que no existan se crean automáticamente.</li>
-              <li>Los movimientos que parezcan repetidos se marcan como posibles duplicados.</li>
+              <li>Los movimientos que ya tengas se omiten: puedes reimportar sin duplicar.</li>
               <li>El archivo no se guarda: solo se leen sus movimientos.</li>
             </ul>
           </SectionCard>

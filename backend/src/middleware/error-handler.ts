@@ -24,9 +24,13 @@ export function errorHandler(
   }
 
   // Multer errors
-  if (err.name === "MulterError" || err.message === "Solo se permiten archivos PDF") {
+  if (err.name === "MulterError") {
     logger.warn({ message: err.message }, "Upload error");
-    return res.status(400).json({ error: err.message });
+    const message =
+      (err as Error & { code?: string }).code === "LIMIT_FILE_SIZE"
+        ? "El archivo es demasiado grande"
+        : "No se pudo recibir el archivo";
+    return res.status(400).json({ error: message });
   }
 
   logger.error({ err }, "Unhandled error");
