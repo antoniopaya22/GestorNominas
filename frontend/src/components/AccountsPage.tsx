@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Wallet, Plus, Edit3, Trash2, Check, CreditCard,
-  Landmark, Banknote, TrendingUp, Archive, ArchiveRestore,
+  Wallet, Plus, Pencil, Trash2, CreditCard, Landmark, Banknote, TrendingUp,
+  Archive, ArchiveRestore, Download, PiggyBank, AlertTriangle, type LucideIcon,
 } from "lucide-react";
 import {
   getAccounts, createAccount, updateAccount, deleteAccount, toggleAccountArchive,
@@ -10,65 +10,255 @@ import {
 } from "../lib/api";
 import { Providers } from "./Providers";
 import { toast } from "sonner";
-import { formatCurrency } from "../lib/format";
+import { formatCurrency, formatPct } from "../lib/format";
 import { EmptyState } from "./ui/EmptyState";
 import { ConfirmModal } from "./ui/ConfirmModal";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import {
+  PageHeader, StatCard, StatGrid, SectionCard, Segmented,
+  PageHeaderSkeleton, StatCardSkeleton,
+} from "./app";
+import { ColorSwatches, SWATCH_COLORS } from "./finance-manage/ColorSwatches";
+import { RowActions } from "./finance-manage/RowActions";
+import { darkBoost } from "./finance-manage/color";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "cn";
 
-const ACCOUNT_TYPES = [
+type AccountType = Account["type"];
+
+const ACCOUNT_TYPES: { value: AccountType; label: string; icon: LucideIcon }[] = [
   { value: "bank", label: "Banco", icon: Landmark },
   { value: "credit_card", label: "Tarjeta", icon: CreditCard },
   { value: "cash", label: "Efectivo", icon: Banknote },
   { value: "investment", label: "Inversión", icon: TrendingUp },
   { value: "other", label: "Otro", icon: Wallet },
-] as const;
-
-const COLORS = [
-  "#2a8558", "#2e3a48", "#3b82f6", "#8b5cf6",
-  "#ec4899", "#ef4444", "#f59e0b", "#6366f1",
-  "#14b8a6", "#06b6d4",
 ];
 
-function typeLabel(type: string) {
-  return ACCOUNT_TYPES.find((t) => t.value === type)?.label ?? type;
+function typeMeta(type: string) {
+  return ACCOUNT_TYPES.find((t) => t.value === type) ?? ACCOUNT_TYPES[4];
 }
 
-function TypeIcon({ type }: { type: string }) {
-  const entry = ACCOUNT_TYPES.find((t) => t.value === type);
-  const Icon = entry?.icon ?? Wallet;
-  return <Icon className="w-5 h-5" />;
+function amountClass(n: number) {
+  return n < 0 ? "text-red-600 dark:text-red-400" : "text-foreground";
 }
 
+// ─── Formulario (crear/editar) ──────────────────────────────────
+interface FormState {
+  name: string;
+  type: AccountType;
+  color: string;
+  initialBalance: string;
+}
+
+const EMPTY_FORM: FormState = { name: "", type: "bank", color: SWATCH_COLORS[0], initialBalance: "" };
+
+function AccountDialog({
+  open, editing, form, setForm, onClose, onSubmit, pending,
+}: {
+  open: boolean;
+  editing: Account | null;
+  form: FormState;
+  setForm: (f: FormState) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+  pending: boolean;
+}) {
+  const TypeIcon = typeMeta(form.type).icon;
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="gap-0 p-0 sm:max-w-md">
+        <form
+          onSubmit={(e) => { e.preventDefault(); onSubmit(); }}
+          className="flex flex-col"
+        >
+          <DialogHeader className="border-b border-border px-5 pt-5 pb-4">
+            <DialogTitle>{editing ? "Editar cuenta" : "Nueva cuenta"}</DialogTitle>
+            <DialogDescription>
+              {editing ? "Cambia el nombre, el tipo o el color de la cuenta." : "Añade una cuenta bancaria, tarjeta, efectivo o inversión."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 px-5 py-5">
+            {/* Vista previa */}
+            <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3">
+              <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-lg text-white shadow-sm", darkBoost(form.color))} style={{ backgroundColor: form.color }}>
+                <TypeIcon className="size-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">{form.name.trim() || "Nombre de la cuenta"}</p>
+                <p className="text-xs text-muted-foreground">{typeMeta(form.type).label}</p>
+              </div>
+              <p className={cn("text-sm font-semibold tabular-nums", amountClass(Number(form.initialBalance) || 0))}>
+                {formatCurrency(Number(form.initialBalance) || 0)}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="account-name">Nombre</Label>
+              <Input
+                id="account-name"
+                autoFocus
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="Ej: Cuenta nómina"
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Tipo</Label>
+              <div role="radiogroup" aria-label="Tipo de cuenta" className="grid grid-cols-5 gap-1.5">
+                {ACCOUNT_TYPES.map((t) => {
+                  const selected = form.type === t.value;
+                  return (
+                    <button
+                      key={t.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setForm({ ...form, type: t.value })}
+                      className={cn(
+                        "flex cursor-pointer flex-col items-center gap-1 rounded-lg border px-1 py-2.5 text-[11px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
+                        selected
+                          ? "border-primary/40 bg-primary/5 text-foreground ring-1 ring-primary/30"
+                          : "border-border text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                      )}
+                    >
+                      <t.icon className={cn("size-4", selected && "text-primary-600 dark:text-primary")} />
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="account-initial-balance">Saldo inicial</Label>
+              <div className="relative">
+                <Input
+                  id="account-initial-balance"
+                  type="number"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={form.initialBalance}
+                  onChange={(e) => setForm({ ...form, initialBalance: e.target.value })}
+                  placeholder="0,00"
+                  className="pr-8 tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+                <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">€</span>
+              </div>
+              <p className="text-xs text-muted-foreground">El saldo actual se calcula sumando las transacciones a este saldo inicial.</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Color</Label>
+              <ColorSwatches value={form.color} onChange={(color) => setForm({ ...form, color })} />
+            </div>
+          </div>
+
+          <DialogFooter className="mx-0 mb-0 rounded-b-xl border-t border-border bg-muted/30 px-5 py-3">
+            <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button type="submit" disabled={pending || !form.name.trim()}>
+              {editing ? "Guardar cambios" : "Crear cuenta"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Tarjeta de cuenta ──────────────────────────────────────────
+function AccountCard({
+  account, share, onEdit, onArchive, onDelete,
+}: {
+  account: Account;
+  share: number | null;
+  onEdit: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+}) {
+  const meta = typeMeta(account.type);
+  const Icon = meta.icon;
+  const change = account.balance - account.initialBalance;
+  return (
+    <article
+      className={cn(
+        "group relative flex flex-col overflow-hidden rounded-xl border border-border bg-card p-5 shadow-[0_1px_2px_rgb(0_0_0/0.03)] transition-shadow hover:shadow-md",
+        account.archived && "opacity-70",
+      )}
+    >
+      <span className={cn("absolute inset-x-0 top-0 h-0.5", darkBoost(account.color))} style={{ backgroundColor: account.color }} aria-hidden="true" />
+      <div className="flex items-start gap-3">
+        <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-lg text-white shadow-sm", darkBoost(account.color))} style={{ backgroundColor: account.color }}>
+          <Icon className="size-5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-semibold text-foreground">{account.name}</h3>
+          <p className="text-xs text-muted-foreground">
+            {meta.label} · {account.currency}
+            {account.archived && <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">Archivada</span>}
+          </p>
+        </div>
+        <RowActions
+          itemLabel={account.name}
+          actions={[
+            { label: "Editar", icon: Pencil, onSelect: onEdit },
+            { label: account.archived ? "Restaurar" : "Archivar", icon: account.archived ? ArchiveRestore : Archive, onSelect: onArchive },
+            { label: "Eliminar", icon: Trash2, onSelect: onDelete, destructive: true, separated: true },
+          ]}
+        />
+      </div>
+
+      <p className={cn("mt-5 text-2xl font-semibold tracking-tight tabular-nums", amountClass(account.balance))}>
+        {formatCurrency(account.balance)}
+      </p>
+      <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span className="tabular-nums">
+          {change === 0 ? "Sin movimientos" : `${change > 0 ? "+" : "−"}${formatCurrency(Math.abs(change))} desde el inicio`}
+        </span>
+        {share != null && <span className="tabular-nums">{formatPct(share)} del total</span>}
+      </div>
+      {share != null && (
+        <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted">
+          <div className={cn("h-full rounded-full", darkBoost(account.color))} style={{ width: `${Math.min(100, share)}%`, backgroundColor: account.color }} />
+        </div>
+      )}
+    </article>
+  );
+}
+
+// ─── Página ─────────────────────────────────────────────────────
 function AccountsView() {
   const queryClient = useQueryClient();
-  const { data: accounts = [], isLoading } = useQuery({
+  const { data: accounts = [], isLoading, error } = useQuery({
     queryKey: ["accounts"],
     queryFn: getAccounts,
   });
 
-  const [showArchived, setShowArchived] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [name, setName] = useState("");
-  const [type, setType] = useState<string>("bank");
-  const [color, setColor] = useState(COLORS[0]);
-  const [initialBalance, setInitialBalance] = useState("");
+  const [view, setView] = useState<"active" | "archived">("active");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Account | null>(null);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<Account | null>(null);
+
+  const closeDialog = () => {
+    setDialogOpen(false);
+    setEditing(null);
+    setForm(EMPTY_FORM);
+  };
 
   const createMut = useMutation({
     mutationFn: createAccount,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       toast.success("Cuenta creada correctamente");
-      resetForm();
+      closeDialog();
     },
     onError: () => toast.error("Error al crear la cuenta"),
   });
@@ -79,7 +269,7 @@ function AccountsView() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       toast.success("Cuenta actualizada");
-      resetForm();
+      closeDialog();
     },
     onError: () => toast.error("Error al actualizar la cuenta"),
   });
@@ -102,241 +292,215 @@ function AccountsView() {
     onError: () => toast.error("Error al cambiar estado de archivo"),
   });
 
-  const resetForm = () => {
-    setEditingId(null);
-    setName("");
-    setType("bank");
-    setColor(COLORS[0]);
-    setInitialBalance("");
+  const openCreate = () => {
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setDialogOpen(true);
   };
 
-  const startEdit = (a: Account) => {
-    setEditingId(a.id);
-    setName(a.name);
-    setType(a.type);
-    setColor(a.color);
-    setInitialBalance(String(a.initialBalance));
+  const openEdit = (a: Account) => {
+    setEditing(a);
+    setForm({ name: a.name, type: a.type, color: a.color, initialBalance: String(a.initialBalance) });
+    setDialogOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
+  const handleSubmit = () => {
+    if (!form.name.trim()) return;
     const data = {
-      name,
-      type,
-      color,
-      initialBalance: initialBalance ? parseFloat(initialBalance) : 0,
+      name: form.name.trim(),
+      type: form.type,
+      color: form.color,
+      initialBalance: form.initialBalance ? parseFloat(form.initialBalance) : 0,
     };
-    if (editingId) {
-      updateMut.mutate({ id: editingId, data });
-    } else {
-      createMut.mutate(data);
-    }
+    if (editing) updateMut.mutate({ id: editing.id, data });
+    else createMut.mutate(data);
   };
 
-  const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
-  const filteredAccounts = showArchived ? accounts : accounts.filter((a) => !a.archived);
-  const archivedCount = accounts.filter((a) => a.archived).length;
+  const active = useMemo(() => accounts.filter((a) => !a.archived), [accounts]);
+  const archived = useMemo(() => accounts.filter((a) => a.archived), [accounts]);
+
+  const stats = useMemo(() => {
+    const sumBy = (types: AccountType[]) => active.filter((a) => types.includes(a.type)).reduce((s, a) => s + a.balance, 0);
+    return {
+      total: active.reduce((s, a) => s + a.balance, 0),
+      liquid: sumBy(["bank", "cash"]),
+      investment: sumBy(["investment"]),
+      cards: sumBy(["credit_card"]),
+      positiveTotal: active.reduce((s, a) => s + Math.max(0, a.balance), 0),
+    };
+  }, [active]);
+
+  // Reparto del saldo positivo entre cuentas activas (ordenado de mayor a menor).
+  const distribution = useMemo(
+    () => active.filter((a) => a.balance > 0).sort((a, b) => b.balance - a.balance),
+    [active],
+  );
 
   if (isLoading) {
     return (
-      <div className="max-w-3xl space-y-6 animate-fade-in">
-        <Card className="p-0 overflow-hidden">
-          <div className="h-1.5 bg-gradient-to-r from-primary-500 to-primary-400" />
-          <div className="px-6 py-5 sm:px-8 sm:py-6">
-            <Skeleton className="h-4 w-32 mb-1" />
-            <Skeleton className="h-9 w-48 mb-3" />
-            <div className="flex gap-2.5">
-              <Skeleton className="h-7 w-24 rounded-lg" />
-            </div>
-          </div>
-        </Card>
-        <Card className="p-5"><Skeleton className="h-10 w-full mb-4" /><Skeleton className="h-10 w-40" /></Card>
-        <Skeleton className="h-20 w-full rounded-xl" />
-        <Skeleton className="h-20 w-full rounded-xl" />
+      <div>
+        <PageHeaderSkeleton />
+        <StatGrid>{Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}</StatGrid>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-44 rounded-xl" />)}
+        </div>
       </div>
     );
   }
 
+  if (error) {
+    return (
+      <EmptyState
+        icon={AlertTriangle}
+        title="No se pudieron cargar las cuentas"
+        description="Revisa tu conexión y vuelve a intentarlo en unos segundos."
+      >
+        <Button variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: ["accounts"] })}>Reintentar</Button>
+      </EmptyState>
+    );
+  }
+
+  const shown = view === "active" ? active : archived;
+  const newButton = (
+    <Button onClick={openCreate} className="gap-1.5">
+      <Plus className="size-4" /> Nueva cuenta
+    </Button>
+  );
+
   return (
-    <div className="max-w-3xl animate-fade-in space-y-6">
-      {/* Hero */}
-      <Card className="p-0 overflow-hidden">
-        <div className="h-1.5 bg-gradient-to-r from-primary-500 to-primary-400" />
-        <div className="px-6 py-5 sm:px-8 sm:py-6">
-          <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Balance total</p>
-          <p className={cn("text-3xl font-bold font-mono tracking-tight", totalBalance >= 0 ? "text-primary-700 dark:text-primary-400" : "text-danger-600")}>
-            {formatCurrency(totalBalance)}
-          </p>
-          <div className="flex flex-wrap gap-2.5 mt-4">
-            <Badge variant="secondary" className="bg-primary-50 text-primary-800 dark:bg-primary-500/10 dark:text-primary-400 gap-1.5">
-              <Wallet className="w-3.5 h-3.5" aria-hidden="true" />
-              <span className="font-mono">{accounts.length}</span>
-              cuentas
-            </Badge>
-            {archivedCount > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowArchived(!showArchived)}
-                className={cn("gap-1.5", showArchived && "bg-accent-100 text-accent-800 dark:bg-accent-500/15 dark:text-accent-300 hover:bg-accent-100")}
-              >
-                <Archive className="w-3.5 h-3.5" />
-                {showArchived ? "Ocultar archivadas" : `${archivedCount} archivadas`}
-              </Button>
-            )}
-          </div>
-        </div>
-      </Card>
+    <div>
+      <PageHeader
+        title="Tus cuentas,"
+        accent="de un vistazo."
+        description="Saldos de tus cuentas bancarias, tarjetas, efectivo e inversiones."
+        actions={accounts.length > 0 ? newButton : undefined}
+      />
 
-      {/* Form */}
-      <Card className="p-5">
-        <form onSubmit={handleSubmit}>
-        <div className="flex items-center gap-2 mb-4">
-          <Plus className="w-4 h-4 text-muted-foreground" />
-          <h3 className="font-semibold text-foreground text-sm">
-            {editingId ? "Editar cuenta" : "Nueva cuenta"}
-          </h3>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="account-name">Nombre</Label>
-            <Input
-              id="account-name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ej: Banco Santander"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="account-type">Tipo</Label>
-            <Select value={type} onValueChange={(v) => v && setType(v)}>
-              <SelectTrigger id="account-type" className="w-full">
-                <SelectValue>{(v: string) => ACCOUNT_TYPES.find((t) => t.value === v)?.label ?? v}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {ACCOUNT_TYPES.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="account-initial-balance">Saldo inicial</Label>
-            <Input
-              id="account-initial-balance"
-              type="number"
-              step="0.01"
-              value={initialBalance}
-              onChange={(e) => setInitialBalance(e.target.value)}
-              placeholder="0.00"
-              className="font-mono"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Color</Label>
-            <div className="flex gap-1.5 flex-wrap">
-              {COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  aria-label={`Color ${c}`}
-                  aria-pressed={color === c}
-                  className={cn(
-                    "w-7 h-7 rounded-lg border-2 transition-all duration-150 cursor-pointer flex items-center justify-center",
-                    color === c ? "border-foreground scale-110 shadow-sm" : "border-transparent hover:scale-105"
-                  )}
-                  style={{ backgroundColor: c }}
-                >
-                  {color === c && <Check className="w-3.5 h-3.5 text-white" aria-hidden="true" />}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button type="submit">
-            {editingId ? "Guardar" : "Crear cuenta"}
-          </Button>
-          {editingId && (
-            <Button type="button" variant="secondary" onClick={resetForm}>Cancelar</Button>
-          )}
-        </div>
-        </form>
-      </Card>
-
-      {/* List */}
-      {filteredAccounts.length === 0 ? (
+      {accounts.length === 0 ? (
         <EmptyState
           icon={Wallet}
-          title="Sin cuentas"
-          description="Crea tu primera cuenta o importa datos desde YNAB para empezar."
-          actionLabel="Importar YNAB"
-          actionHref="/import"
-        />
+          title="Todavía no tienes cuentas"
+          description="Crea tu primera cuenta para empezar a registrar movimientos, o importa tus datos desde YNAB."
+        >
+          {newButton}
+          <a href="/app/import" className={cn(buttonVariants({ variant: "outline" }), "gap-1.5")}>
+            <Download className="size-4" /> Importar YNAB
+          </a>
+        </EmptyState>
       ) : (
-        <div className="space-y-3">
-          {filteredAccounts.map((a) => (
-            <Card
-              key={a.id}
-              className={cn("p-4 flex-row items-center justify-between transition-shadow hover:shadow-card-hover", a.archived && "opacity-60")}
-            >
-              <div className="flex items-center gap-3.5">
-                <div
-                  className="w-11 h-11 rounded-xl flex items-center justify-center text-white shadow-sm"
-                  style={{ backgroundColor: a.color }}
+        <>
+          <StatGrid className="grid-cols-2">
+            <StatCard
+              className="col-span-2 sm:col-span-1"
+              label="Saldo total"
+              value={formatCurrency(stats.total)}
+              icon={Wallet}
+              hint={`${active.length} ${active.length === 1 ? "cuenta activa" : "cuentas activas"}`}
+              emphasis
+            />
+            <StatCard label="Liquidez" value={formatCurrency(stats.liquid)} icon={Landmark} hint="Bancos y efectivo" />
+            <StatCard label="Inversión" value={formatCurrency(stats.investment)} icon={PiggyBank} hint="Cuentas de inversión" />
+            <StatCard
+              className="col-span-2 sm:col-span-1"
+              label="Tarjetas"
+              value={<span className={amountClass(stats.cards)}>{formatCurrency(stats.cards)}</span>}
+              icon={CreditCard}
+              hint={stats.cards < 0 ? "Saldo pendiente de pago" : "Sin deuda pendiente"}
+            />
+          </StatGrid>
+
+          {distribution.length > 1 && stats.positiveTotal > 0 && (
+            <SectionCard className="mt-6" title="Reparto del saldo" description="Peso de cada cuenta en tu saldo positivo">
+              <div className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-muted">
+                {distribution.map((a) => (
+                  <div
+                    key={a.id}
+                    className={cn("h-full first:rounded-l-full last:rounded-r-full", darkBoost(a.color))}
+                    style={{ width: `${(a.balance / stats.positiveTotal) * 100}%`, backgroundColor: a.color }}
+                    title={`${a.name}: ${formatCurrency(a.balance)}`}
+                  />
+                ))}
+              </div>
+              <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
+                {distribution.map((a) => (
+                  <li key={a.id} className="flex items-center gap-2 text-xs">
+                    <span className={cn("size-2 rounded-full", darkBoost(a.color))} style={{ backgroundColor: a.color }} aria-hidden="true" />
+                    <span className="text-foreground">{a.name}</span>
+                    <span className="tabular-nums text-muted-foreground">{formatPct((a.balance / stats.positiveTotal) * 100)}</span>
+                  </li>
+                ))}
+              </ul>
+            </SectionCard>
+          )}
+
+          <div className="mt-8 mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-foreground">
+              {view === "active" ? "Cuentas activas" : "Cuentas archivadas"}
+            </h2>
+            {archived.length > 0 && (
+              <Segmented
+                aria-label="Filtrar cuentas"
+                value={view}
+                onChange={setView}
+                options={[
+                  { value: "active", label: `Activas (${active.length})` },
+                  { value: "archived", label: `Archivadas (${archived.length})` },
+                ]}
+              />
+            )}
+          </div>
+
+          {shown.length === 0 ? (
+            <EmptyState
+              compact
+              icon={view === "active" ? Wallet : Archive}
+              title={view === "active" ? "No hay cuentas activas" : "No hay cuentas archivadas"}
+              description={view === "active" ? "Todas tus cuentas están archivadas. Restaura alguna o crea una nueva." : "Las cuentas que archives aparecerán aquí."}
+              className="rounded-xl border border-dashed border-border"
+            />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {shown.map((a) => (
+                <AccountCard
+                  key={a.id}
+                  account={a}
+                  share={!a.archived && a.balance > 0 && stats.positiveTotal > 0 ? (a.balance / stats.positiveTotal) * 100 : null}
+                  onEdit={() => openEdit(a)}
+                  onArchive={() => archiveMut.mutate(a.id)}
+                  onDelete={() => setDeleteTarget(a)}
+                />
+              ))}
+              {view === "active" && (
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="flex min-h-44 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border text-sm font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
                 >
-                  <TypeIcon type={a.type} />
-                </div>
-                <div>
-                  <p className="font-semibold text-foreground">
-                    {a.name}
-                    {a.archived && <span className="ml-2 text-xs text-accent-600 dark:text-accent-400 font-normal">(archivada)</span>}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{typeLabel(a.type)} · {a.currency}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <p className={cn("font-bold text-base font-mono tabular-nums", a.balance >= 0 ? "text-success-600" : "text-danger-600")}>
-                  {formatCurrency(a.balance)}
-                </p>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon-sm" onClick={() => startEdit(a)} aria-label={`Editar ${a.name}`}>
-                    <Edit3 className="w-3.5 h-3.5" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => archiveMut.mutate(a.id)}
-                    className="hover:bg-accent-50 dark:hover:bg-accent-500/10"
-                    aria-label={a.archived ? `Restaurar ${a.name}` : `Archivar ${a.name}`}
-                  >
-                    {a.archived
-                      ? <ArchiveRestore className="w-3.5 h-3.5 text-accent-500" aria-hidden="true" />
-                      : <Archive className="w-3.5 h-3.5" aria-hidden="true" />}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => setDeleteTarget(a)}
-                    className="hover:bg-destructive/10 hover:text-destructive"
-                    aria-label={`Eliminar ${a.name}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+                  <span className="flex size-9 items-center justify-center rounded-full border border-border bg-card">
+                    <Plus className="size-4" />
+                  </span>
+                  Añadir cuenta
+                </button>
+              )}
+            </div>
+          )}
+        </>
       )}
+
+      <AccountDialog
+        open={dialogOpen}
+        editing={editing}
+        form={form}
+        setForm={setForm}
+        onClose={closeDialog}
+        onSubmit={handleSubmit}
+        pending={createMut.isPending || updateMut.isPending}
+      />
 
       <ConfirmModal
         open={!!deleteTarget}
         title="Eliminar cuenta"
-        message={`¿Estás seguro de eliminar "${deleteTarget?.name ?? ""}"? Todas las transacciones asociadas se perderán.`}
+        message={`¿Seguro que quieres eliminar "${deleteTarget?.name ?? ""}"? Se perderán todas sus transacciones.`}
         confirmLabel="Eliminar"
         variant="danger"
         onConfirm={() => { if (deleteTarget) { deleteMut.mutate(deleteTarget.id); setDeleteTarget(null); } }}

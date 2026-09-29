@@ -1,0 +1,144 @@
+import type { Account, CategoryGroup } from "../../../lib/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { AccountSelect, CategorySelect, TypeToggle, amountInputClass, type TxType } from "./shared";
+
+export interface TxForm {
+  type: TxType;
+  accountId: number | "";
+  targetAccountId: number | "";
+  categoryId: number | "";
+  amount: string;
+  date: string;
+  payee: string;
+  memo: string;
+}
+
+interface Props {
+  open: boolean;
+  editing: boolean;
+  form: TxForm;
+  setForm: (f: TxForm) => void;
+  accounts: Account[];
+  groups: CategoryGroup[];
+  canCreateTransfers: boolean;
+  pending: boolean;
+  onClose: () => void;
+  onSubmit: () => void;
+  onNewCategory: () => void;
+}
+
+const TYPES = ["expense", "income", "transfer"] as const;
+
+export function TransactionDialog({
+  open, editing, form, setForm, accounts, groups, canCreateTransfers, pending, onClose, onSubmit, onNewCategory,
+}: Props) {
+  const isTransfer = form.type === "transfer";
+  const title = editing ? "Editar transacción" : isTransfer ? "Movimiento entre cuentas" : "Nueva transacción";
+  const description = editing
+    ? "Actualiza importe, cuenta, categoría o notas."
+    : isTransfer
+      ? "Se registran ambos lados: cargo en la cuenta de origen y abono en la de destino."
+      : "Registra un gasto o un ingreso. Cámbialo a transferencia si mueves saldo entre tus cuentas.";
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="gap-0 p-0 sm:max-w-lg">
+        <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }} className="flex max-h-[90vh] flex-col">
+          <DialogHeader className="border-b border-border px-5 pt-5 pb-4">
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{description}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 overflow-y-auto px-5 py-5">
+            <TypeToggle
+              value={form.type}
+              types={TYPES}
+              disabled={canCreateTransfers || isTransfer ? [] : ["transfer"]}
+              onChange={(t) => setForm({ ...form, type: t, targetAccountId: t === "transfer" ? form.targetAccountId : "", categoryId: t === "transfer" ? "" : form.categoryId })}
+            />
+
+            <div className="space-y-1.5">
+              <Label htmlFor="tx-amount">Importe</Label>
+              <div className="relative">
+                <Input
+                  id="tx-amount"
+                  type="number"
+                  inputMode="decimal"
+                  min="0.01"
+                  step="0.01"
+                  autoFocus
+                  value={form.amount}
+                  onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                  placeholder="0,00"
+                  className={`h-11 text-lg font-semibold ${amountInputClass}`}
+                  required
+                />
+                <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-base text-muted-foreground">€</span>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <div className="flex h-5 items-center"><Label htmlFor="tx-account">{isTransfer ? "Desde" : "Cuenta"}</Label></div>
+                <AccountSelect id="tx-account" value={form.accountId} onChange={(v) => setForm({ ...form, accountId: v })} accounts={accounts} />
+              </div>
+              {isTransfer ? (
+                <div className="space-y-1.5">
+                  <div className="flex h-5 items-center"><Label htmlFor="tx-target">Hacia</Label></div>
+                  <AccountSelect
+                    id="tx-target"
+                    value={form.targetAccountId}
+                    onChange={(v) => setForm({ ...form, targetAccountId: v })}
+                    accounts={accounts}
+                    excludeId={form.accountId}
+                    placeholder="Cuenta de destino"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="flex h-5 items-center justify-between gap-2">
+                    <Label htmlFor="tx-category">Categoría</Label>
+                    <button type="button" onClick={onNewCategory} className="cursor-pointer text-xs font-medium text-primary-700 hover:underline dark:text-primary">
+                      Nueva
+                    </button>
+                  </div>
+                  <CategorySelect id="tx-category" value={form.categoryId} onChange={(v) => setForm({ ...form, categoryId: v })} groups={groups} />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="tx-date">Fecha</Label>
+                <Input id="tx-date" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="tx-payee">Beneficiario</Label>
+                <Input
+                  id="tx-payee"
+                  value={form.payee}
+                  onChange={(e) => setForm({ ...form, payee: e.target.value })}
+                  placeholder={isTransfer ? "Opcional" : "Ej: Supermercado"}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="tx-memo">Nota</Label>
+              <Input id="tx-memo" value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} placeholder="Opcional" />
+            </div>
+          </div>
+
+          <DialogFooter className="mx-0 mb-0 border-t border-border px-5 py-3">
+            <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Guardando…" : editing ? "Guardar cambios" : isTransfer ? "Crear movimiento" : "Crear transacción"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
