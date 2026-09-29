@@ -2,21 +2,18 @@
 
 ## Visión General
 
-Aplicación web monorepo de gestión y análisis de nóminas españolas. Backend API REST + Frontend SPA con OCR para extracción automática de datos de PDFs de nóminas.
+Aplicación web monorepo de gestión y análisis de nóminas españolas. Solo versión web (sin escritorio, sin OCR — ver `old/` para la versión anterior con Electron/Tesseract, retirada). Backend API REST desplegado como función de Vercel + Frontend Astro estático + Postgres (Supabase).
 
 ## Arquitectura
 
 ```
-[Browser] → [Astro/React SPA :4321] → proxy /api → [Express API :3001] → [SQLite DB]
-                                                          ↓
-                                                    [PDF Parser]
-                                                    [Tesseract OCR]
+[Browser] → [Astro estático + React islands] → Vercel rewrites /api/* → [Express en Vercel Function] → [Postgres (Supabase)]
 ```
 
-- **Frontend** (puerto 4321): Astro SSG + React islands con `client:load`. Vite proxy redirige `/api` y `/uploads` al backend.
-- **Backend** (puerto 3001): Express REST API. Sirve el frontend estático en producción.
-- **Base de datos**: SQLite en `./data/nominas.db`. Drizzle ORM para schema y queries.
-- **Uploads**: PDFs almacenados en `./data/uploads/`.
+- **Frontend**: Astro (salida estática) + React islands con `client:load`, UI con shadcn/ui. En dev, proxy de Vite hacia el backend local.
+- **Backend**: Express envuelto como función de Vercel (`api/index.ts` en la raíz re-exporta la app de `backend/src/index.ts`). `app.listen()` solo corre fuera de Vercel (desarrollo local).
+- **Base de datos**: Postgres en Supabase. Drizzle ORM (`drizzle-orm/postgres-js`) para schema y queries — sin dependencias nativas.
+- **Sin storage de archivos**: los PDFs de nóminas se procesan en memoria al subirlos y se descartan — solo se guarda el texto extraído (`rawText`) y los conceptos ya estructurados. `old/` es la referencia de la versión anterior (SQLite + disco local + Electron + OCR), no se mantiene.
 
 ## Tablas de Base de Datos
 
@@ -34,12 +31,11 @@ Aplicación web monorepo de gestión y análisis de nóminas españolas. Backend
 
 ## Flujo de Parsing de Nóminas
 
-1. Usuario sube PDF(s) → Multer guarda en disco → se crea registro con status `pending`
-2. **Async** (no bloqueante): `parserEngine.parsePayslip(payslip)`
-3. Intenta extracción de texto directo con `pdf-parse`
-4. Si el texto tiene menos de 50 caracteres → fallback a OCR con Tesseract.js (español)
-5. `conceptMatcher` aplica reglas regex para extraer: periodo, empresa, salario bruto/neto, conceptos individuales
-6. Actualiza registro con datos extraídos y status `parsed` o `error`
+1. Usuario sube PDF(s) → Multer los recibe en memoria (`multer.memoryStorage()`, sin tocar disco) → se crea registro con status `pending`
+2. **Síncrono, dentro de la misma petición** (no hay OCR de respaldo que lo haga lento, y así no depende de que la función siga viva tras responder): `parserEngine.parsePayslip(buffer)`
+3. Extracción de texto posicional con `pdfjs-dist` (agrupa por fila/columna — ver `backend/AGENTS.md`)
+4. `conceptMatcher` aplica reglas regex para extraer: periodo, empresa, salario bruto/neto, conceptos individuales
+5. Actualiza registro con datos extraídos y status `parsed` o `review` (si no se encontró ningún concepto) o `error`
 
 ## Convenciones de Commits
 
@@ -51,7 +47,7 @@ tipo(scope): descripción breve en español
 ```
 
 Tipos válidos: `feat`, `fix`, `refactor`, `docs`, `chore`, `test`, `style`, `perf`
-Scopes válidos: `backend`, `frontend`, `db`, `parsers`, `auth`, `api`, `ui`, `docker`, `deps`
+Scopes válidos: `backend`, `frontend`, `db`, `parsers`, `auth`, `api`, `ui`, `deps`
 
 ## Reglas para Agentes
 
