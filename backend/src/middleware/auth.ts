@@ -1,6 +1,9 @@
 import type { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import { jwtVerify, createRemoteJWKSet } from "jose";
+import { eq } from "drizzle-orm";
 import { env } from "../config.js";
+import { db } from "../db/index.js";
+import { users } from "../db/schema.js";
 
 export interface AuthPayload {
   userId: number;
@@ -16,7 +19,18 @@ declare global {
   }
 }
 
-export function authMiddleware(req: Request, res: Response, next: NextFunction) {
+// Claves públicas de Supabase para verificar sus JWT sin llamar a su API en
+// cada petición — requiere que el proyecto tenga firmado asimétrico activado
+// (Settings → API → JWT Keys).
+const JWKS = createRemoteJWKSet(new URL(`${env.SUPABASE_URL}/auth/v1/.well-known/jwks.json`));
+
+interface SupabasePayload {
+  sub: string;
+  email?: string;
+  user_metadata?: { full_name?: string; name?: string };
+}
+
+export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Token requerido" });
@@ -24,29 +38,35 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
 
   try {
     const token = header.slice(7);
-    const payload = jwt.verify(token, env.JWT_SECRET) as AuthPayload;
-    req.user = payload;
+    const { payload } = await jwtVerify<SupabasePayload>(token, JWKS, {
+      issuer: `${env.SUPABASE_URL}/auth/v1`,
+    });
+
+    if (!payload.sub || !payload.email) {
+      return res.status(401).json({ error: "Token inválido" });
+    }
+
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(eq(users.supabaseUserId, payload.sub));
+
+    const user =
+      existing ??
+      (
+        await db
+          .insert(users)
+          .values({
+            supabaseUserId: payload.sub,
+            email: payload.email,
+            name: payload.user_metadata?.full_name ?? payload.user_metadata?.name ?? payload.email,
+          })
+          .returning()
+      )[0];
+
+    req.user = { userId: user.id, email: user.email };
     next();
   } catch {
     res.status(401).json({ error: "Token inválido o expirado" });
-  }
-}
-
-export function generateToken(payload: AuthPayload): string {
-  const expiresInSeconds = parseExpiry(env.JWT_EXPIRES_IN);
-  return jwt.sign(payload, env.JWT_SECRET, { expiresIn: expiresInSeconds });
-}
-
-function parseExpiry(val: string): number {
-  const match = val.match(/^(\d+)([smhd])$/);
-  if (!match) return 604800; // default 7 days
-  const num = Number(match[1]);
-  const unit = match[2];
-  switch (unit) {
-    case "s": return num;
-    case "m": return num * 60;
-    case "h": return num * 3600;
-    case "d": return num * 86400;
-    default: return 604800;
   }
 }

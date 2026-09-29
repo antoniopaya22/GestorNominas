@@ -1,28 +1,17 @@
+import { supabase } from "./supabase";
+
 const BASE = "/api";
 
 // ─── Auth Token Management ──────────────────────────────────────
-let authToken: string | null = null;
-
-export function setAuthToken(token: string | null) {
-  authToken = token;
-  if (token) {
-    localStorage.setItem("auth_token", token);
-  } else {
-    localStorage.removeItem("auth_token");
-  }
+// La sesión (incluido el refresco del token) la gestiona el cliente de
+// Supabase — aquí solo se lee el access_token vigente en cada petición.
+export async function getAuthToken(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
 }
 
-export function getAuthToken(): string | null {
-  if (!authToken) {
-    authToken = localStorage.getItem("auth_token");
-  }
-  return authToken;
-}
-
-export function clearAuth() {
-  authToken = null;
-  localStorage.removeItem("auth_token");
-  localStorage.removeItem("auth_user");
+export async function clearAuth() {
+  await supabase.auth.signOut();
 }
 
 // ─── HTTP Client ────────────────────────────────────────────────
@@ -35,7 +24,7 @@ async function request<T>(
     ...(options?.headers as Record<string, string>),
   };
 
-  const token = getAuthToken();
+  const token = await getAuthToken();
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
@@ -48,7 +37,7 @@ async function request<T>(
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     if (res.status === 401) {
-      clearAuth();
+      await clearAuth();
       window.location.href = "/login";
     }
     throw new Error(body.error ?? (res.status === 401 ? "No autorizado" : `HTTP ${res.status}`));
@@ -71,25 +60,7 @@ export interface AuthUser {
   name: string;
 }
 
-export const login = (email: string, password: string) =>
-  request<{ token: string; user: AuthUser }>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
-
-export const register = (email: string, password: string, name: string) =>
-  request<{ token: string; user: AuthUser }>("/auth/register", {
-    method: "POST",
-    body: JSON.stringify({ email, password, name }),
-  });
-
 export const getMe = () => request<AuthUser>("/auth/me");
-
-export const changePassword = (currentPassword: string, newPassword: string) =>
-  request<{ ok: boolean; message: string }>("/auth/change-password", {
-    method: "POST",
-    body: JSON.stringify({ currentPassword, newPassword }),
-  });
 
 export const updateUserProfile = (data: { name: string }) =>
   request<AuthUser>("/auth/me", {
@@ -186,7 +157,7 @@ export const uploadPayslips = async (profileId: number, files: File[], payslipTy
   formData.append("payslipType", payslipType);
   files.forEach((f) => formData.append("files", f));
 
-  const token = getAuthToken();
+  const token = await getAuthToken();
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -198,7 +169,7 @@ export const uploadPayslips = async (profileId: number, files: File[], payslipTy
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     if (res.status === 401) {
-      clearAuth();
+      await clearAuth();
       window.location.href = "/login";
     }
     throw new Error(body.error ?? "Error al subir los archivos");
@@ -332,7 +303,7 @@ export const exportData = async (profileId: number, year?: number, format: "csv"
   const params = new URLSearchParams({ profileId: String(profileId), format });
   if (year) params.set("year", String(year));
 
-  const token = getAuthToken();
+  const token = await getAuthToken();
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -695,7 +666,7 @@ export const exportTransactions = async (filters: Omit<TransactionFilters, "sort
   const fmt = filters.format ?? "csv";
   params.set("format", fmt);
 
-  const token = getAuthToken();
+  const token = await getAuthToken();
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -906,7 +877,7 @@ export const importYnab = async (file: File, dryRun = false): Promise<ImportResu
   const formData = new FormData();
   formData.append("file", file);
 
-  const token = getAuthToken();
+  const token = await getAuthToken();
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -918,7 +889,7 @@ export const importYnab = async (file: File, dryRun = false): Promise<ImportResu
   });
   if (!res.ok) {
     if (res.status === 401) {
-      clearAuth();
+      await clearAuth();
       window.location.href = "/login";
     }
     const body = await res.json().catch(() => ({}));

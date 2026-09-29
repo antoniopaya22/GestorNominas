@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-const isProd = process.env.NODE_ENV === "production";
-
 const envSchema = z.object({
   PORT: z.coerce.number().default(3001),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
@@ -11,10 +9,11 @@ const envSchema = z.object({
   // local — el cliente de postgres-js es perezoso, no conecta hasta la
   // primera query, así que no rompe tests que no tocan la BBDD.
   DATABASE_URL: z.string().default("postgresql://postgres:postgres@localhost:5432/sueldia"),
-  JWT_SECRET: isProd
-    ? z.string().min(32, "JWT_SECRET must be at least 32 characters in production")
-    : z.string().min(16).default("sueldia-dev-secret-change-me"),
-  JWT_EXPIRES_IN: z.string().default("7d"),
+  // URL del proyecto de Supabase (Project Settings → API → Project URL), NO
+  // la connection string de la BBDD — se usa para verificar los JWT que
+  // emite Supabase Auth contra su endpoint JWKS público. El valor por
+  // defecto solo evita que tests/typecheck exijan configurarlo en local.
+  SUPABASE_URL: z.string().default("https://localhost.supabase.co"),
 });
 
 export const env = envSchema.parse(process.env);

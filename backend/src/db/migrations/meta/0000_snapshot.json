@@ -1,5 +1,5 @@
 {
-  "id": "8127d842-1902-4a50-ab1a-1dace60df568",
+  "id": "7d90535d-6ec7-4bbe-851c-2636879bee70",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1084,8 +1084,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "password_hash": {
-          "name": "password_hash",
+        "supabase_user_id": {
+          "name": "supabase_user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -1107,6 +1107,13 @@
           "nullsNotDistinct": false,
           "columns": [
             "email"
+          ]
+        },
+        "users_supabase_user_id_unique": {
+          "name": "users_supabase_user_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "supabase_user_id"
           ]
         }
       },

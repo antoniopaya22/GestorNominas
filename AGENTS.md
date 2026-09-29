@@ -19,7 +19,7 @@ Aplicación web monorepo de gestión y análisis de nóminas españolas. Solo ve
 
 | Tabla | Propósito |
 |---|---|
-| `users` | Cuentas de usuario (email, password_hash, name) |
+| `users` | Cuentas de usuario (email, name, supabase_user_id — login vía Google/Supabase Auth) |
 | `profiles` | Perfiles/personas cuyas nóminas se gestionan |
 | `payslips` | Nóminas subidas (metadata, salarios, status de parsing) |
 | `payslip_concepts` | Conceptos extraídos (devengos, deducciones) |

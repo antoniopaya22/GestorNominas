@@ -2,7 +2,7 @@
 
 ## Stack
 
-Express 4 + TypeScript ESM + Drizzle ORM + Postgres (Supabase, driver `postgres`) + Zod + JWT + Pino. Sin dependencias nativas — despliega como función de Vercel (`api/index.ts` en la raíz del monorepo re-exporta la app).
+Express 4 + TypeScript ESM + Drizzle ORM + Postgres (Supabase, driver `postgres`) + Zod + Pino. Sin dependencias nativas — despliega como servicio de Vercel (`vercel.json` en la raíz, modo "Services": detecta `export default app` directamente desde `src/index.ts`, sin wrapper de función).
 
 ## Patrón de Rutas Express
 
@@ -43,7 +43,7 @@ domainRouter.post('/', async (req, res, next) => {
 
 - **Imports**: extensión `.js` en imports relativos.
 - **Validación**: `zod.safeParse()` → 400 con `error.flatten().fieldErrors`.
-- **Auth**: rutas protegidas detrás de `authMiddleware` (JWT real, `Authorization: Bearer <token>`) en `src/index.ts`.
+- **Auth**: login vía Google, gestionado por Supabase Auth (no hay login/registro propio). El frontend manda el `access_token` de Supabase como `Authorization: Bearer <token>`; `authMiddleware` lo verifica contra el JWKS de Supabase (sin llamar a su API) y crea la fila en `users` la primera vez que ve ese `supabase_user_id`.
 - **User ID**: `(req as Request).user!.userId`.
 - **Postgres, no SQLite**: el driver de `postgres-js` es asíncrono — nada de `.get()`/`.all()`/`.run()` síncronos. Búsquedas de texto usan `ilike`, no `like` (Postgres es case-sensitive). `count(*)` siempre con cast `::int` (si no, llega como string por ser `bigint`).
 - **`created_at`**: columna `timestamp`, no `text` — en TS llega como `Date`, `res.json()` ya lo serializa a ISO string automáticamente.
@@ -71,7 +71,6 @@ No hay `tesseract.js`/`canvas` ni disco para PDFs — decisión deliberada (ver 
 
 Variables de entorno validadas con Zod en `src/config.ts`:
 - `PORT` (default 3001, solo desarrollo local — Vercel lo ignora)
-- `JWT_SECRET` (requerido, ≥32 caracteres en producción)
-- `JWT_EXPIRES_IN` (default "7d")
-- `DATABASE_URL` (connection string de Postgres/Supabase; default apunta a un Postgres local para que los tests no necesiten configuración)
+- `DATABASE_URL` (connection string de Postgres/Supabase — Transaction Pooler, puerto 6543; default apunta a un Postgres local para que los tests no necesiten configuración)
+- `SUPABASE_URL` (URL del proyecto, para verificar los JWT de Supabase Auth — no confundir con `DATABASE_URL`)
 - `NODE_ENV`, `CORS_ORIGIN`

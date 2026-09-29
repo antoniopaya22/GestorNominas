@@ -1,33 +1,25 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
 import { Card, CardContent, CardHeader } from "./ui/card";
 
 export default function LoginPage() {
-  const { login, register } = useAuth();
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [loading, setLoading] = useState(false);
+  const { loginWithGoogle, user, loading } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  // Si ya hay sesión (p.ej. al volver del redirect de Google), entra directo.
+  useEffect(() => {
+    if (!loading && user) window.location.href = "/app";
+  }, [loading, user]);
+
+  const handleGoogleLogin = async () => {
+    setSubmitting(true);
     try {
-      if (mode === "login") {
-        await login(email, password);
-      } else {
-        await register(email, password, name);
-      }
-      window.location.href = "/app";
+      await loginWithGoogle();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Error de autenticación");
-    } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -41,76 +33,30 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-xl font-bold text-foreground">SueldIA</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {mode === "login" ? "Inicia sesión en tu cuenta" : "Crea una cuenta nueva"}
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">Inicia sesión para continuar</p>
         </div>
 
         <Card>
-          <CardHeader className="sr-only">
-            {mode === "login" ? "Iniciar sesión" : "Crear cuenta"}
-          </CardHeader>
+          <CardHeader className="sr-only">Iniciar sesión</CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {mode === "register" && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="name">Nombre</Label>
-                  <Input
-                    id="name"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    placeholder="Tu nombre"
-                  />
-                </div>
-              )}
-
-              <div className="space-y-1.5">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  placeholder="tu@email.com"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="password">Contraseña</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  placeholder="Mínimo 8 caracteres"
-                />
-              </div>
-
-              <Button type="submit" disabled={loading} className="w-full">
-                {loading ? "Cargando..." : mode === "login" ? "Iniciar sesión" : "Crear cuenta"}
-              </Button>
-
-              <p className="text-center text-sm text-muted-foreground">
-                {mode === "login" ? (
-                  <>¿No tienes cuenta?{" "}
-                    <button type="button" onClick={() => setMode("register")} className="text-primary hover:underline font-medium">
-                      Regístrate
-                    </button>
-                  </>
-                ) : (
-                  <>¿Ya tienes cuenta?{" "}
-                    <button type="button" onClick={() => setMode("login")} className="text-primary hover:underline font-medium">
-                      Inicia sesión
-                    </button>
-                  </>
-                )}
-              </p>
-            </form>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full gap-2"
+              disabled={submitting || loading}
+              onClick={handleGoogleLogin}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.48a5.55 5.55 0 0 1-2.4 3.64v3h3.88c2.27-2.09 3.56-5.17 3.56-8.83z" />
+                <path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.9l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11A11.99 11.99 0 0 0 12 24z" />
+                <path fill="#FBBC05" d="M5.27 14.29A7.2 7.2 0 0 1 4.89 12c0-.8.14-1.57.38-2.29V6.6H1.27A11.99 11.99 0 0 0 0 12c0 1.94.46 3.77 1.27 5.4z" />
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.6l4 3.11C6.22 6.86 8.87 4.75 12 4.75z" />
+              </svg>
+              {submitting ? "Conectando..." : "Continuar con Google"}
+            </Button>
+            <p className="text-center text-xs text-muted-foreground mt-4">
+              Al continuar, se crea tu cuenta automáticamente si es la primera vez.
+            </p>
           </CardContent>
         </Card>
       </div>
