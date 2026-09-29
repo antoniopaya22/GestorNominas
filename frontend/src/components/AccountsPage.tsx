@@ -13,6 +13,16 @@ import { toast } from "sonner";
 import { formatCurrency } from "../lib/format";
 import { EmptyState } from "./ui/EmptyState";
 import { ConfirmModal } from "./ui/ConfirmModal";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { cn } from "cn";
 
 const ACCOUNT_TYPES = [
   { value: "bank", label: "Banco", icon: Landmark },
@@ -131,19 +141,19 @@ function AccountsView() {
   if (isLoading) {
     return (
       <div className="max-w-3xl space-y-6 animate-fade-in">
-        <div className="card p-0 overflow-hidden">
+        <Card className="p-0 overflow-hidden">
           <div className="h-1.5 bg-gradient-to-r from-primary-500 to-primary-400" />
           <div className="px-6 py-5 sm:px-8 sm:py-6">
-            <div className="skeleton h-4 w-32 mb-1" />
-            <div className="skeleton h-9 w-48 mb-3" />
+            <Skeleton className="h-4 w-32 mb-1" />
+            <Skeleton className="h-9 w-48 mb-3" />
             <div className="flex gap-2.5">
-              <div className="skeleton h-7 w-24 rounded-lg" />
+              <Skeleton className="h-7 w-24 rounded-lg" />
             </div>
           </div>
-        </div>
-        <div className="card p-5"><div className="skeleton h-10 w-full mb-4" /><div className="skeleton h-10 w-40" /></div>
-        <div className="skeleton h-20 w-full rounded-xl" />
-        <div className="skeleton h-20 w-full rounded-xl" />
+        </Card>
+        <Card className="p-5"><Skeleton className="h-10 w-full mb-4" /><Skeleton className="h-10 w-40" /></Card>
+        <Skeleton className="h-20 w-full rounded-xl" />
+        <Skeleton className="h-20 w-full rounded-xl" />
       </div>
     );
   }
@@ -151,80 +161,81 @@ function AccountsView() {
   return (
     <div className="max-w-3xl animate-fade-in space-y-6">
       {/* Hero */}
-      <div className="card p-0 overflow-hidden">
+      <Card className="p-0 overflow-hidden">
         <div className="h-1.5 bg-gradient-to-r from-primary-500 to-primary-400" />
         <div className="px-6 py-5 sm:px-8 sm:py-6">
-          <p className="text-surface-400 text-xs uppercase tracking-wider mb-0.5">Balance total</p>
-          <p className={`text-3xl font-bold font-mono tracking-tight ${totalBalance >= 0 ? "text-primary-700" : "text-danger-600"}`}>
+          <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Balance total</p>
+          <p className={cn("text-3xl font-bold font-mono tracking-tight", totalBalance >= 0 ? "text-primary-700 dark:text-primary-400" : "text-danger-600")}>
             {formatCurrency(totalBalance)}
           </p>
           <div className="flex flex-wrap gap-2.5 mt-4">
-            <div className="flex items-center gap-1.5 bg-primary-50 rounded-lg px-3 py-1.5">
-              <Wallet className="w-3.5 h-3.5 text-primary-600" aria-hidden="true" />
-              <span className="text-xs font-bold text-primary-800 font-mono">{accounts.length}</span>
-              <span className="text-xs font-medium text-primary-700">cuentas</span>
-            </div>
+            <Badge variant="secondary" className="bg-primary-50 text-primary-800 dark:bg-primary-500/10 dark:text-primary-400 gap-1.5">
+              <Wallet className="w-3.5 h-3.5" aria-hidden="true" />
+              <span className="font-mono">{accounts.length}</span>
+              cuentas
+            </Badge>
             {archivedCount > 0 && (
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowArchived(!showArchived)}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${showArchived ? "bg-amber-100 text-amber-800" : "bg-surface-100 text-surface-600 hover:bg-surface-200"}`}
+                className={cn("gap-1.5", showArchived && "bg-accent-100 text-accent-800 dark:bg-accent-500/15 dark:text-accent-300 hover:bg-accent-100")}
               >
                 <Archive className="w-3.5 h-3.5" />
                 {showArchived ? "Ocultar archivadas" : `${archivedCount} archivadas`}
-              </button>
+              </Button>
             )}
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="card p-5">
+      <Card className="p-5">
+        <form onSubmit={handleSubmit}>
         <div className="flex items-center gap-2 mb-4">
-          <Plus className="w-4 h-4 text-surface-500" />
-          <h3 className="font-semibold text-surface-900 text-sm">
+          <Plus className="w-4 h-4 text-muted-foreground" />
+          <h3 className="font-semibold text-foreground text-sm">
             {editingId ? "Editar cuenta" : "Nueva cuenta"}
           </h3>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label htmlFor="account-name" className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">
-              Nombre
-            </label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="account-name">Nombre</Label>
+            <Input
               id="account-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ej: Banco Santander"
-              className="input"
             />
           </div>
-          <div>
-            <label htmlFor="account-type" className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">
-              Tipo
-            </label>
-            <select id="account-type" value={type} onChange={(e) => setType(e.target.value)} className="input">
-              {ACCOUNT_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
+          <div className="space-y-1.5">
+            <Label htmlFor="account-type">Tipo</Label>
+            <Select value={type} onValueChange={(v) => v && setType(v)}>
+              <SelectTrigger id="account-type" className="w-full">
+                <SelectValue>{(v: string) => ACCOUNT_TYPES.find((t) => t.value === v)?.label ?? v}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {ACCOUNT_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <div>
-            <label htmlFor="account-initial-balance" className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">
-              Saldo inicial
-            </label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="account-initial-balance">Saldo inicial</Label>
+            <Input
               id="account-initial-balance"
               type="number"
               step="0.01"
               value={initialBalance}
               onChange={(e) => setInitialBalance(e.target.value)}
               placeholder="0.00"
-              className="input font-mono"
+              className="font-mono"
             />
           </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Color</label>
+          <div className="space-y-1.5">
+            <Label>Color</Label>
             <div className="flex gap-1.5 flex-wrap">
               {COLORS.map((c) => (
                 <button
@@ -233,9 +244,10 @@ function AccountsView() {
                   onClick={() => setColor(c)}
                   aria-label={`Color ${c}`}
                   aria-pressed={color === c}
-                  className={`w-7 h-7 rounded-lg border-2 transition-all duration-150 cursor-pointer flex items-center justify-center ${
-                    color === c ? "border-surface-900 scale-110 shadow-sm" : "border-transparent hover:scale-105"
-                  }`}
+                  className={cn(
+                    "w-7 h-7 rounded-lg border-2 transition-all duration-150 cursor-pointer flex items-center justify-center",
+                    color === c ? "border-foreground scale-110 shadow-sm" : "border-transparent hover:scale-105"
+                  )}
                   style={{ backgroundColor: c }}
                 >
                   {color === c && <Check className="w-3.5 h-3.5 text-white" aria-hidden="true" />}
@@ -245,14 +257,15 @@ function AccountsView() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button type="submit" className="btn-primary text-sm">
+          <Button type="submit">
             {editingId ? "Guardar" : "Crear cuenta"}
-          </button>
+          </Button>
           {editingId && (
-            <button type="button" onClick={resetForm} className="btn-secondary text-sm">Cancelar</button>
+            <Button type="button" variant="secondary" onClick={resetForm}>Cancelar</Button>
           )}
         </div>
-      </form>
+        </form>
+      </Card>
 
       {/* List */}
       {filteredAccounts.length === 0 ? (
@@ -266,9 +279,9 @@ function AccountsView() {
       ) : (
         <div className="space-y-3">
           {filteredAccounts.map((a) => (
-            <div
+            <Card
               key={a.id}
-              className={`card p-4 flex items-center justify-between transition-shadow hover:shadow-card-hover ${a.archived ? "opacity-60" : ""}`}
+              className={cn("p-4 flex-row items-center justify-between transition-shadow hover:shadow-card-hover", a.archived && "opacity-60")}
             >
               <div className="flex items-center gap-3.5">
                 <div
@@ -278,40 +291,44 @@ function AccountsView() {
                   <TypeIcon type={a.type} />
                 </div>
                 <div>
-                  <p className="font-semibold text-surface-900">
+                  <p className="font-semibold text-foreground">
                     {a.name}
-                    {a.archived && <span className="ml-2 text-xs text-amber-600 font-normal">(archivada)</span>}
+                    {a.archived && <span className="ml-2 text-xs text-accent-600 dark:text-accent-400 font-normal">(archivada)</span>}
                   </p>
-                  <p className="text-xs text-surface-500">{typeLabel(a.type)} · {a.currency}</p>
+                  <p className="text-xs text-muted-foreground">{typeLabel(a.type)} · {a.currency}</p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <p className={`font-bold text-base font-mono tabular-nums ${a.balance >= 0 ? "text-success-600" : "text-danger-600"}`}>
+                <p className={cn("font-bold text-base font-mono tabular-nums", a.balance >= 0 ? "text-success-600" : "text-danger-600")}>
                   {formatCurrency(a.balance)}
                 </p>
                 <div className="flex gap-1">
-                  <button onClick={() => startEdit(a)} className="p-1.5 rounded-lg hover:bg-surface-100" aria-label={`Editar ${a.name}`}>
-                    <Edit3 className="w-3.5 h-3.5 text-surface-400" aria-hidden="true" />
-                  </button>
-                  <button
+                  <Button variant="ghost" size="icon-sm" onClick={() => startEdit(a)} aria-label={`Editar ${a.name}`}>
+                    <Edit3 className="w-3.5 h-3.5" aria-hidden="true" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={() => archiveMut.mutate(a.id)}
-                    className="p-1.5 rounded-lg hover:bg-amber-50"
+                    className="hover:bg-accent-50 dark:hover:bg-accent-500/10"
                     aria-label={a.archived ? `Restaurar ${a.name}` : `Archivar ${a.name}`}
                   >
                     {a.archived
-                      ? <ArchiveRestore className="w-3.5 h-3.5 text-amber-500" aria-hidden="true" />
-                      : <Archive className="w-3.5 h-3.5 text-surface-400" aria-hidden="true" />}
-                  </button>
-                  <button
+                      ? <ArchiveRestore className="w-3.5 h-3.5 text-accent-500" aria-hidden="true" />
+                      : <Archive className="w-3.5 h-3.5" aria-hidden="true" />}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={() => setDeleteTarget(a)}
-                    className="p-1.5 rounded-lg hover:bg-danger-50"
+                    className="hover:bg-destructive/10 hover:text-destructive"
                     aria-label={`Eliminar ${a.name}`}
                   >
-                    <Trash2 className="w-3.5 h-3.5 text-danger-400" aria-hidden="true" />
-                  </button>
+                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                  </Button>
                 </div>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}

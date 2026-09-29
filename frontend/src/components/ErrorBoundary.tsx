@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   children: ReactNode;
@@ -27,22 +28,21 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="text-center py-20 animate-fade-in">
-          <div className="w-20 h-20 rounded-2xl bg-danger-50 flex items-center justify-center mx-auto mb-5">
+          <div className="w-20 h-20 rounded-2xl bg-danger-50 dark:bg-danger-500/10 flex items-center justify-center mx-auto mb-5">
             <AlertTriangle className="w-10 h-10 text-danger-400" />
           </div>
-          <h3 className="text-lg font-semibold text-surface-900 mb-1.5">Algo salió mal</h3>
-          <p className="text-surface-500 text-sm max-w-sm mx-auto mb-6">
+          <h3 className="text-lg font-semibold text-foreground mb-1.5">Algo salió mal</h3>
+          <p className="text-muted-foreground text-sm max-w-sm mx-auto mb-6">
             Ha ocurrido un error inesperado. Intenta recargar la página.
           </p>
-          <button
+          <Button
             onClick={() => {
               this.setState({ hasError: false });
               window.location.reload();
             }}
-            className="btn-primary"
           >
             Recargar página
-          </button>
+          </Button>
         </div>
       );
     }

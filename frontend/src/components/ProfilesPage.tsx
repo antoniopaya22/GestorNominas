@@ -11,6 +11,14 @@ import {
   type Profile,
 } from "../lib/api";
 import { Providers } from "./Providers";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ConfirmModal } from "./ui/ConfirmModal";
+import { cn } from "cn";
 
 const COLORS = [
   "#1e40af", "#3b82f6", "#6366f1", "#8b5cf6",
@@ -28,6 +36,7 @@ function ProfilesManager() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [color, setColor] = useState(COLORS[0]);
+  const [toDelete, setToDelete] = useState<Profile | null>(null);
 
   const createMut = useMutation({
     mutationFn: createProfile,
@@ -78,17 +87,17 @@ function ProfilesManager() {
   if (isLoading) {
     return (
       <div className="max-w-2xl space-y-4 animate-fade-in">
-        <div className="card p-0 overflow-hidden">
+        <Card className="p-0 overflow-hidden">
           <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
           <div className="px-6 py-5 sm:px-8 sm:py-6">
-            <div className="skeleton h-4 w-32 mb-1" />
-            <div className="skeleton h-5 w-56" />
+            <Skeleton className="h-4 w-32 mb-1" />
+            <Skeleton className="h-5 w-56" />
           </div>
-        </div>
-        <div className="card p-6">
-          <div className="skeleton h-10 w-full mb-4" />
-          <div className="skeleton h-10 w-40" />
-        </div>
+        </Card>
+        <Card className="p-6">
+          <Skeleton className="h-10 w-full mb-4" />
+          <Skeleton className="h-10 w-40" />
+        </Card>
       </div>
     );
   }
@@ -96,45 +105,45 @@ function ProfilesManager() {
   return (
     <div className="max-w-2xl animate-fade-in space-y-6">
       {/* Hero */}
-      <div className="card p-0 overflow-hidden">
+      <Card className="p-0 overflow-hidden">
         <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
         <div className="px-6 py-5 sm:px-8 sm:py-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <p className="text-surface-400 text-xs uppercase tracking-wider mb-0.5">Perfiles</p>
-              <p className="text-base font-semibold text-surface-900">Gestiona los perfiles de empleados</p>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Perfiles</p>
+              <p className="text-base font-semibold text-foreground">Gestiona los perfiles de empleados</p>
             </div>
             {profiles.length > 0 && (
-              <div className="bg-accent-50 rounded-lg px-3 py-1.5">
-                <span className="text-xs font-medium text-accent-700">{profiles.length} perfil{profiles.length !== 1 ? "es" : ""}</span>
-              </div>
+              <Badge variant="secondary" className="bg-accent-50 text-accent-700 dark:bg-accent-500/10 dark:text-accent-400">
+                {profiles.length} perfil{profiles.length !== 1 ? "es" : ""}
+              </Badge>
             )}
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="card p-5">
+      <Card className="p-5">
+        <form onSubmit={handleSubmit}>
         <div className="flex items-center gap-2 mb-4">
-          <UserPlus className="w-4 h-4 text-surface-500" aria-hidden="true" />
-          <h3 className="font-semibold text-surface-900 text-sm">
+          <UserPlus className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+          <h3 className="font-semibold text-foreground text-sm">
             {editingId ? "Editar perfil" : "Nuevo perfil"}
           </h3>
         </div>
         <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
-          <div className="flex-1">
-            <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5" htmlFor="profile-name">Nombre</label>
-            <input
+          <div className="flex-1 space-y-1.5">
+            <Label htmlFor="profile-name">Nombre</Label>
+            <Input
               id="profile-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ej: Antonio, Mi pareja..."
-              className="input"
             />
           </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Color</label>
+          <div className="space-y-1.5">
+            <Label>Color</Label>
             <div className="flex gap-1.5" role="group" aria-label="Seleccionar color">
               {COLORS.map((c) => (
                 <button
@@ -143,11 +152,10 @@ function ProfilesManager() {
                   onClick={() => setColor(c)}
                   aria-label={`Color ${c}`}
                   aria-pressed={color === c}
-                  className={`w-7 h-7 rounded-lg border-2 transition-all duration-150 cursor-pointer flex items-center justify-center ${
-                    color === c
-                      ? "border-surface-900 scale-110 shadow-sm"
-                      : "border-transparent hover:scale-105"
-                  }`}
+                  className={cn(
+                    "w-7 h-7 rounded-lg border-2 transition-all duration-150 cursor-pointer flex items-center justify-center",
+                    color === c ? "border-foreground scale-110 shadow-sm" : "border-transparent hover:scale-105"
+                  )}
                   style={{ backgroundColor: c }}
                 >
                   {color === c && <Check className="w-3.5 h-3.5 text-white" />}
@@ -156,24 +164,25 @@ function ProfilesManager() {
             </div>
           </div>
           <div className="flex gap-2">
-            <button type="submit" className="btn-primary text-sm whitespace-nowrap">
+            <Button type="submit" className="whitespace-nowrap">
               {editingId ? "Guardar" : "Crear perfil"}
-            </button>
+            </Button>
             {editingId && (
-              <button type="button" onClick={cancelEdit} className="btn-secondary text-sm">
+              <Button type="button" variant="secondary" onClick={cancelEdit}>
                 Cancelar
-              </button>
+              </Button>
             )}
           </div>
         </div>
-      </form>
+        </form>
+      </Card>
 
       {/* List */}
       <div className="space-y-3">
         {profiles.map((p) => (
-          <div
+          <Card
             key={p.id}
-            className="card p-4 flex items-center justify-between group hover:shadow-card-hover transition-shadow"
+            className="p-4 flex-row items-center justify-between group hover:shadow-card-hover transition-shadow"
           >
             <div className="flex items-center gap-3.5">
               <div
@@ -183,8 +192,8 @@ function ProfilesManager() {
                 {p.name.charAt(0).toUpperCase()}
               </div>
               <div>
-                <div className="font-semibold text-surface-900 text-sm">{p.name}</div>
-                <div className="text-[11px] text-surface-400 mt-0.5">
+                <div className="font-semibold text-foreground text-sm">{p.name}</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">
                   Creado: {new Date(p.createdAt).toLocaleDateString("es-ES", {
                     day: "numeric", month: "short", year: "numeric",
                   })}
@@ -192,36 +201,47 @@ function ProfilesManager() {
               </div>
             </div>
             <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => startEdit(p)}
                 aria-label={`Editar perfil ${p.name}`}
-                className="btn-ghost text-xs cursor-pointer"
+                className="gap-1.5"
               >
                 <Edit3 className="w-3.5 h-3.5" /> Editar
-              </button>
-              <button
-                onClick={() => {
-                  if (confirm(`¿Eliminar el perfil "${p.name}" y todas sus nóminas?`))
-                    deleteMut.mutate(p.id);
-                }}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setToDelete(p)}
                 aria-label={`Eliminar perfil ${p.name}`}
-                className="btn-ghost text-xs text-danger-600 hover:bg-danger-50 cursor-pointer"
+                className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
               >
                 <Trash2 className="w-3.5 h-3.5" /> Eliminar
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         ))}
         {profiles.length === 0 && (
-          <div className="card text-center py-14">
-            <div className="w-14 h-14 rounded-2xl bg-surface-100 flex items-center justify-center mx-auto mb-4">
-              <Users className="w-7 h-7 text-surface-300" aria-hidden="true" />
+          <Card className="text-center py-14">
+            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+              <Users className="w-7 h-7 text-muted-foreground" aria-hidden="true" />
             </div>
-            <h3 className="font-semibold text-surface-900 text-sm mb-1">Sin perfiles</h3>
-            <p className="text-xs text-surface-500">Crea tu primer perfil con el formulario de arriba.</p>
-          </div>
+            <h3 className="font-semibold text-foreground text-sm mb-1">Sin perfiles</h3>
+            <p className="text-xs text-muted-foreground">Crea tu primer perfil con el formulario de arriba.</p>
+          </Card>
         )}
       </div>
+
+      <ConfirmModal
+        open={!!toDelete}
+        title="Eliminar perfil"
+        message={`¿Eliminar el perfil "${toDelete?.name ?? ""}" y todas sus nóminas? Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        variant="danger"
+        onConfirm={() => { if (toDelete) deleteMut.mutate(toDelete.id); setToDelete(null); }}
+        onCancel={() => setToDelete(null)}
+      />
     </div>
   );
 }

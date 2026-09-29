@@ -17,11 +17,15 @@ import { formatCurrency, formatMonthLabel } from "../lib/format";
 import { ChartTooltip } from "./ui/ChartTooltip";
 import { ProfileSelector } from "./ui/ProfileSelector";
 import { EmptyState } from "./ui/EmptyState";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "cn";
 
 const SEVERITY_STYLES = {
-  info: "bg-primary-50 border-primary-200 text-primary-700",
-  warning: "bg-accent-50 border-accent-200 text-accent-700",
-  critical: "bg-danger-50 border-danger-200 text-danger-700",
+  info: "bg-primary-50 border-primary-200 text-primary-700 dark:bg-primary-500/10 dark:border-primary-500/20 dark:text-primary-400",
+  warning: "bg-accent-50 border-accent-200 text-accent-700 dark:bg-accent-500/10 dark:border-accent-500/20 dark:text-accent-400",
+  critical: "bg-danger-50 border-danger-100 text-danger-700 dark:bg-danger-500/10 dark:border-danger-500/20 dark:text-danger-400",
 } as const;
 
 const SEVERITY_ICONS = {
@@ -29,6 +33,12 @@ const SEVERITY_ICONS = {
   warning: AlertTriangle,
   critical: AlertTriangle,
 } as const;
+
+// Colores de gráfico que se leen en tiempo de ejecución desde las custom
+// properties de Tailwind (ver global.css) — así los charts de Recharts (que
+// pintan en SVG, fuera del alcance de las clases `dark:`) siguen el tema.
+const CHART_GRID = "var(--color-border)";
+const CHART_AXIS = "var(--color-muted-foreground)";
 
 type SalaryEvolutionDatum = {
   month: string;
@@ -86,6 +96,15 @@ function buildSalaryEvolutionData(trends: AnalyticsData["trends"]): SalaryEvolut
   return salaryEvolution;
 }
 
+function SectionCard({ gradient, children }: { gradient: string; children: React.ReactNode }) {
+  return (
+    <Card className="p-0 overflow-hidden">
+      <div className={cn("h-1.5 bg-gradient-to-r", gradient)} />
+      <div className="p-6">{children}</div>
+    </Card>
+  );
+}
+
 function AnalyticsView() {
   const { data: profiles = [] } = useQuery({
     queryKey: ["profiles"],
@@ -137,33 +156,33 @@ function AnalyticsView() {
   return (
     <div className="animate-fade-in space-y-6">
       {/* Hero */}
-      <div className="card p-0 overflow-hidden">
+      <Card className="p-0 overflow-hidden">
         <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
         <div className="px-6 py-5 sm:px-8 sm:py-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <p className="text-surface-400 text-xs uppercase tracking-wider mb-0.5">Analítica Avanzada</p>
-              <p className="text-lg font-semibold text-surface-900">Tendencias, predicciones y anomalías</p>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Analítica Avanzada</p>
+              <p className="text-lg font-semibold text-foreground">Tendencias, predicciones y anomalías</p>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => handleExport("csv")} className="flex items-center gap-1.5 bg-surface-100 hover:bg-surface-200 rounded-lg px-3 py-1.5 text-xs font-medium text-surface-700 transition-colors" aria-label="Exportar CSV">
+              <Button variant="secondary" size="sm" onClick={() => handleExport("csv")} className="gap-1.5" aria-label="Exportar CSV">
                 <Download className="w-3.5 h-3.5" aria-hidden="true" />
                 CSV
-              </button>
-              <button onClick={() => handleExport("json")} className="flex items-center gap-1.5 bg-surface-100 hover:bg-surface-200 rounded-lg px-3 py-1.5 text-xs font-medium text-surface-700 transition-colors" aria-label="Exportar JSON">
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => handleExport("json")} className="gap-1.5" aria-label="Exportar JSON">
                 <Download className="w-3.5 h-3.5" aria-hidden="true" />
                 JSON
-              </button>
+              </Button>
             </div>
           </div>
         </div>
-      </div>
+      </Card>
 
       {exportError && (
-        <div className="card border-danger-200 bg-danger-50/50 p-4 flex items-center gap-2" role="alert">
-          <AlertTriangle className="w-4 h-4 text-danger-600 flex-shrink-0" aria-hidden="true" />
-          <p className="text-sm text-danger-700">{exportError}</p>
-        </div>
+        <Card className="border-destructive/20 bg-destructive/5 p-4 flex-row items-center gap-2" role="alert">
+          <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" aria-hidden="true" />
+          <p className="text-sm text-destructive">{exportError}</p>
+        </Card>
       )}
 
       {/* Profile selector */}
@@ -178,36 +197,31 @@ function AnalyticsView() {
       {isLoading && (
         <div className="space-y-6">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="card p-0 overflow-hidden">
-              <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-              <div className="p-6">
-                <div className="skeleton h-5 w-40 mb-4" />
-                <div className="skeleton h-[250px] w-full rounded-xl" />
-              </div>
-            </div>
+            <SectionCard key={i} gradient="from-accent-500 to-accent-400">
+              <Skeleton className="h-5 w-40 mb-4" />
+              <Skeleton className="h-[250px] w-full rounded-xl" />
+            </SectionCard>
           ))}
         </div>
       )}
 
       {error && (
-        <div className="card border-danger-200 bg-danger-50/50 p-5">
-          <p className="text-sm text-danger-700">Error cargando analítica: {(error as Error).message}</p>
-        </div>
+        <Card className="border-destructive/20 bg-destructive/5 p-5">
+          <p className="text-sm text-destructive">Error cargando analítica: {(error as Error).message}</p>
+        </Card>
       )}
 
       {analytics && (
         <div className="space-y-6">
           {/* Trends Chart */}
-          <div className="card p-0 overflow-hidden">
-            <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-            <div className="p-6">
+          <SectionCard gradient="from-accent-500 to-accent-400">
             <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center">
-                <TrendingUp className="w-4 h-4 text-primary-600" aria-hidden="true" />
+              <div className="w-8 h-8 rounded-lg bg-primary-50 dark:bg-primary-500/10 flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-primary-600 dark:text-primary-400" aria-hidden="true" />
               </div>
               <div>
-                <h3 className="font-semibold text-surface-900 text-sm">Evolución Salarial</h3>
-                <p className="text-xs text-surface-400">Tendencia de bruto y neto mensual</p>
+                <h3 className="font-semibold text-foreground text-sm">Evolución Salarial</h3>
+                <p className="text-xs text-muted-foreground">Tendencia de bruto y neto mensual</p>
               </div>
             </div>
 
@@ -224,7 +238,7 @@ function AnalyticsView() {
                       <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
                   <XAxis
                     dataKey="month"
                     interval={0}
@@ -234,9 +248,9 @@ function AnalyticsView() {
                     textAnchor="end"
                     tickMargin={12}
                     tick={{ fontSize: 11 }}
-                    stroke="#9ca3af"
+                    stroke={CHART_AXIS}
                   />
-                  <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                  <YAxis tick={{ fontSize: 11 }} stroke={CHART_AXIS} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Area type="monotone" dataKey="Bruto" stroke="#1e40af" strokeWidth={2} fill="url(#gradBruto)" />
@@ -244,38 +258,35 @@ function AnalyticsView() {
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-sm text-surface-400 py-8 text-center">No hay datos de tendencia suficientes</p>
+              <p className="text-sm text-muted-foreground py-8 text-center">No hay datos de tendencia suficientes</p>
             )}
-            </div>
-          </div>
+          </SectionCard>
 
           {/* Predictions */}
           {analytics.predictions.length > 0 && (
-            <div className="card p-0 overflow-hidden">
-              <div className="h-1.5 bg-gradient-to-r from-amber-500 to-amber-400" />
-              <div className="p-6">
+            <SectionCard gradient="from-accent-500 to-accent-400">
               <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-accent-50 flex items-center justify-center">
-                  <Target className="w-4 h-4 text-accent-600" aria-hidden="true" />
+                <div className="w-8 h-8 rounded-lg bg-accent-50 dark:bg-accent-500/10 flex items-center justify-center">
+                  <Target className="w-4 h-4 text-accent-600 dark:text-accent-400" aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-surface-900 text-sm">Predicciones</h3>
-                  <p className="text-xs text-surface-400">Estimación de los próximos 3 meses basada en regresión lineal</p>
+                  <h3 className="font-semibold text-foreground text-sm">Predicciones</h3>
+                  <p className="text-xs text-muted-foreground">Estimación de los próximos 3 meses basada en regresión lineal</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                 {analytics.predictions.map((p) => (
-                  <div key={p.month} className="bg-accent-50/50 border border-accent-200 rounded-xl p-4">
-                    <p className="text-xs font-medium text-accent-600 uppercase tracking-wider">{formatMonthLabel(p.month)}</p>
+                  <div key={p.month} className="bg-accent-50/50 dark:bg-accent-500/10 border border-accent-200 dark:border-accent-500/20 rounded-xl p-4">
+                    <p className="text-xs font-medium text-accent-600 dark:text-accent-400 uppercase tracking-wider">{formatMonthLabel(p.month)}</p>
                     <div className="mt-2 space-y-1">
                       <div className="flex justify-between">
-                        <span className="text-xs text-surface-500">Bruto est.</span>
-                        <span className="text-sm font-semibold font-mono text-surface-900">{formatCurrency(p.predictedGross)}</span>
+                        <span className="text-xs text-muted-foreground">Bruto est.</span>
+                        <span className="text-sm font-semibold font-mono text-foreground">{formatCurrency(p.predictedGross)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-xs text-surface-500">Neto est.</span>
-                        <span className="text-sm font-semibold font-mono text-success-700">{formatCurrency(p.predictedNet)}</span>
+                        <span className="text-xs text-muted-foreground">Neto est.</span>
+                        <span className="text-sm font-semibold font-mono text-success-700 dark:text-success-500">{formatCurrency(p.predictedNet)}</span>
                       </div>
                     </div>
                   </div>
@@ -300,9 +311,9 @@ function AnalyticsView() {
                     NetoEst: p.predictedNet,
                   })),
                 ]}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="#9ca3af" />
-                  <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke={CHART_AXIS} />
+                  <YAxis tick={{ fontSize: 11 }} stroke={CHART_AXIS} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Line type="monotone" dataKey="Bruto" stroke="#1e40af" strokeWidth={2} dot={{ r: 3 }} />
@@ -311,22 +322,19 @@ function AnalyticsView() {
                   <Line type="monotone" dataKey="NetoEst" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} name="Neto (est.)" />
                 </LineChart>
               </ResponsiveContainer>
-              </div>
-            </div>
+            </SectionCard>
           )}
 
           {/* Year-over-Year */}
           {analytics.trends.yoyGross.length > 0 && (
-            <div className="card p-0 overflow-hidden">
-              <div className="h-1.5 bg-gradient-to-r from-success-500 to-success-400" />
-              <div className="p-6">
+            <SectionCard gradient="from-success-500 to-success-400">
               <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-success-50 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-success-50 dark:bg-success-500/10 flex items-center justify-center">
                   <Activity className="w-4 h-4 text-success-600" aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-surface-900 text-sm">Comparación Interanual</h3>
-                  <p className="text-xs text-surface-400">Este año vs. año anterior</p>
+                  <h3 className="font-semibold text-foreground text-sm">Comparación Interanual</h3>
+                  <p className="text-xs text-muted-foreground">Este año vs. año anterior</p>
                 </div>
               </div>
 
@@ -337,31 +345,28 @@ function AnalyticsView() {
                   "Año anterior": d.previous,
                   Cambio: d.change,
                 }))}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke="#9ca3af" />
-                  <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} stroke={CHART_AXIS} />
+                  <YAxis tick={{ fontSize: 11 }} stroke={CHART_AXIS} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Bar dataKey="Año actual" fill="#1e40af" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Año anterior" fill="#93c5fd" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-              </div>
-            </div>
+            </SectionCard>
           )}
 
           {/* Anomalies */}
           {analytics.anomalies.length > 0 && (
-            <div className="card p-0 overflow-hidden">
-              <div className="h-1.5 bg-gradient-to-r from-danger-500 to-danger-400" />
-              <div className="p-6">
+            <SectionCard gradient="from-danger-500 to-danger-400">
               <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-danger-50 flex items-center justify-center">
-                  <AlertTriangle className="w-4 h-4 text-danger-600" aria-hidden="true" />
+                <div className="w-8 h-8 rounded-lg bg-danger-50 dark:bg-danger-500/10 flex items-center justify-center">
+                  <AlertTriangle className="w-4 h-4 text-danger-600 dark:text-danger-400" aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-surface-900 text-sm">Anomalías Detectadas</h3>
-                  <p className="text-xs text-surface-400">Desviaciones significativas en tus nóminas</p>
+                  <h3 className="font-semibold text-foreground text-sm">Anomalías Detectadas</h3>
+                  <p className="text-xs text-muted-foreground">Desviaciones significativas en tus nóminas</p>
                 </div>
               </div>
 
@@ -369,7 +374,7 @@ function AnalyticsView() {
                 {analytics.anomalies.map((a, i) => {
                   const Icon = SEVERITY_ICONS[a.severity] ?? AlertTriangle;
                   return (
-                    <div key={i} className={`border rounded-xl p-4 ${SEVERITY_STYLES[a.severity]}`}>
+                    <div key={i} className={cn("border rounded-xl p-4", SEVERITY_STYLES[a.severity])}>
                       <div className="flex items-start gap-3">
                         <Icon className="w-4 h-4 mt-0.5 flex-shrink-0" />
                         <div className="flex-1">
@@ -385,22 +390,19 @@ function AnalyticsView() {
                   );
                 })}
               </div>
-              </div>
-            </div>
+            </SectionCard>
           )}
 
           {/* Alerts */}
           {analytics.alerts.length > 0 && (
-            <div className="card p-0 overflow-hidden">
-              <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-              <div className="p-6">
+            <SectionCard gradient="from-accent-500 to-accent-400">
               <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-accent-50 flex items-center justify-center">
-                  <Bell className="w-4 h-4 text-accent-600" aria-hidden="true" />
+                <div className="w-8 h-8 rounded-lg bg-accent-50 dark:bg-accent-500/10 flex items-center justify-center">
+                  <Bell className="w-4 h-4 text-accent-600 dark:text-accent-400" aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-surface-900 text-sm">Alertas</h3>
-                  <p className="text-xs text-surface-400">Recomendaciones y avisos automáticos</p>
+                  <h3 className="font-semibold text-foreground text-sm">Alertas</h3>
+                  <p className="text-xs text-muted-foreground">Recomendaciones y avisos automáticos</p>
                 </div>
               </div>
 
@@ -409,64 +411,60 @@ function AnalyticsView() {
                   const Icon = SEVERITY_ICONS[a.severity as keyof typeof SEVERITY_ICONS] ?? Bell;
                   const styles = SEVERITY_STYLES[a.severity as keyof typeof SEVERITY_STYLES] ?? SEVERITY_STYLES.info;
                   return (
-                    <div key={i} className={`border rounded-xl px-4 py-3 flex items-center gap-3 ${styles}`}>
+                    <div key={i} className={cn("border rounded-xl px-4 py-3 flex items-center gap-3", styles)}>
                       <Icon className="w-4 h-4 flex-shrink-0" />
                       <p className="text-sm">{a.message}</p>
                     </div>
                   );
                 })}
               </div>
-              </div>
-            </div>
+            </SectionCard>
           )}
 
           {/* No anomalies/alerts message */}
           {analytics.anomalies.length === 0 && analytics.alerts.length === 0 && (
-            <div className="card p-6 text-center">
-              <div className="w-12 h-12 rounded-xl bg-success-50 flex items-center justify-center mx-auto mb-3">
+            <Card className="p-6 text-center">
+              <div className="w-12 h-12 rounded-xl bg-success-50 dark:bg-success-500/10 flex items-center justify-center mx-auto mb-3">
                 <ArrowUpRight className="w-6 h-6 text-success-600" />
               </div>
-              <h3 className="font-semibold text-surface-900 text-sm">Todo en orden</h3>
-              <p className="text-xs text-surface-400 mt-1">No se han detectado anomalías ni alertas en tus nóminas</p>
-            </div>
+              <h3 className="font-semibold text-foreground text-sm">Todo en orden</h3>
+              <p className="text-xs text-muted-foreground mt-1">No se han detectado anomalías ni alertas en tus nóminas</p>
+            </Card>
           )}
 
           {/* Extras Summary */}
           {analytics.extras && analytics.extras.length > 0 && (
-            <div className="card p-0 overflow-hidden">
-              <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-              <div className="p-6">
+            <SectionCard gradient="from-accent-500 to-accent-400">
               <div className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-accent-50 flex items-center justify-center">
-                  <Target className="w-4 h-4 text-accent-600" aria-hidden="true" />
+                <div className="w-8 h-8 rounded-lg bg-accent-50 dark:bg-accent-500/10 flex items-center justify-center">
+                  <Target className="w-4 h-4 text-accent-600 dark:text-accent-400" aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-surface-900 text-sm">Pagas Extra</h3>
-                  <p className="text-xs text-surface-400">Resumen de pagas extra por año</p>
+                  <h3 className="font-semibold text-foreground text-sm">Pagas Extra</h3>
+                  <p className="text-xs text-muted-foreground">Resumen de pagas extra por año</p>
                 </div>
               </div>
               <div className="space-y-3">
                 {analytics.extras.map((e) => (
-                  <div key={e.year} className="flex items-center justify-between border border-accent-100 rounded-xl p-4 bg-accent-50/20">
+                  <div key={e.year} className="flex items-center justify-between border border-accent-100 dark:border-accent-500/20 rounded-xl p-4 bg-accent-50/20 dark:bg-accent-500/5">
                     <div>
-                      <span className="text-sm font-bold text-surface-900">{e.year}</span>
-                      <span className="text-xs text-surface-400 ml-2">{e.count} paga{e.count > 1 ? "s" : ""}</span>
+                      <span className="text-sm font-bold text-foreground">{e.year}</span>
+                      <span className="text-xs text-muted-foreground ml-2">{e.count} paga{e.count > 1 ? "s" : ""}</span>
                     </div>
                     <div className="flex gap-6">
                       <div className="text-right">
-                        <p className="text-[10px] text-surface-400 uppercase">Bruto</p>
-                        <p className="text-sm font-mono font-semibold text-surface-900">{formatCurrency(e.totalGross)}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">Bruto</p>
+                        <p className="text-sm font-mono font-semibold text-foreground">{formatCurrency(e.totalGross)}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] text-surface-400 uppercase">Neto</p>
-                        <p className="text-sm font-mono font-semibold text-success-700">{formatCurrency(e.totalNet)}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">Neto</p>
+                        <p className="text-sm font-mono font-semibold text-success-700 dark:text-success-500">{formatCurrency(e.totalNet)}</p>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-              </div>
-            </div>
+            </SectionCard>
           )}
         </div>
       )}

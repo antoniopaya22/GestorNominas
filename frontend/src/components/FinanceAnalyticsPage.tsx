@@ -286,7 +286,7 @@ function SegmentedControl({
   options: Array<{ value: string; label: string }>;
 }) {
   return (
-    <div className="inline-flex flex-wrap rounded-xl bg-surface-100 p-1">
+    <div className="inline-flex flex-wrap rounded-xl bg-muted p-1">
       {options.map((option) => (
         <button
           key={option.value}
@@ -294,8 +294,8 @@ function SegmentedControl({
           onClick={() => onChange(option.value)}
           className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
             value === option.value
-              ? "bg-white text-surface-900 shadow-sm"
-              : "text-surface-500 hover:text-surface-800"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           {option.label}
@@ -326,8 +326,8 @@ function AnalyticsPanel({
       <div className="p-5">
         <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
           <div>
-            <h3 className="text-base font-semibold text-surface-900">{title}</h3>
-            <p className="mt-1 text-sm text-surface-500">{subtitle}</p>
+            <h3 className="text-base font-semibold text-foreground">{title}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {controls}
@@ -364,7 +364,7 @@ function ExpandedChartDialog({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-surface-950/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -374,17 +374,17 @@ function ExpandedChartDialog({
         className="card max-h-[92vh] w-full max-w-[1400px] overflow-hidden"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-surface-200 px-6 py-5">
+        <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
           <div>
-            <h2 className="text-xl font-semibold text-surface-900">{title}</h2>
-            <p className="mt-1 text-sm text-surface-500">{subtitle}</p>
+            <h2 className="text-xl font-semibold text-foreground">{title}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
           </div>
           <button type="button" onClick={onClose} className="btn-ghost px-3 py-2 text-sm" aria-label="Cerrar gráfico ampliado">
             <X className="h-4 w-4" /> Cerrar
           </button>
         </div>
         {controls ? (
-          <div className="border-b border-surface-200 px-6 py-4">
+          <div className="border-b border-border px-6 py-4">
             <div className="flex flex-wrap items-center gap-2">{controls}</div>
           </div>
         ) : null}
@@ -397,7 +397,7 @@ function ExpandedChartDialog({
 function ChartPlaceholder({ message, height = 280 }: { message: string; height?: number }) {
   return (
     <div
-      className="flex items-center justify-center rounded-2xl border border-dashed border-surface-200 bg-surface-50 px-6 text-center text-sm text-surface-400"
+      className="flex items-center justify-center rounded-2xl border border-dashed border-border bg-muted px-6 text-center text-sm text-muted-foreground"
       style={{ height }}
     >
       {message}
@@ -432,18 +432,18 @@ function MatrixHeatmap({
           minWidth: `${220 + months.length * cellMinWidth}px`,
         }}
       >
-        <div className="px-2 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-surface-400">Serie</div>
+        <div className="px-2 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Serie</div>
         {months.map((month) => (
-          <div key={month.month} className="px-1 py-2 text-center text-xs font-semibold uppercase tracking-[0.18em] text-surface-400">
+          <div key={month.month} className="px-1 py-2 text-center text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             {month.label}
           </div>
         ))}
 
         {rows.map((row) => (
           <Fragment key={row.key}>
-            <div key={`${row.key}-label`} className="rounded-2xl border border-surface-200 bg-surface-50 px-3 py-3">
-              <p className="truncate text-sm font-semibold text-surface-900">{row.label}</p>
-              <p className="mt-1 text-xs text-surface-400">{formatCurrency(row.total)}</p>
+            <div key={`${row.key}-label`} className="rounded-2xl border border-border bg-muted px-3 py-3">
+              <p className="truncate text-sm font-semibold text-foreground">{row.label}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{formatCurrency(row.total)}</p>
             </div>
             {row.values.map((value) => {
               const intensity = maxValue > 0 ? value.value / maxValue : 0;
@@ -457,7 +457,7 @@ function MatrixHeatmap({
                     borderColor: hexToRgba(color, 0.16 + intensity * 0.24),
                   }}
                 >
-                  <span className="text-[11px] font-semibold text-surface-500">{value.value > 0 ? formatCompact(value.value) : "—"}</span>
+                  <span className="text-[11px] font-semibold text-muted-foreground">{value.value > 0 ? formatCompact(value.value) : "—"}</span>
                 </div>
               );
             })}
@@ -997,8 +997,8 @@ function FinanceAnalyticsView() {
   if (error) {
     return (
       <div className="card p-8 text-center">
-        <p className="text-lg font-semibold text-surface-900">No se pudo cargar la analítica financiera</p>
-        <p className="mt-2 text-sm text-surface-500">Revisa la conexión con la API o vuelve a intentarlo.</p>
+        <p className="text-lg font-semibold text-foreground">No se pudo cargar la analítica financiera</p>
+        <p className="mt-2 text-sm text-muted-foreground">Revisa la conexión con la API o vuelve a intentarlo.</p>
         <button type="button" onClick={() => refetch()} className="btn-primary mt-5">
           <RefreshCcw className="h-4 w-4" /> Reintentar
         </button>
@@ -1088,9 +1088,9 @@ function FinanceAnalyticsView() {
       return (
         <ResponsiveContainer width="100%" height={height}>
           <ComposedChart data={monthlyChartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-surface-200)" />
-            <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" />
-            <YAxis tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" tickFormatter={tickFormatter} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+            <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
+            <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
             <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
             <Legend />
             {trendMetric === "all" ? (
@@ -1111,9 +1111,9 @@ function FinanceAnalyticsView() {
       return (
         <ResponsiveContainer width="100%" height={height}>
           <AreaChart data={monthlyChartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-surface-200)" />
-            <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" />
-            <YAxis tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" tickFormatter={tickFormatter} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+            <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
+            <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
             <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
             <Legend />
             {trendMetric === "all" ? (
@@ -1133,9 +1133,9 @@ function FinanceAnalyticsView() {
     return (
       <ResponsiveContainer width="100%" height={height}>
         <ComposedChart data={monthlyChartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-surface-200)" />
-          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" />
-          <YAxis tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" tickFormatter={tickFormatter} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
+          <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
           <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
           <Legend />
           {trendMetric === "all" ? (
@@ -1161,9 +1161,9 @@ function FinanceAnalyticsView() {
       return (
         <ResponsiveContainer width="100%" height={height}>
           <ComposedChart data={cumulativeChartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-surface-200)" />
-            <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" />
-            <YAxis tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" tickFormatter={tickFormatter} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+            <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
+            <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
             <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
             <Line type="monotone" dataKey={cumulativeDataKey} name="Acumulado" stroke={CUMULATIVE_COLOR} strokeWidth={3} dot={false} />
           </ComposedChart>
@@ -1174,9 +1174,9 @@ function FinanceAnalyticsView() {
     return (
       <ResponsiveContainer width="100%" height={height}>
         <AreaChart data={cumulativeChartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-surface-200)" />
-          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" />
-          <YAxis tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" tickFormatter={tickFormatter} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
+          <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
           <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
           <Area type="monotone" dataKey={cumulativeDataKey} name="Acumulado" stroke={CUMULATIVE_COLOR} fill={`${CUMULATIVE_COLOR}22`} strokeWidth={2.5} />
         </AreaChart>
@@ -1211,12 +1211,12 @@ function FinanceAnalyticsView() {
               <div key={item.key} className="flex items-start gap-3">
                 <span className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-surface-900">{item.label}</p>
-                  {item.parentLabel ? <p className="text-xs text-surface-400">{item.parentLabel}</p> : null}
+                  <p className="truncate text-sm font-medium text-foreground">{item.label}</p>
+                  {item.parentLabel ? <p className="text-xs text-muted-foreground">{item.parentLabel}</p> : null}
                 </div>
                 <div className="text-right">
-                  <p className="font-mono text-sm font-semibold text-surface-900">{valueFormatter(item.value)}</p>
-                  <p className="text-xs text-surface-400">{formatPercent(item.share)}</p>
+                  <p className="font-mono text-sm font-semibold text-foreground">{valueFormatter(item.value)}</p>
+                  <p className="text-xs text-muted-foreground">{formatPercent(item.share)}</p>
                 </div>
               </div>
             ))}
@@ -1228,9 +1228,9 @@ function FinanceAnalyticsView() {
     return (
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={distributionData} layout="vertical" margin={{ left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-surface-200)" />
-          <XAxis type="number" tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" tickFormatter={tickFormatter} />
-          <YAxis type="category" dataKey="shortLabel" width={120} tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+          <XAxis type="number" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
+          <YAxis type="category" dataKey="shortLabel" width={120} tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
           <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
           <Bar dataKey="value" name="Valor" radius={[0, 8, 8, 0]}>
             {distributionData.map((item) => (
@@ -1254,9 +1254,9 @@ function FinanceAnalyticsView() {
     return (
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={payeeData} layout="vertical" margin={{ left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-surface-200)" />
-          <XAxis type="number" tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" tickFormatter={tickFormatter} />
-          <YAxis type="category" dataKey="shortLabel" width={120} tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+          <XAxis type="number" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
+          <YAxis type="category" dataKey="shortLabel" width={120} tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
           <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
           <Bar dataKey="value" name="Valor" radius={[0, 8, 8, 0]}>
             {payeeData.map((item) => (
@@ -1281,9 +1281,9 @@ function FinanceAnalyticsView() {
       return (
         <ResponsiveContainer width="100%" height={height}>
           <RadarChart data={weekdayChartData} outerRadius="72%">
-            <PolarGrid stroke="var(--color-surface-200)" />
-            <PolarAngleAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--color-surface-500)" }} />
-            <PolarRadiusAxis tick={{ fontSize: 10, fill: "var(--color-surface-400)" }} tickFormatter={tickFormatter} />
+            <PolarGrid stroke="var(--color-border)" />
+            <PolarAngleAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} />
+            <PolarRadiusAxis tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }} tickFormatter={tickFormatter} />
             <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
             <Radar dataKey="value" name="Valor" stroke={WEEKDAY_COLOR} fill={`${WEEKDAY_COLOR}33`} fillOpacity={0.7} />
           </RadarChart>
@@ -1294,9 +1294,9 @@ function FinanceAnalyticsView() {
     return (
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={weekdayChartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-surface-200)" />
-          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" />
-          <YAxis tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" tickFormatter={tickFormatter} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
+          <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
           <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
           <Bar dataKey="value" name="Valor" fill={WEEKDAY_COLOR} radius={[8, 8, 0, 0]} />
         </BarChart>
@@ -1315,9 +1315,9 @@ function FinanceAnalyticsView() {
       return (
         <ResponsiveContainer width="100%" height={height}>
           <AreaChart data={stackTrend.data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-surface-200)" />
-            <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" />
-            <YAxis tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" tickFormatter={formatCompact} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+            <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
+            <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={formatCompact} />
             <Tooltip content={<ChartTooltip />} />
             <Legend />
             {stackTrend.series.map((series) => (
@@ -1331,9 +1331,9 @@ function FinanceAnalyticsView() {
     return (
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={stackTrend.data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-surface-200)" />
-          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" />
-          <YAxis tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" tickFormatter={formatCompact} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
+          <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={formatCompact} />
           <Tooltip content={<ChartTooltip />} />
           <Legend />
           {stackTrend.series.map((series) => (
@@ -1371,10 +1371,10 @@ function FinanceAnalyticsView() {
               <div key={item.accountId} className="flex items-center gap-3">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-surface-900">{item.label}</p>
-                  <p className="text-xs text-surface-400">{item.transactionCount} movimientos</p>
+                  <p className="truncate text-sm font-medium text-foreground">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.transactionCount} movimientos</p>
                 </div>
-                <p className="font-mono text-sm font-semibold text-surface-900">{valueFormatter(item.value)}</p>
+                <p className="font-mono text-sm font-semibold text-foreground">{valueFormatter(item.value)}</p>
               </div>
             ))}
           </div>
@@ -1385,9 +1385,9 @@ function FinanceAnalyticsView() {
     return (
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={accountChartData} layout="vertical" margin={{ left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-surface-200)" />
-          <XAxis type="number" tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" tickFormatter={tickFormatter} />
-          <YAxis type="category" dataKey="shortLabel" width={120} tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+          <XAxis type="number" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
+          <YAxis type="category" dataKey="shortLabel" width={120} tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
           <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
           <Bar dataKey="value" name="Valor" radius={[0, 8, 8, 0]}>
             {accountChartData.map((item, index) => (
@@ -1415,10 +1415,10 @@ function FinanceAnalyticsView() {
     return (
       <ResponsiveContainer width="100%" height={height}>
         <ComposedChart data={efficiencyChartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-surface-200)" />
-          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" />
-          <YAxis yAxisId="left" tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" tickFormatter={tickFormatter} />
-          <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" tickFormatter={secondaryTickFormatter} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
+          <YAxis yAxisId="left" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
+          <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={secondaryTickFormatter} />
           <Tooltip
             content={<ChartTooltip />}
             formatter={(value: number, name: string) => {
@@ -1454,10 +1454,10 @@ function FinanceAnalyticsView() {
     return (
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={chartData} layout="vertical" margin={{ left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-surface-200)" />
-          <ReferenceLine x={0} stroke="var(--color-surface-300)" />
-          <XAxis type="number" tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" tickFormatter={tickFormatter} />
-          <YAxis type="category" dataKey="shortLabel" width={130} tick={{ fontSize: 12 }} stroke="var(--color-surface-400)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+          <ReferenceLine x={0} stroke="var(--color-border)" />
+          <XAxis type="number" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
+          <YAxis type="category" dataKey="shortLabel" width={130} tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
           <Tooltip content={<ChartTooltip valueFormatter={(value) => valueFormatter(Math.abs(value))} />} />
           <Legend />
           <Bar dataKey="incomeDisplay" name="Ingresos" fill={INCOME_COLOR} radius={[0, 8, 8, 0]} />
@@ -1838,46 +1838,46 @@ function FinanceAnalyticsView() {
       <div className="space-y-8 animate-fade-in">
         <div className="card overflow-hidden p-0">
           <div className="h-1.5 bg-gradient-to-r from-sky-500 via-cyan-400 to-emerald-400" />
-          <div className="bg-gradient-to-br from-sky-50 via-white to-amber-50 px-6 py-6 sm:px-8 sm:py-7">
+          <div className="bg-gradient-to-br from-primary-50 via-background to-accent-50 dark:from-primary-500/10 dark:via-background dark:to-accent-500/10 px-6 py-6 sm:px-8 sm:py-7">
             <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
               <div className="max-w-3xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-sky-700 shadow-sm ring-1 ring-sky-100">
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-background/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-primary-700 dark:text-primary-400 shadow-sm ring-1 ring-primary-100 dark:ring-primary-500/20">
                   <BarChart3 className="h-3.5 w-3.5" /> Analítica financiera
                 </div>
-                <h1 className="text-3xl font-bold tracking-tight text-surface-900 sm:text-4xl">Lectura completa, ampliable y mucho más configurable</h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-surface-600 sm:text-base">
+                <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Lectura completa, ampliable y mucho más configurable</h1>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
                   Cada panel puede abrirse en grande, casi todos admiten más variables y el tablero añade comparativas, métricas de eficiencia y matriz temporal para explorar patrones que antes no se veían.
                 </p>
                 <div className="mt-5 flex flex-wrap gap-2">
                   {scopePills.map((pill) => (
-                    <span key={pill} className="badge bg-white text-surface-700 shadow-sm ring-1 ring-surface-200">
+                    <span key={pill} className="badge bg-background text-foreground shadow-sm ring-1 ring-border">
                       {pill}
                     </span>
                   ))}
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2 rounded-2xl bg-white/85 p-4 shadow-sm ring-1 ring-surface-200">
+              <div className="flex flex-col gap-2 rounded-2xl bg-background/85 p-4 shadow-sm ring-1 ring-border">
                 <div className="flex items-center justify-between gap-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-surface-400">Estado</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">Estado</p>
                   {isFetching ? (
-                    <span className="badge bg-amber-50 text-amber-700">Actualizando</span>
+                    <span className="badge bg-accent-50 text-accent-700 dark:bg-accent-500/10 dark:text-accent-400">Actualizando</span>
                   ) : (
-                    <span className="badge bg-emerald-50 text-emerald-700">Sincronizado</span>
+                    <span className="badge bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-500">Sincronizado</span>
                   )}
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="font-mono text-2xl font-bold text-surface-900">{analytics.summary.visibleMonths}</span>
-                  <span className="text-sm text-surface-500">meses visibles</span>
+                  <span className="font-mono text-2xl font-bold text-foreground">{analytics.summary.visibleMonths}</span>
+                  <span className="text-sm text-muted-foreground">meses visibles</span>
                 </div>
-                <p className="text-sm text-surface-500">{analytics.summary.transactionCount} movimientos analizados.</p>
+                <p className="text-sm text-muted-foreground">{analytics.summary.transactionCount} movimientos analizados.</p>
                 <button type="button" onClick={() => refetch()} className="btn-secondary mt-1 text-sm" disabled={isFetching}>
                   <RefreshCcw className="h-4 w-4" /> Actualizar
                 </button>
               </div>
             </div>
 
-            <div className="mt-6 rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm">
+            <div className="mt-6 rounded-2xl border border-border bg-background/80 p-4 shadow-sm">
               <div className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-2">
                   {[
@@ -1893,8 +1893,8 @@ function FinanceAnalyticsView() {
                       onClick={() => applyPreset(preset.value as Exclude<PeriodPreset, "custom">)}
                       className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
                         periodPreset === preset.value
-                          ? "bg-surface-900 text-white"
-                          : "bg-surface-100 text-surface-600 hover:bg-surface-200 hover:text-surface-900"
+                          ? "bg-foreground text-background"
+                          : "bg-muted text-muted-foreground hover:bg-muted hover:text-foreground"
                       }`}
                     >
                       {preset.label}
@@ -1904,7 +1904,7 @@ function FinanceAnalyticsView() {
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
                   <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-500" htmlFor="finance-account-filter">Cuenta</label>
+                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground" htmlFor="finance-account-filter">Cuenta</label>
                     <select
                       id="finance-account-filter"
                       className="input text-sm"
@@ -1919,7 +1919,7 @@ function FinanceAnalyticsView() {
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-500" htmlFor="finance-group-filter">Grupo</label>
+                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground" htmlFor="finance-group-filter">Grupo</label>
                     <select
                       id="finance-group-filter"
                       className="input text-sm"
@@ -1941,7 +1941,7 @@ function FinanceAnalyticsView() {
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-500" htmlFor="finance-category-filter">Categoría</label>
+                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground" htmlFor="finance-category-filter">Categoría</label>
                     <select
                       id="finance-category-filter"
                       className="input text-sm"
@@ -1960,7 +1960,7 @@ function FinanceAnalyticsView() {
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-500" htmlFor="finance-date-from">Desde</label>
+                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground" htmlFor="finance-date-from">Desde</label>
                     <input
                       id="finance-date-from"
                       type="date"
@@ -1974,7 +1974,7 @@ function FinanceAnalyticsView() {
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.22em] text-surface-500" htmlFor="finance-date-to">Hasta</label>
+                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground" htmlFor="finance-date-to">Hasta</label>
                     <input
                       id="finance-date-to"
                       type="date"
@@ -1988,9 +1988,9 @@ function FinanceAnalyticsView() {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2 text-sm text-surface-500 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2">
-                    <Filter className="h-4 w-4 text-surface-400" />
+                    <Filter className="h-4 w-4 text-muted-foreground" />
                     <span>Los filtros globales recalculan todo el tablero y los gráficos ampliados.</span>
                   </div>
                   {hasFiltersApplied ? (
@@ -2055,8 +2055,8 @@ function FinanceAnalyticsView() {
 
         {!hasTransactions ? (
           <div className="card p-8 text-center">
-            <p className="text-lg font-semibold text-surface-900">No hay movimientos conciliados para esta selección</p>
-            <p className="mt-2 text-sm text-surface-500">
+            <p className="text-lg font-semibold text-foreground">No hay movimientos conciliados para esta selección</p>
+            <p className="mt-2 text-sm text-muted-foreground">
               Ajusta el rango, cambia la categoría o revisa los movimientos pendientes si esperabas ver actividad aquí.
             </p>
             {hasFiltersApplied ? (
@@ -2114,16 +2114,16 @@ function FinanceAnalyticsView() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
               <div className="card p-5">
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400">
                     <Target className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-surface-400">Foco</p>
-                    <p className="text-sm font-semibold text-surface-900">Serie dominante</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Foco</p>
+                    <p className="text-sm font-semibold text-foreground">Serie dominante</p>
                   </div>
                 </div>
-                <p className="text-xl font-bold text-surface-900">{distributionData[0]?.label ?? "—"}</p>
-                <p className="mt-1 text-sm text-surface-500">
+                <p className="text-xl font-bold text-foreground">{distributionData[0]?.label ?? "—"}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
                   {distributionData[0]
                     ? `${getValueFormatter(distributionValueMode)(distributionData[0].value)} · ${formatPercent(distributionData[0].share)}`
                     : "Sin serie dominante"}
@@ -2132,46 +2132,46 @@ function FinanceAnalyticsView() {
 
               <div className="card p-5">
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-500">
                     <Activity className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-surface-400">Cadencia</p>
-                    <p className="text-sm font-semibold text-surface-900">Día dominante</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cadencia</p>
+                    <p className="text-sm font-semibold text-foreground">Día dominante</p>
                   </div>
                 </div>
-                <p className="text-xl font-bold text-surface-900">{topWeekday?.label ?? "—"}</p>
-                <p className="mt-1 text-sm text-surface-500">
+                <p className="text-xl font-bold text-foreground">{topWeekday?.label ?? "—"}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
                   {topWeekday ? getValueFormatter(weekdayValueMode)(Math.abs(topWeekday.value)) : "Sin patrón semanal"}
                 </p>
               </div>
 
               <div className="card p-5">
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-50 text-accent-600 dark:bg-accent-500/10 dark:text-accent-400">
                     <Layers3 className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-surface-400">Mix</p>
-                    <p className="text-sm font-semibold text-surface-900">Series activas</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Mix</p>
+                    <p className="text-sm font-semibold text-foreground">Series activas</p>
                   </div>
                 </div>
-                <p className="text-xl font-bold text-surface-900">{stackTrend.series.length}</p>
-                <p className="mt-1 text-sm text-surface-500">{stackGrouping === "category" ? "Categorías" : "Grupos"} visibles en el apilado.</p>
+                <p className="text-xl font-bold text-foreground">{stackTrend.series.length}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{stackGrouping === "category" ? "Categorías" : "Grupos"} visibles en el apilado.</p>
               </div>
 
               <div className="card p-5">
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-foreground">
                     <Landmark className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-surface-400">Cuenta líder</p>
-                    <p className="text-sm font-semibold text-surface-900">Mayor peso</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cuenta líder</p>
+                    <p className="text-sm font-semibold text-foreground">Mayor peso</p>
                   </div>
                 </div>
-                <p className="text-xl font-bold text-surface-900">{accountChartData[0]?.label ?? "—"}</p>
-                <p className="mt-1 text-sm text-surface-500">
+                <p className="text-xl font-bold text-foreground">{accountChartData[0]?.label ?? "—"}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
                   {accountChartData[0] ? getValueFormatter(accountValueMode)(accountChartData[0].value) : "Sin datos de cuenta"}
                 </p>
               </div>

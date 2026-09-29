@@ -1,3 +1,6 @@
+import { Button } from "@/components/ui/button";
+import { cn } from "cn";
+
 interface Profile {
   id: number;
   name: string;
@@ -32,22 +35,21 @@ export function ProfileSelector({ profiles, value, onChange, multi = false }: Pr
       {profiles.map((p) => {
         const isSelected = selected.includes(p.id);
         return (
-          <button
+          <Button
             key={p.id}
+            type="button"
+            variant={isSelected ? "secondary" : "ghost"}
+            size="sm"
             onClick={() => handleClick(p.id)}
             aria-pressed={isSelected}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer ${
-              isSelected
-                ? "bg-white shadow-card border border-surface-200 text-surface-900"
-                : "text-surface-400 hover:text-surface-600 hover:bg-surface-100"
-            }`}
+            className={cn("gap-1.5", isSelected ? "shadow-sm" : "text-muted-foreground")}
           >
             <div
-              className={`w-2.5 h-2.5 rounded-full transition-opacity ${isSelected ? "opacity-100" : "opacity-40"}`}
+              className={cn("w-2.5 h-2.5 rounded-full transition-opacity", isSelected ? "opacity-100" : "opacity-40")}
               style={{ backgroundColor: p.color }}
             />
             {p.name}
-          </button>
+          </Button>
         );
       })}
     </div>

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, Edit3, RefreshCw, Trash2, FileText, Plus, X, Save,
-  ChevronDown, Building2, Calendar, ArrowRight, Search, Download,
+  Building2, Calendar, ArrowRight, Search, Download,
   ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
 import {
@@ -20,13 +20,30 @@ import {
 } from "../lib/api";
 import { Providers } from "./Providers";
 import { formatCurrency } from "../lib/format";
+import { Card } from "@/components/ui/card";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { ConfirmModal } from "./ui/ConfirmModal";
+import { cn } from "cn";
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
-  pending: { label: "Procesando", cls: "bg-accent-50 text-accent-700" },
-  parsed: { label: "Procesada", cls: "bg-success-50 text-success-700" },
-  error: { label: "Error", cls: "bg-danger-50 text-danger-700" },
-  review: { label: "Revisar", cls: "bg-accent-50 text-accent-700" },
+  pending: { label: "Procesando", cls: "bg-accent-50 text-accent-700 dark:bg-accent-500/10 dark:text-accent-400" },
+  parsed: { label: "Procesada", cls: "bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-500" },
+  error: { label: "Error", cls: "bg-danger-50 text-danger-700 dark:bg-danger-500/10 dark:text-danger-400" },
+  review: { label: "Revisar", cls: "bg-accent-50 text-accent-700 dark:bg-accent-500/10 dark:text-accent-400" },
 };
+
+const MONTH_NAMES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+const TYPE_FILTER_LABELS: Record<string, string> = { ordinal: "Mensual", extra: "Paga Extra" };
 
 function formatPeriod(m: number | null, y: number | null): string {
   if (!m || !y) return "Sin fecha";
@@ -53,6 +70,8 @@ function SortIndicator({ active, direction }: SortIndicatorProps) {
     : <ArrowDown className="w-3.5 h-3.5" />;
 }
 
+const ALL = "__all__";
+
 function PayslipsList() {
   const queryClient = useQueryClient();
   const { data: profiles = [] } = useQuery({
@@ -70,6 +89,7 @@ function PayslipsList() {
   const [sortField, setSortField] = useState<PayslipSortField>("period");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
+  const [deleteTarget, setDeleteTarget] = useState<(Payslip & { concepts: PayslipConcept[] }) | null>(null);
 
   const profileId = selectedProfile ?? profiles[0]?.id;
 
@@ -150,9 +170,7 @@ function PayslipsList() {
       <PayslipDetail
         payslip={detail}
         onBack={() => setSelectedPayslip(null)}
-        onDelete={() => {
-          if (confirm("¿Eliminar esta nómina?")) deleteMut.mutate(detail.id);
-        }}
+        onDelete={() => setDeleteTarget(detail)}
         onReprocess={() => reprocessMut.mutate(detail.id)}
         isReprocessing={reprocessMut.isPending}
       />
@@ -162,323 +180,330 @@ function PayslipsList() {
   return (
     <div className="animate-fade-in space-y-6">
       {/* Hero */}
-      <div className="card p-0 overflow-hidden">
+      <Card className="p-0 overflow-hidden">
         <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
         <div className="px-6 py-5 sm:px-8 sm:py-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <p className="text-surface-400 text-xs uppercase tracking-wider mb-0.5">Mis Nóminas</p>
-              <p className="text-2xl font-bold text-surface-900">
+              <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Mis Nóminas</p>
+              <p className="text-2xl font-bold text-foreground">
                 {filteredPayslips.length} nómina{filteredPayslips.length !== 1 ? "s" : ""}
               </p>
             </div>
             <div className="flex flex-wrap gap-2.5">
-              <div className="flex items-center gap-1.5 bg-accent-50 rounded-lg px-3 py-1.5">
-                <FileText className="w-3.5 h-3.5 text-accent-600" aria-hidden="true" />
-                <span className="text-xs font-bold text-accent-800 font-mono">{totalPayslips}</span>
-                <span className="text-xs font-medium text-accent-700">total</span>
-              </div>
+              <Badge variant="secondary" className="bg-accent-50 text-accent-800 dark:bg-accent-500/10 dark:text-accent-300 gap-1.5">
+                <FileText className="w-3.5 h-3.5" aria-hidden="true" />
+                <span className="font-mono">{totalPayslips}</span>
+                total
+              </Badge>
             </div>
           </div>
           <div className="flex gap-2 mt-4">
             {profileId && (
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => exportData(profileId, yearFilter ? Number(yearFilter) : undefined, "csv")}
-                className="flex items-center gap-1.5 bg-surface-100 hover:bg-surface-200 rounded-lg px-3 py-1.5 text-xs font-medium text-surface-700 transition-colors"
+                className="gap-1.5"
                 aria-label="Exportar CSV"
               >
                 <Download className="w-3.5 h-3.5" aria-hidden="true" />
                 CSV
-              </button>
+              </Button>
             )}
-            <a href="/app/upload" className="flex items-center gap-1.5 bg-accent-50 hover:bg-accent-100 rounded-lg px-3 py-1.5 text-xs font-medium text-accent-700 transition-colors">
+            <a href="/app/upload" className="inline-flex items-center gap-1.5 bg-accent-50 hover:bg-accent-100 dark:bg-accent-500/10 dark:hover:bg-accent-500/20 rounded-lg px-3 py-1.5 text-xs font-medium text-accent-700 dark:text-accent-400 transition-colors">
               <Plus className="w-3.5 h-3.5" aria-hidden="true" />
               Subir nóminas
             </a>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
-        <div className="flex gap-1.5" role="group" aria-label="Filtrar por perfil">
+        <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filtrar por perfil">
           {profiles.map((p) => (
-            <button
+            <Button
               key={p.id}
+              type="button"
+              variant={profileId === p.id ? "secondary" : "ghost"}
+              size="sm"
               onClick={() => { setSelectedProfile(p.id); setSelectedPayslip(null); setPage(1); }}
               aria-pressed={profileId === p.id}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer ${
-                profileId === p.id
-                  ? "bg-white shadow-card border border-surface-200 text-surface-900"
-                  : "text-surface-400 hover:text-surface-600 hover:bg-surface-100"
-              }`}
+              className={cn("gap-1.5", profileId === p.id ? "shadow-sm" : "text-muted-foreground")}
             >
               <div
-                className={`w-2.5 h-2.5 rounded-full transition-opacity ${profileId === p.id ? "opacity-100" : "opacity-40"}`}
+                className={cn("w-2.5 h-2.5 rounded-full transition-opacity", profileId === p.id ? "opacity-100" : "opacity-40")}
                 style={{ backgroundColor: p.color }}
               />
               {p.name}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
 
       {/* Extended Filters Bar */}
-      <div className="card p-3 mb-6 flex flex-wrap gap-3 items-center">
+      <Card className="p-3 mb-6 flex-row flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400" />
-          <input
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Input
             type="text"
             placeholder="Buscar por archivo o empresa..."
             value={searchFilter}
             onChange={(e) => { setSearchFilter(e.target.value); setPage(1); }}
-            className="input text-xs pl-9 py-2"
+            className="pl-9"
           />
         </div>
 
         {years.length > 0 && (
-          <div className="relative">
-            <select
-              value={yearFilter}
-              onChange={(e) => { setYearFilter(e.target.value); setPage(1); }}
-              className="input text-xs pr-8 py-2 appearance-none cursor-pointer w-auto"
-            >
-              <option value="">Año</option>
+          <Select value={yearFilter || ALL} onValueChange={(v) => { setYearFilter(v === ALL || v === null ? "" : v); setPage(1); }}>
+            <SelectTrigger className="w-auto" size="sm">
+              <SelectValue placeholder="Año">{(v: string) => (v === ALL ? "Año" : v)}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Año</SelectItem>
               {years.map((y) => (
-                <option key={y} value={y ?? ""}>{y}</option>
+                <SelectItem key={y} value={String(y ?? "")}>{y}</SelectItem>
               ))}
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400 pointer-events-none" />
-          </div>
+            </SelectContent>
+          </Select>
         )}
 
-        <div className="relative">
-          <select
-            value={monthFilter}
-            onChange={(e) => setMonthFilter(e.target.value)}
-            className="input text-xs pr-8 py-2 appearance-none cursor-pointer w-auto"
-          >
-            <option value="">Mes</option>
-            {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"].map((m, i) => (
-              <option key={i} value={i + 1}>{m}</option>
+        <Select value={monthFilter || ALL} onValueChange={(v) => setMonthFilter(v === ALL || v === null ? "" : v)}>
+          <SelectTrigger className="w-auto" size="sm">
+            <SelectValue placeholder="Mes">{(v: string) => (v === ALL ? "Mes" : MONTH_NAMES[Number(v) - 1])}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Mes</SelectItem>
+            {MONTH_NAMES.map((m, i) => (
+              <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
             ))}
-          </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400 pointer-events-none" />
-        </div>
+          </SelectContent>
+        </Select>
 
-        <div className="relative">
-          <select
-            value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-            className="input text-xs pr-8 py-2 appearance-none cursor-pointer w-auto"
-          >
-            <option value="">Estado</option>
-            <option value="parsed">Procesada</option>
-            <option value="pending">Procesando</option>
-            <option value="review">Revisar</option>
-            <option value="error">Error</option>
-          </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400 pointer-events-none" />
-        </div>
+        <Select value={statusFilter || ALL} onValueChange={(v) => { setStatusFilter(v === ALL || v === null ? "" : v); setPage(1); }}>
+          <SelectTrigger className="w-auto" size="sm">
+            <SelectValue placeholder="Estado">{(v: string) => (STATUS_MAP[v]?.label ?? "Estado")}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Estado</SelectItem>
+            <SelectItem value="parsed">Procesada</SelectItem>
+            <SelectItem value="pending">Procesando</SelectItem>
+            <SelectItem value="review">Revisar</SelectItem>
+            <SelectItem value="error">Error</SelectItem>
+          </SelectContent>
+        </Select>
 
-        <div className="relative">
-          <select
-            value={typeFilter}
-            onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
-            className="input text-xs pr-8 py-2 appearance-none cursor-pointer w-auto"
-          >
-            <option value="">Tipo</option>
-            <option value="ordinal">Mensual</option>
-            <option value="extra">Paga Extra</option>
-          </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400 pointer-events-none" />
-        </div>
+        <Select value={typeFilter || ALL} onValueChange={(v) => { setTypeFilter(v === ALL || v === null ? "" : v); setPage(1); }}>
+          <SelectTrigger className="w-auto" size="sm">
+            <SelectValue placeholder="Tipo">{(v: string) => (TYPE_FILTER_LABELS[v] ?? "Tipo")}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Tipo</SelectItem>
+            <SelectItem value="ordinal">Mensual</SelectItem>
+            <SelectItem value="extra">Paga Extra</SelectItem>
+          </SelectContent>
+        </Select>
 
         {(searchFilter || yearFilter || monthFilter || statusFilter || typeFilter) && (
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => { setSearchFilter(""); setYearFilter(""); setMonthFilter(""); setStatusFilter(""); setTypeFilter(""); setPage(1); }}
-            className="btn-ghost text-xs py-2 px-3 text-danger-600 hover:bg-danger-50"
+            className="gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
           >
             <X className="w-3 h-3" /> Limpiar
-          </button>
+          </Button>
         )}
-      </div>
+      </Card>
 
       {/* Summary bar */}
       {filteredPayslips.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          <div className="card p-3 text-center">
-            <p className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Bruto Medio</p>
-            <p className="text-sm font-bold font-mono text-surface-900 mt-0.5">
+          <Card className="p-3 text-center">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Bruto Medio</p>
+            <p className="text-sm font-bold font-mono text-foreground mt-0.5">
               {formatCurrency(filteredPayslips.reduce((s, p) => s + (p.grossSalary ?? 0), 0) / filteredPayslips.length)}
             </p>
-          </div>
-          <div className="card p-3 text-center">
-            <p className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Neto Medio</p>
-            <p className="text-sm font-bold font-mono text-success-700 mt-0.5">
+          </Card>
+          <Card className="p-3 text-center">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Neto Medio</p>
+            <p className="text-sm font-bold font-mono text-success-700 dark:text-success-500 mt-0.5">
               {formatCurrency(filteredPayslips.reduce((s, p) => s + (p.netSalary ?? 0), 0) / filteredPayslips.length)}
             </p>
-          </div>
-          <div className="card p-3 text-center">
-            <p className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Total Bruto</p>
-            <p className="text-sm font-bold font-mono text-surface-900 mt-0.5">
+          </Card>
+          <Card className="p-3 text-center">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total Bruto</p>
+            <p className="text-sm font-bold font-mono text-foreground mt-0.5">
               {formatCurrency(filteredPayslips.reduce((s, p) => s + (p.grossSalary ?? 0), 0))}
             </p>
-          </div>
-          <div className="card p-3 text-center">
-            <p className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Total Neto</p>
-            <p className="text-sm font-bold font-mono text-success-700 mt-0.5">
+          </Card>
+          <Card className="p-3 text-center">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total Neto</p>
+            <p className="text-sm font-bold font-mono text-success-700 dark:text-success-500 mt-0.5">
               {formatCurrency(filteredPayslips.reduce((s, p) => s + (p.netSalary ?? 0), 0))}
             </p>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* Table */}
       {isLoading ? (
-        <div className="card p-6 space-y-3">
+        <Card className="p-6 space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="flex gap-4">
-              <div className="skeleton h-4 w-20" />
-              <div className="skeleton h-4 flex-1" />
-              <div className="skeleton h-4 w-24" />
-              <div className="skeleton h-4 w-24" />
-              <div className="skeleton h-4 w-16" />
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-4 flex-1" />
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-16" />
             </div>
           ))}
-        </div>
+        </Card>
       ) : filteredPayslips.length === 0 ? (
-        <div className="card text-center py-16">
-          <div className="w-16 h-16 rounded-2xl bg-surface-100 flex items-center justify-center mx-auto mb-4">
-            <Search className="w-8 h-8 text-surface-300" />
+        <Card className="text-center py-16">
+          <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+            <Search className="w-8 h-8 text-muted-foreground" />
           </div>
-          <h3 className="font-semibold text-surface-900 text-sm mb-1">No hay nóminas</h3>
-          <p className="text-surface-500 text-xs mb-5">Sube nóminas para este perfil.</p>
-          <a href="/app/upload" className="btn-primary text-sm">
+          <h3 className="font-semibold text-foreground text-sm mb-1">No hay nóminas</h3>
+          <p className="text-muted-foreground text-xs mb-5">Sube nóminas para este perfil.</p>
+          <a href="/app/upload" className={cn(buttonVariants(), "gap-1.5")}>
             Subir nóminas <ArrowRight className="w-3.5 h-3.5" />
           </a>
-        </div>
+        </Card>
       ) : (
-        <div className="card overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-surface-100 bg-surface-50/50">
-                <th scope="col" aria-sort={sortField === "period" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="text-left px-5 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+        <Card className="p-0 overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50 hover:bg-muted/50">
+                <TableHead aria-sort={sortField === "period" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
                   <button
                     type="button"
                     onClick={() => handleSort("period")}
-                    className="inline-flex items-center gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                    className="inline-flex items-center gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground"
                   >
                     <span>Período</span>
                     <SortIndicator active={sortField === "period"} direction={sortDir} />
                   </button>
-                </th>
-                <th scope="col" aria-sort={sortField === "fileName" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="text-left px-4 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                </TableHead>
+                <TableHead aria-sort={sortField === "fileName" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
                   <button
                     type="button"
                     onClick={() => handleSort("fileName")}
-                    className="inline-flex items-center gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                    className="inline-flex items-center gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground"
                   >
                     <span>Archivo</span>
                     <SortIndicator active={sortField === "fileName"} direction={sortDir} />
                   </button>
-                </th>
-                <th scope="col" aria-sort={sortField === "grossSalary" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="text-right px-4 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                </TableHead>
+                <TableHead className="text-right" aria-sort={sortField === "grossSalary" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
                   <button
                     type="button"
                     onClick={() => handleSort("grossSalary")}
-                    className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                    className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground"
                   >
                     <span>Bruto</span>
                     <SortIndicator active={sortField === "grossSalary"} direction={sortDir} />
                   </button>
-                </th>
-                <th scope="col" aria-sort={sortField === "netSalary" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="text-right px-4 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                </TableHead>
+                <TableHead className="text-right" aria-sort={sortField === "netSalary" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
                   <button
                     type="button"
                     onClick={() => handleSort("netSalary")}
-                    className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                    className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground"
                   >
                     <span>Neto</span>
                     <SortIndicator active={sortField === "netSalary"} direction={sortDir} />
                   </button>
-                </th>
-                <th scope="col" aria-sort={sortField === "parsingStatus" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="text-center px-5 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                </TableHead>
+                <TableHead className="text-center" aria-sort={sortField === "parsingStatus" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
                   <button
                     type="button"
                     onClick={() => handleSort("parsingStatus")}
-                    className="inline-flex items-center justify-center gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                    className="inline-flex items-center justify-center gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground"
                   >
                     <span>Estado</span>
                     <SortIndicator active={sortField === "parsingStatus"} direction={sortDir} />
                   </button>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filteredPayslips.map((p) => {
                 const status = STATUS_MAP[p.parsingStatus] ?? STATUS_MAP.error;
                 return (
-                  <tr
+                  <TableRow
                     key={p.id}
                     onClick={() => setSelectedPayslip(p.id)}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedPayslip(p.id); } }}
                     role="button"
                     tabIndex={0}
-                    className="border-b border-surface-50 hover:bg-surface-50/80 cursor-pointer transition-colors group focus-visible:outline-2 focus-visible:outline-accent-500"
+                    className="cursor-pointer group focus-visible:outline-2 focus-visible:outline-accent-500"
                   >
-                    <td className="px-5 py-3.5">
-                      <span className="text-sm font-semibold text-surface-900">{formatPeriod(p.periodMonth, p.periodYear)}</span>
+                    <TableCell className="py-3.5">
+                      <span className="text-sm font-semibold text-foreground">{formatPeriod(p.periodMonth, p.periodYear)}</span>
                       {p.payslipType === "extra" && (
-                        <span className="ml-2 badge bg-accent-50 text-accent-700 text-[10px]">Extra</span>
+                        <Badge variant="secondary" className="ml-2 bg-accent-50 text-accent-700 dark:bg-accent-500/10 dark:text-accent-400 text-[10px]">Extra</Badge>
                       )}
-                    </td>
-                    <td className="px-4 py-3.5">
+                    </TableCell>
+                    <TableCell className="py-3.5">
                       <div className="flex items-center gap-2">
-                        <FileText className="w-3.5 h-3.5 text-surface-400" aria-hidden="true" />
-                        <span className="text-sm text-surface-600 group-hover:text-surface-900 transition-colors truncate max-w-[200px]">{p.fileName}</span>
+                        <FileText className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
+                        <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors truncate max-w-[200px]">{p.fileName}</span>
                       </div>
-                    </td>
-                    <td className="px-4 py-3.5 text-sm text-right font-mono tabular-nums text-surface-700">{formatCurrency(p.grossSalary)}</td>
-                    <td className="px-4 py-3.5 text-sm text-right font-mono tabular-nums font-semibold text-success-700">{formatCurrency(p.netSalary)}</td>
-                    <td className="px-5 py-3.5 text-center">
-                      <span className={`badge ${status.cls}`}>{status.label}</span>
-                    </td>
-                  </tr>
+                    </TableCell>
+                    <TableCell className="py-3.5 text-right font-mono tabular-nums text-foreground">{formatCurrency(p.grossSalary)}</TableCell>
+                    <TableCell className="py-3.5 text-right font-mono tabular-nums font-semibold text-success-700 dark:text-success-500">{formatCurrency(p.netSalary)}</TableCell>
+                    <TableCell className="py-3.5 text-center">
+                      <Badge variant="secondary" className={status.cls}>{status.label}</Badge>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
 
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4 text-sm">
-          <p className="text-surface-500 text-xs">
+          <p className="text-muted-foreground text-xs">
             {totalPayslips} nómina{totalPayslips !== 1 ? "s" : ""} en total
           </p>
           <div className="flex items-center gap-1.5">
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="btn-ghost text-xs px-2 py-1 disabled:opacity-30"
             >
               Anterior
-            </button>
-            <span className="text-xs text-surface-600 px-2">
+            </Button>
+            <span className="text-xs text-muted-foreground px-2">
               {page} / {totalPages}
             </span>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="btn-ghost text-xs px-2 py-1 disabled:opacity-30"
             >
               Siguiente
-            </button>
+            </Button>
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={!!deleteTarget}
+        title="Eliminar nómina"
+        message={`¿Eliminar la nómina "${deleteTarget?.fileName ?? ""}"? Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        variant="danger"
+        onConfirm={() => { if (deleteTarget) deleteMut.mutate(deleteTarget.id); setDeleteTarget(null); }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
@@ -556,24 +581,21 @@ function PayslipDetail({
 
   return (
     <div className="animate-fade-in">
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1.5 text-xs font-medium text-surface-500 hover:text-surface-900 mb-5 transition-colors cursor-pointer"
-      >
+      <Button variant="ghost" size="sm" onClick={onBack} className="gap-1.5 text-muted-foreground mb-5">
         <ArrowLeft className="w-3.5 h-3.5" />
         Volver al listado
-      </button>
+      </Button>
 
       {/* Header */}
-      <div className="card p-5 mb-6">
+      <Card className="p-5 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-primary-50 ring-1 ring-primary-100 flex items-center justify-center flex-shrink-0">
-              <FileText className="w-6 h-6 text-primary-600" />
+            <div className="w-12 h-12 rounded-xl bg-primary-50 dark:bg-primary-500/10 ring-1 ring-primary-100 dark:ring-primary-500/20 flex items-center justify-center flex-shrink-0">
+              <FileText className="w-6 h-6 text-primary-600 dark:text-primary-400" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-surface-900">{payslip.fileName}</h2>
-              <div className="flex items-center gap-3 mt-1.5 text-xs text-surface-500">
+              <h2 className="text-base font-bold text-foreground">{payslip.fileName}</h2>
+              <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                 {payslip.company && (
                   <span className="flex items-center gap-1">
                     <Building2 className="w-3 h-3" /> {payslip.company}
@@ -588,73 +610,74 @@ function PayslipDetail({
                 <button
                   onClick={() => typeMut.mutate(payslip.payslipType === "extra" ? "ordinal" : "extra")}
                   disabled={typeMut.isPending}
-                  className={`badge text-[10px] cursor-pointer transition-colors ${payslip.payslipType === "extra" ? "bg-accent-50 text-accent-700 hover:bg-accent-100" : "bg-surface-100 text-surface-500 hover:bg-surface-200"}`}
                   title="Haz clic para cambiar el tipo"
                 >
-                  {payslip.payslipType === "extra" ? "Paga Extra" : "Mensual"}
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "text-[10px] cursor-pointer transition-colors",
+                      payslip.payslipType === "extra"
+                        ? "bg-accent-50 text-accent-700 hover:bg-accent-100 dark:bg-accent-500/10 dark:text-accent-400"
+                        : ""
+                    )}
+                  >
+                    {payslip.payslipType === "extra" ? "Paga Extra" : "Mensual"}
+                  </Badge>
                 </button>
               </div>
             </div>
           </div>
           <div className="flex gap-2">
             {!editing && (
-              <button onClick={() => setEditing(true)} className="btn-ghost text-xs cursor-pointer">
+              <Button variant="ghost" size="sm" onClick={() => setEditing(true)} className="gap-1.5">
                 <Edit3 className="w-3.5 h-3.5" /> Editar
-              </button>
+              </Button>
             )}
-            <button
-              onClick={onReprocess}
-              disabled={isReprocessing}
-              className="btn-ghost text-xs cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isReprocessing ? "animate-spin" : ""}`} />
+            <Button variant="ghost" size="sm" onClick={onReprocess} disabled={isReprocessing} className="gap-1.5">
+              <RefreshCw className={cn("w-3.5 h-3.5", isReprocessing && "animate-spin")} />
               {isReprocessing ? "…" : "Reprocesar"}
-            </button>
-            <button onClick={onDelete} className="btn-ghost text-xs text-danger-600 hover:bg-danger-50 cursor-pointer">
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onDelete} className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive">
               <Trash2 className="w-3.5 h-3.5" /> Eliminar
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Metadata (editable) */}
       {editing && (
-        <div className="card p-5 mb-6 grid grid-cols-2 sm:grid-cols-4 gap-4 animate-slide-up">
-          <div>
-            <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Mes</label>
-            <input type="number" min={1} max={12}
-              value={periodMonth} onChange={(e) => setPeriodMonth(Number(e.target.value))}
-              className="input text-sm" />
+        <Card className="p-5 mb-6 grid grid-cols-2 sm:grid-cols-4 gap-4 animate-slide-up">
+          <div className="space-y-1.5">
+            <Label>Mes</Label>
+            <Input type="number" min={1} max={12}
+              value={periodMonth} onChange={(e) => setPeriodMonth(Number(e.target.value))} />
           </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Año</label>
-            <input type="number" min={1990} max={2100}
-              value={periodYear} onChange={(e) => setPeriodYear(Number(e.target.value))}
-              className="input text-sm" />
+          <div className="space-y-1.5">
+            <Label>Año</Label>
+            <Input type="number" min={1990} max={2100}
+              value={periodYear} onChange={(e) => setPeriodYear(Number(e.target.value))} />
           </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Bruto</label>
-            <input type="number" step="0.01"
-              value={grossSalary} onChange={(e) => setGrossSalary(Number(e.target.value))}
-              className="input text-sm" />
+          <div className="space-y-1.5">
+            <Label>Bruto</Label>
+            <Input type="number" step="0.01"
+              value={grossSalary} onChange={(e) => setGrossSalary(Number(e.target.value))} />
           </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Neto</label>
-            <input type="number" step="0.01"
-              value={netSalary} onChange={(e) => setNetSalary(Number(e.target.value))}
-              className="input text-sm" />
+          <div className="space-y-1.5">
+            <Label>Neto</Label>
+            <Input type="number" step="0.01"
+              value={netSalary} onChange={(e) => setNetSalary(Number(e.target.value))} />
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Concepts grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Devengos */}
-        <div className="card p-5">
+        <Card className="p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-2.5 h-2.5 rounded-full bg-success-500" />
-            <h3 className="font-semibold text-surface-900 text-sm">Devengos</h3>
-            <span className="text-[11px] text-surface-400 ml-auto">{devengos.length}</span>
+            <h3 className="font-semibold text-foreground text-sm">Devengos</h3>
+            <span className="text-[11px] text-muted-foreground ml-auto">{devengos.length}</span>
           </div>
           <div className="space-y-2">
             {devengos.map((c, i) => {
@@ -663,41 +686,39 @@ function PayslipDetail({
                 <div key={i} className="flex items-center gap-2">
                   {editing ? (
                     <>
-                      <input value={c.name} onChange={(e) => updateConcept(realIndex, "name", e.target.value)}
-                        className="input text-xs flex-1" placeholder="Concepto" />
-                      <input type="number" step="0.01" value={c.amount}
+                      <Input value={c.name} onChange={(e) => updateConcept(realIndex, "name", e.target.value)}
+                        className="flex-1" placeholder="Concepto" />
+                      <Input type="number" step="0.01" value={c.amount}
                         onChange={(e) => updateConcept(realIndex, "amount", Number(e.target.value))}
-                        className="input text-xs w-24 text-right font-mono" />
-                      <button onClick={() => removeConcept(realIndex)}
-                        className="w-6 h-6 rounded hover:bg-danger-50 flex items-center justify-center text-surface-400 hover:text-danger-500 transition-colors cursor-pointer">
+                        className="w-24 text-right font-mono" />
+                      <Button variant="ghost" size="icon-sm" onClick={() => removeConcept(realIndex)} className="hover:bg-destructive/10 hover:text-destructive">
                         <X className="w-3 h-3" />
-                      </button>
+                      </Button>
                     </>
                   ) : (
                     <>
-                      <span className="text-xs text-surface-600 flex-1">{c.name}</span>
-                      <span className="text-xs font-mono font-semibold text-surface-900">{formatCurrency(c.amount)}</span>
+                      <span className="text-xs text-muted-foreground flex-1">{c.name}</span>
+                      <span className="text-xs font-mono font-semibold text-foreground">{formatCurrency(c.amount)}</span>
                     </>
                   )}
                 </div>
               );
             })}
-            {devengos.length === 0 && <p className="text-xs text-surface-400">Sin devengos detectados</p>}
+            {devengos.length === 0 && <p className="text-xs text-muted-foreground">Sin devengos detectados</p>}
             {editing && (
-              <button onClick={() => addConcept("devengo")}
-                className="flex items-center gap-1 text-xs text-primary-600 font-medium hover:text-primary-700 transition-colors cursor-pointer mt-1">
+              <Button variant="link" size="sm" onClick={() => addConcept("devengo")} className="gap-1 px-0 h-auto text-primary-600 dark:text-primary-400 mt-1">
                 <Plus className="w-3 h-3" /> Añadir devengo
-              </button>
+              </Button>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Deducciones */}
-        <div className="card p-5">
+        <Card className="p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-2.5 h-2.5 rounded-full bg-danger-500" />
-            <h3 className="font-semibold text-surface-900 text-sm">Deducciones</h3>
-            <span className="text-[11px] text-surface-400 ml-auto">{deducciones.length}</span>
+            <h3 className="font-semibold text-foreground text-sm">Deducciones</h3>
+            <span className="text-[11px] text-muted-foreground ml-auto">{deducciones.length}</span>
           </div>
           <div className="space-y-2">
             {deducciones.map((c, i) => {
@@ -706,64 +727,62 @@ function PayslipDetail({
                 <div key={i} className="flex items-center gap-2">
                   {editing ? (
                     <>
-                      <input value={c.name} onChange={(e) => updateConcept(realIndex, "name", e.target.value)}
-                        className="input text-xs flex-1" placeholder="Concepto" />
-                      <input type="number" step="0.01" value={c.amount}
+                      <Input value={c.name} onChange={(e) => updateConcept(realIndex, "name", e.target.value)}
+                        className="flex-1" placeholder="Concepto" />
+                      <Input type="number" step="0.01" value={c.amount}
                         onChange={(e) => updateConcept(realIndex, "amount", Number(e.target.value))}
-                        className="input text-xs w-24 text-right font-mono" />
-                      <button onClick={() => removeConcept(realIndex)}
-                        className="w-6 h-6 rounded hover:bg-danger-50 flex items-center justify-center text-surface-400 hover:text-danger-500 transition-colors cursor-pointer">
+                        className="w-24 text-right font-mono" />
+                      <Button variant="ghost" size="icon-sm" onClick={() => removeConcept(realIndex)} className="hover:bg-destructive/10 hover:text-destructive">
                         <X className="w-3 h-3" />
-                      </button>
+                      </Button>
                     </>
                   ) : (
                     <>
-                      <span className="text-xs text-surface-600 flex-1">{c.name}</span>
+                      <span className="text-xs text-muted-foreground flex-1">{c.name}</span>
                       <span className="text-xs font-mono font-semibold text-danger-600">{formatCurrency(c.amount)}</span>
                     </>
                   )}
                 </div>
               );
             })}
-            {deducciones.length === 0 && <p className="text-xs text-surface-400">Sin deducciones detectadas</p>}
+            {deducciones.length === 0 && <p className="text-xs text-muted-foreground">Sin deducciones detectadas</p>}
             {editing && (
-              <button onClick={() => addConcept("deduccion")}
-                className="flex items-center gap-1 text-xs text-primary-600 font-medium hover:text-primary-700 transition-colors cursor-pointer mt-1">
+              <Button variant="link" size="sm" onClick={() => addConcept("deduccion")} className="gap-1 px-0 h-auto text-primary-600 dark:text-primary-400 mt-1">
                 <Plus className="w-3 h-3" /> Añadir deducción
-              </button>
+              </Button>
             )}
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Totals */}
       {!editing && (
-        <div className="card mt-6 p-5 flex items-center justify-between">
+        <Card className="mt-6 p-5 flex-row items-center justify-between">
           <div>
-            <p className="text-[11px] font-semibold text-surface-500 uppercase tracking-wider">Total Bruto</p>
-            <p className="text-lg font-bold text-surface-900 font-mono">{formatCurrency(payslip.grossSalary)}</p>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Bruto</p>
+            <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(payslip.grossSalary)}</p>
           </div>
-          <div className="w-px h-10 bg-surface-100" />
+          <div className="w-px h-10 bg-muted" />
           <div className="text-right">
-            <p className="text-[11px] font-semibold text-surface-500 uppercase tracking-wider">Líquido a Percibir</p>
-            <p className="text-lg font-bold text-success-700 font-mono">{formatCurrency(payslip.netSalary)}</p>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Líquido a Percibir</p>
+            <p className="text-lg font-bold text-success-700 dark:text-success-500 font-mono">{formatCurrency(payslip.netSalary)}</p>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Actions */}
       {editing && (
         <div className="mt-6 flex gap-3 animate-slide-up">
-          <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} className="btn-primary text-sm">
+          <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} className="gap-2">
             <Save className="w-4 h-4" />
             {saveMut.isPending ? "Guardando..." : "Guardar cambios"}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="secondary"
             onClick={() => { setEditing(false); setConcepts(payslip.concepts); }}
-            className="btn-secondary text-sm"
           >
             Cancelar
-          </button>
+          </Button>
         </div>
       )}
     </div>
