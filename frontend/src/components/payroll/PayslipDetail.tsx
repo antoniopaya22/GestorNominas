@@ -1,0 +1,564 @@
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ArrowLeft, Building2, ChevronDown, FileText, Gift, Loader2, MoreHorizontal, NotebookPen, Pencil,
+  Plus, RefreshCw, Save, Tag as TagIcon, Trash2, X,
+} from "lucide-react";
+import { toast } from "sonner";
+import {
+  assignTag, createNote, createTag, deleteNote, getNotes, getPayslipTags, getTags, removeTag,
+  updatePayslipConcepts, updatePayslipType, type Payslip, type PayslipConcept,
+} from "../../lib/api";
+import { formatCurrency, formatPct } from "../../lib/format";
+import { PageHeader, SectionCard, StatCard, StatGrid } from "../app";
+import { StatusBadge, ExtraBadge, MONTHS_FULL, formatPeriod } from "./shared";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { cn } from "cn";
+
+// El backend devuelve la fila completa (incluido el texto extraído), aunque
+// el tipo compartido no lo declare.
+export type PayslipWithConcepts = Payslip & { concepts: PayslipConcept[]; rawText?: string | null };
+
+const TAG_COLORS = ["#2a8558", "#f59e0b", "#3b82f6", "#8b5cf6", "#ef4444", "#14b8a6"];
+
+function capitalize(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// ─── Conceptos ──────────────────────────────────────────────────
+function ConceptTable({
+  title, tone, concepts, allConcepts, editing, onChange, onRemove, onAdd,
+}: {
+  title: string;
+  tone: "devengo" | "deduccion";
+  concepts: PayslipConcept[];
+  allConcepts: PayslipConcept[];
+  editing: boolean;
+  onChange: (index: number, field: "name" | "amount", value: string | number) => void;
+  onRemove: (index: number) => void;
+  onAdd: () => void;
+}) {
+  const total = concepts.reduce((s, c) => s + (c.isPercentage ? 0 : c.amount), 0);
+  const sorted = editing ? concepts : [...concepts].sort((a, b) => b.amount - a.amount);
+  return (
+    <SectionCard
+      title={
+        <span className="flex items-center gap-2">
+          <span className={cn("size-2 rounded-full", tone === "devengo" ? "bg-primary-500 dark:bg-primary" : "bg-red-500")} />
+          {title}
+          <span className="font-normal text-muted-foreground">· {concepts.length}</span>
+        </span>
+      }
+      flush
+      footer={
+        <div className="flex items-center justify-between text-sm">
+          <span className="font-medium text-muted-foreground">Total {tone === "devengo" ? "devengado" : "deducciones"}</span>
+          <span className={cn("font-semibold tabular-nums", tone === "devengo" ? "text-foreground" : "text-red-600 dark:text-red-400")}>
+            {tone === "deduccion" && total > 0 ? "−" : ""}{formatCurrency(total)}
+          </span>
+        </div>
+      }
+    >
+      {sorted.length === 0 && !editing ? (
+        <p className="px-5 py-8 text-center text-sm text-muted-foreground">
+          {tone === "devengo" ? "No se detectaron devengos." : "No se detectaron deducciones."}
+        </p>
+      ) : (
+        <ul className="divide-y divide-border">
+          {sorted.map((c) => {
+            const realIndex = allConcepts.indexOf(c);
+            return (
+              <li key={realIndex} className="flex items-center gap-3 px-5 py-2.5">
+                {editing ? (
+                  <>
+                    <Input
+                      value={c.name}
+                      onChange={(e) => onChange(realIndex, "name", e.target.value)}
+                      placeholder="Concepto"
+                      aria-label="Nombre del concepto"
+                      className="h-8 flex-1"
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={c.amount}
+                      onChange={(e) => onChange(realIndex, "amount", Number(e.target.value))}
+                      aria-label={`Importe de ${c.name || "concepto"}`}
+                      className="h-8 w-24 shrink-0 text-right tabular-nums"
+                    />
+                    <Button variant="ghost" size="icon-sm" onClick={() => onRemove(realIndex)} aria-label="Quitar concepto" className="text-muted-foreground hover:text-destructive">
+                      <X className="size-4" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="min-w-0 flex-1 truncate text-sm text-foreground">{c.name}</span>
+                    <span className="text-sm font-medium tabular-nums text-foreground">
+                      {c.isPercentage ? formatPct(c.amount) : `${tone === "deduccion" ? "−" : ""}${formatCurrency(c.amount)}`}
+                    </span>
+                  </>
+                )}
+              </li>
+            );
+          })}
+          {editing && (
+            <li className="px-5 py-2.5">
+              <Button variant="ghost" size="sm" onClick={onAdd} className="gap-1.5 text-primary-700 hover:text-primary-700 dark:text-primary">
+                <Plus className="size-3.5" /> Añadir {tone === "devengo" ? "devengo" : "deducción"}
+              </Button>
+            </li>
+          )}
+        </ul>
+      )}
+    </SectionCard>
+  );
+}
+
+// ─── Reparto del bruto ──────────────────────────────────────────
+function BreakdownCard({ payslip }: { payslip: PayslipWithConcepts }) {
+  const gross = payslip.grossSalary ?? 0;
+  const net = payslip.netSalary ?? 0;
+  const irpf = payslip.concepts
+    .filter((c) => c.category === "deduccion" && !c.isPercentage && c.name.toLowerCase().includes("irpf"))
+    .reduce((s, c) => s + c.amount, 0);
+  const other = Math.max(gross - net - irpf, 0);
+  const segments = [
+    { label: "Neto", value: net, className: "bg-primary-500 dark:bg-primary" },
+    { label: "IRPF", value: irpf, className: "bg-amber-400" },
+    { label: "Seg. Social y otros", value: other, className: "bg-brand-navy/70 dark:bg-slate-500" },
+  ];
+  return (
+    <SectionCard title="Del bruto al neto" description="Cómo se reparte lo que cobras">
+      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label="Reparto del bruto">
+        {segments.map((s) => (
+          <div key={s.label} className={cn("h-full", s.className)} style={{ width: `${gross ? (s.value / gross) * 100 : 0}%` }} />
+        ))}
+      </div>
+      <ul className="mt-4 space-y-2.5">
+        {segments.map((s) => (
+          <li key={s.label} className="flex items-center gap-2 text-sm">
+            <span className={cn("size-2 rounded-full", s.className)} />
+            <span className="text-muted-foreground">{s.label}</span>
+            <span className="ml-auto font-medium tabular-nums text-foreground">{formatCurrency(s.value)}</span>
+            <span className="w-14 text-right text-xs tabular-nums text-muted-foreground">{gross ? formatPct((s.value / gross) * 100) : "—"}</span>
+          </li>
+        ))}
+      </ul>
+    </SectionCard>
+  );
+}
+
+// ─── Etiquetas ──────────────────────────────────────────────────
+function TagsCard({ payslipId }: { payslipId: number }) {
+  const queryClient = useQueryClient();
+  const { data: assigned = [] } = useQuery({ queryKey: ["payslip-tags", payslipId], queryFn: () => getPayslipTags(payslipId) });
+  const { data: allTags = [] } = useQuery({ queryKey: ["tags"], queryFn: getTags });
+  const [newTag, setNewTag] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["payslip-tags", payslipId] });
+  const assignMut = useMutation({
+    mutationFn: (tagId: number) => assignTag(payslipId, tagId),
+    onSuccess: refresh,
+    onError: () => toast.error("No se pudo añadir la etiqueta"),
+  });
+  const removeMut = useMutation({
+    mutationFn: (tagId: number) => removeTag(payslipId, tagId),
+    onSuccess: refresh,
+    onError: () => toast.error("No se pudo quitar la etiqueta"),
+  });
+  const createMut = useMutation({
+    mutationFn: (name: string) => createTag(name, TAG_COLORS[allTags.length % TAG_COLORS.length]),
+    onSuccess: (tag) => {
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      setNewTag("");
+      assignMut.mutate(tag.id);
+    },
+    onError: () => toast.error("No se pudo crear la etiqueta"),
+  });
+
+  const available = allTags.filter((t) => !assigned.some((a) => a.id === t.id));
+
+  return (
+    <SectionCard
+      title="Etiquetas"
+      icon={TagIcon}
+      action={
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger render={<Button variant="ghost" size="sm" className="gap-1 text-muted-foreground" />}>
+            <Plus className="size-3.5" /> Añadir
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-64 p-2">
+            {available.length > 0 && (
+              <div className="mb-2 flex flex-col">
+                {available.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => { assignMut.mutate(t.id); setOpen(false); }}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+                  >
+                    <span className="size-2 rounded-full" style={{ backgroundColor: t.color }} />
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <form
+              onSubmit={(e) => { e.preventDefault(); if (newTag.trim()) createMut.mutate(newTag.trim()); }}
+              className={cn("flex gap-1.5", available.length > 0 && "border-t border-border pt-2")}
+            >
+              <Input value={newTag} onChange={(e) => setNewTag(e.target.value)} placeholder="Nueva etiqueta" aria-label="Nueva etiqueta" className="h-8" maxLength={30} />
+              <Button type="submit" size="sm" disabled={!newTag.trim() || createMut.isPending}>Crear</Button>
+            </form>
+          </PopoverContent>
+        </Popover>
+      }
+    >
+      {assigned.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Sin etiquetas. Úsalas para marcar nóminas revisadas, con atrasos…</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {assigned.map((t) => (
+            <span key={t.id} className="inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-card pr-1 pl-2.5 text-xs font-medium text-foreground">
+              <span className="size-2 rounded-full" style={{ backgroundColor: t.color }} />
+              {t.name}
+              <button
+                type="button"
+                onClick={() => removeMut.mutate(t.id)}
+                className="flex size-5 cursor-pointer items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                aria-label={`Quitar etiqueta ${t.name}`}
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+// ─── Notas ──────────────────────────────────────────────────────
+function NotesCard({ payslipId }: { payslipId: number }) {
+  const queryClient = useQueryClient();
+  const { data: notes = [] } = useQuery({ queryKey: ["notes", payslipId], queryFn: () => getNotes(payslipId) });
+  const [content, setContent] = useState("");
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["notes", payslipId] });
+  const addMut = useMutation({
+    mutationFn: () => createNote(payslipId, content.trim()),
+    onSuccess: () => { setContent(""); refresh(); },
+    onError: () => toast.error("No se pudo guardar la nota"),
+  });
+  const deleteMut = useMutation({
+    mutationFn: deleteNote,
+    onSuccess: refresh,
+    onError: () => toast.error("No se pudo borrar la nota"),
+  });
+
+  return (
+    <SectionCard title="Notas" icon={NotebookPen}>
+      {notes.length > 0 && (
+        <ul className="mb-4 space-y-3">
+          {notes.map((n) => (
+            <li key={n.id} className="group relative rounded-lg border border-border bg-muted/30 p-3 pr-9">
+              <p className="whitespace-pre-wrap text-sm text-foreground">{n.content}</p>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                {new Date(n.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
+              </p>
+              <button
+                type="button"
+                onClick={() => deleteMut.mutate(n.id)}
+                className="absolute top-2 right-2 flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-destructive focus-visible:opacity-100"
+                aria-label="Borrar nota"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form onSubmit={(e) => { e.preventDefault(); if (content.trim()) addMut.mutate(); }} className="space-y-2">
+        <Label htmlFor={`note-${payslipId}`} className="sr-only">Nueva nota</Label>
+        <Textarea
+          id={`note-${payslipId}`}
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="Apunta algo sobre esta nómina…"
+          rows={2}
+          maxLength={2000}
+        />
+        <div className="flex justify-end">
+          <Button type="submit" size="sm" variant="outline" disabled={!content.trim() || addMut.isPending}>Guardar nota</Button>
+        </div>
+      </form>
+    </SectionCard>
+  );
+}
+
+// ─── Detalle ────────────────────────────────────────────────────
+export function PayslipDetail({
+  payslip, profileName, onBack, onDelete, onReprocess, isReprocessing,
+}: {
+  payslip: PayslipWithConcepts;
+  profileName?: string;
+  onBack: () => void;
+  onDelete: () => void;
+  onReprocess: () => void;
+  isReprocessing: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [concepts, setConcepts] = useState(payslip.concepts);
+  const [meta, setMeta] = useState({
+    grossSalary: payslip.grossSalary ?? 0,
+    netSalary: payslip.netSalary ?? 0,
+    periodMonth: payslip.periodMonth ?? new Date().getMonth() + 1,
+    periodYear: payslip.periodYear ?? new Date().getFullYear(),
+    company: payslip.company ?? "",
+  });
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["payslip", payslip.id] });
+    queryClient.invalidateQueries({ queryKey: ["payslips"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+  };
+
+  const saveMut = useMutation({
+    mutationFn: () =>
+      updatePayslipConcepts(payslip.id, {
+        concepts: concepts
+          .filter((c) => c.name.trim())
+          .map((c) => ({ category: c.category, name: c.name.trim(), amount: c.amount, isPercentage: c.isPercentage })),
+        grossSalary: meta.grossSalary,
+        netSalary: meta.netSalary,
+        periodMonth: meta.periodMonth,
+        periodYear: meta.periodYear,
+        company: meta.company.trim() || undefined,
+      }),
+    onSuccess: () => {
+      setEditing(false);
+      invalidate();
+      toast.success("Nómina actualizada");
+    },
+    onError: () => toast.error("No se pudieron guardar los cambios"),
+  });
+
+  const typeMut = useMutation({
+    mutationFn: (type: "ordinal" | "extra") => updatePayslipType(payslip.id, type),
+    onSuccess: (_d, type) => {
+      invalidate();
+      toast.success(type === "extra" ? "Marcada como paga extra" : "Marcada como nómina mensual");
+    },
+    onError: () => toast.error("No se pudo cambiar el tipo"),
+  });
+
+  const devengos = concepts.filter((c) => c.category === "devengo");
+  const deducciones = concepts.filter((c) => c.category === "deduccion");
+  const gross = payslip.grossSalary ?? 0;
+  const net = payslip.netSalary ?? 0;
+  const irpf = useMemo(
+    () => payslip.concepts.filter((c) => c.category === "deduccion" && !c.isPercentage && c.name.toLowerCase().includes("irpf")).reduce((s, c) => s + c.amount, 0),
+    [payslip.concepts],
+  );
+
+  const updateConcept = (index: number, field: "name" | "amount", value: string | number) =>
+    setConcepts((cs) => cs.map((c, i) => (i === index ? { ...c, [field]: value } : c)));
+  const addConcept = (category: "devengo" | "deduccion") =>
+    setConcepts((cs) => [...cs, { id: 0, payslipId: payslip.id, category, name: "", amount: 0, isPercentage: false }]);
+  const removeConcept = (index: number) => setConcepts((cs) => cs.filter((_, i) => i !== index));
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setConcepts(payslip.concepts);
+    setMeta({
+      grossSalary: payslip.grossSalary ?? 0,
+      netSalary: payslip.netSalary ?? 0,
+      periodMonth: payslip.periodMonth ?? new Date().getMonth() + 1,
+      periodYear: payslip.periodYear ?? new Date().getFullYear(),
+      company: payslip.company ?? "",
+    });
+  };
+
+  const period = payslip.periodMonth && payslip.periodYear
+    ? capitalize(formatPeriod(payslip.periodMonth, payslip.periodYear, true))
+    : "Nómina sin periodo";
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onBack}
+        className="mb-4 inline-flex cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 -ml-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" /> Mis nóminas
+      </button>
+
+      <PageHeader
+        eyebrow={
+          <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+            {payslip.company && <span className="inline-flex items-center gap-1"><Building2 className="size-3.5" />{payslip.company}</span>}
+            {profileName && <span>· {profileName}</span>}
+          </span>
+        }
+        title={period}
+        description={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <StatusBadge status={payslip.parsingStatus} />
+            {payslip.payslipType === "extra" && <ExtraBadge className="h-6" />}
+          </span>
+        }
+        actions={
+          editing ? (
+            <>
+              <Button variant="outline" onClick={cancelEdit} disabled={saveMut.isPending}>Cancelar</Button>
+              <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} className="gap-1.5">
+                {saveMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                Guardar cambios
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => setEditing(true)} className="gap-1.5">
+                <Pencil className="size-4" /> Editar
+              </Button>
+              <Button variant="outline" onClick={onReprocess} disabled={isReprocessing} className="gap-1.5">
+                <RefreshCw className={cn("size-4", isReprocessing && "animate-spin")} />
+                {isReprocessing ? "Reprocesando…" : "Reprocesar"}
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="Más acciones" />}>
+                  <MoreHorizontal className="size-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-52">
+                  <DropdownMenuItem
+                    onClick={() => typeMut.mutate(payslip.payslipType === "extra" ? "ordinal" : "extra")}
+                    disabled={typeMut.isPending}
+                    className="gap-2"
+                  >
+                    <Gift className="size-4" />
+                    {payslip.payslipType === "extra" ? "Marcar como mensual" : "Marcar como paga extra"}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={onDelete} variant="destructive" className="gap-2">
+                    <Trash2 className="size-4" /> Eliminar nómina
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )
+        }
+      />
+
+      {editing ? (
+        <SectionCard title="Datos generales" description="Corrige lo que no se haya leído bien del PDF." className="mb-6">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+            <div className="col-span-2 space-y-1.5 lg:col-span-1">
+              <Label htmlFor="edit-company">Empresa</Label>
+              <Input id="edit-company" value={meta.company} onChange={(e) => setMeta((m) => ({ ...m, company: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Mes</Label>
+              <Select value={String(meta.periodMonth)} onValueChange={(v) => v && setMeta((m) => ({ ...m, periodMonth: Number(v) }))}>
+                <SelectTrigger className="w-full">
+                  <SelectValue>{(v: string) => capitalize(MONTHS_FULL[Number(v) - 1] ?? "")}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTHS_FULL.map((m, i) => <SelectItem key={m} value={String(i + 1)}>{capitalize(m)}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-year">Año</Label>
+              <Input id="edit-year" type="number" min={1990} max={2100} value={meta.periodYear} onChange={(e) => setMeta((m) => ({ ...m, periodYear: Number(e.target.value) }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-gross">Bruto (€)</Label>
+              <Input id="edit-gross" type="number" step="0.01" value={meta.grossSalary} onChange={(e) => setMeta((m) => ({ ...m, grossSalary: Number(e.target.value) }))} className="tabular-nums" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-net">Neto (€)</Label>
+              <Input id="edit-net" type="number" step="0.01" value={meta.netSalary} onChange={(e) => setMeta((m) => ({ ...m, netSalary: Number(e.target.value) }))} className="tabular-nums" />
+            </div>
+          </div>
+        </SectionCard>
+      ) : (
+        <StatGrid className="mb-6">
+          <StatCard label="Líquido a percibir" value={formatCurrency(payslip.netSalary)} emphasis hint={gross ? `Te llega el ${formatPct((net / gross) * 100)} del bruto` : undefined} />
+          <StatCard label="Salario bruto" value={formatCurrency(payslip.grossSalary)} hint={`${devengos.length} ${devengos.length === 1 ? "devengo" : "devengos"}`} />
+          <StatCard label="IRPF" className="hidden sm:flex" value={formatCurrency(irpf)} hint={gross ? `Retención del ${formatPct((irpf / gross) * 100)}` : undefined} />
+          <StatCard label="Total deducciones" className="hidden sm:flex" value={formatCurrency(Math.max(gross - net, 0))} hint={`${deducciones.length} ${deducciones.length === 1 ? "concepto" : "conceptos"}`} />
+        </StatGrid>
+      )}
+
+      <div className="grid items-start gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+        <div className="grid items-start gap-6 xl:grid-cols-2">
+          <ConceptTable
+            title="Devengos"
+            tone="devengo"
+            concepts={devengos}
+            allConcepts={concepts}
+            editing={editing}
+            onChange={updateConcept}
+            onRemove={removeConcept}
+            onAdd={() => addConcept("devengo")}
+          />
+          <ConceptTable
+            title="Deducciones"
+            tone="deduccion"
+            concepts={deducciones}
+            allConcepts={concepts}
+            editing={editing}
+            onChange={updateConcept}
+            onRemove={removeConcept}
+            onAdd={() => addConcept("deduccion")}
+          />
+        </div>
+        <NotesCard payslipId={payslip.id} />
+        </div>
+
+        <div className="space-y-6">
+          {!editing && gross > 0 && <BreakdownCard payslip={payslip} />}
+          <TagsCard payslipId={payslip.id} />
+          <SectionCard title="Archivo" icon={FileText}>
+            <dl className="space-y-2 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Nombre</dt>
+                <dd className="min-w-0 truncate text-right font-medium text-foreground" title={payslip.fileName}>{payslip.fileName}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Subida</dt>
+                <dd className="text-foreground">{new Date(payslip.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}</dd>
+              </div>
+            </dl>
+            {payslip.rawText ? (
+              <details className="group mt-4 rounded-lg border border-border">
+                <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground">
+                  Texto extraído del PDF
+                  <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" />
+                </summary>
+                <pre className="max-h-72 overflow-auto border-t border-border bg-muted/40 p-3 [font-family:ui-monospace,SFMono-Regular,Menlo,monospace] text-[11px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
+                  {payslip.rawText}
+                </pre>
+              </details>
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground">El PDF original no se guarda: solo los datos extraídos.</p>
+            )}
+          </SectionCard>
+        </div>
+      </div>
+    </div>
+  );
+}

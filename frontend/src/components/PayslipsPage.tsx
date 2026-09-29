@@ -1,790 +1,547 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft, Edit3, RefreshCw, Trash2, FileText, Plus, X, Save,
-  Building2, Calendar, ArrowRight, Search, Download,
-  ArrowUp, ArrowDown, ArrowUpDown,
+  AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, CircleDollarSign,
+  Download, FileSearch, FileText, Gift, Landmark, Loader2, Search, Upload, X,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
-  getProfiles,
-  getPayslips,
-  getPayslip,
-  deletePayslip,
-  reprocessPayslip,
-  updatePayslipConcepts,
-  updatePayslipType,
-  exportData,
-  type Payslip,
-  type PayslipConcept,
+  deletePayslip, exportData, getDashboard, getPayslip, getPayslips, getProfiles, reprocessPayslip,
   type PayslipSortField,
 } from "../lib/api";
-import { Providers } from "./Providers";
 import { formatCurrency } from "../lib/format";
-import { Card } from "@/components/ui/card";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Providers } from "./Providers";
+import {
+  PageHeader, PageHeaderSkeleton, SectionCard, StatCard, StatCardSkeleton, StatGrid, ListCardSkeleton,
+} from "./app";
+import { EmptyState } from "./ui/EmptyState";
+import { ConfirmModal } from "./ui/ConfirmModal";
+import { ProfileSelector } from "./ui/ProfileSelector";
+import { PayslipDetail, type PayslipWithConcepts } from "./payroll/PayslipDetail";
+import { ExtraBadge, MONTHS_FULL, MONTHS_SHORT, StatusBadge, formatPeriod } from "./payroll/shared";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { ConfirmModal } from "./ui/ConfirmModal";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "cn";
 
-const STATUS_MAP: Record<string, { label: string; cls: string }> = {
-  pending: { label: "Procesando", cls: "bg-accent-50 text-accent-700 dark:bg-accent-500/10 dark:text-accent-400" },
-  parsed: { label: "Procesada", cls: "bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-500" },
-  error: { label: "Error", cls: "bg-danger-50 text-danger-700 dark:bg-danger-500/10 dark:text-danger-400" },
-  review: { label: "Revisar", cls: "bg-accent-50 text-accent-700 dark:bg-accent-500/10 dark:text-accent-400" },
-};
-
-const MONTH_NAMES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-const TYPE_FILTER_LABELS: Record<string, string> = { ordinal: "Mensual", extra: "Paga Extra" };
-
-function formatPeriod(m: number | null, y: number | null): string {
-  if (!m || !y) return "Sin fecha";
-  const names = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-  return `${names[m]} ${y}`;
-}
-
-function getPayslipSortDirection(field: PayslipSortField): "asc" | "desc" {
-  return field === "fileName" || field === "parsingStatus" ? "asc" : "desc";
-}
-
-interface SortIndicatorProps {
-  active: boolean;
-  direction: "asc" | "desc";
-}
-
-function SortIndicator({ active, direction }: SortIndicatorProps) {
-  if (!active) {
-    return <ArrowUpDown className="w-3.5 h-3.5 opacity-60" />;
-  }
-
-  return direction === "asc"
-    ? <ArrowUp className="w-3.5 h-3.5" />
-    : <ArrowDown className="w-3.5 h-3.5" />;
-}
-
 const ALL = "__all__";
+const PAGE_SIZE = 20;
+// El backend no filtra por mes: con ese filtro se trae el máximo por página
+// y se filtra en cliente, para no limitarlo a las 20 filas de la página actual.
+const MONTH_FILTER_LIMIT = 100;
 
+const STATUS_OPTIONS = [
+  { value: "parsed", label: "Procesadas" },
+  { value: "review", label: "Para revisar" },
+  { value: "pending", label: "Procesando" },
+  { value: "error", label: "Con error" },
+];
+const TYPE_OPTIONS = [
+  { value: "ordinal", label: "Mensuales" },
+  { value: "extra", label: "Pagas extra" },
+];
+
+function capitalize(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function readParam(name: string): number | null {
+  if (typeof window === "undefined") return null;
+  const v = Number(new URLSearchParams(window.location.search).get(name));
+  return Number.isInteger(v) && v > 0 ? v : null;
+}
+
+function setUrlParam(name: string, value: number | null) {
+  const url = new URL(window.location.href);
+  if (value) url.searchParams.set(name, String(value));
+  else url.searchParams.delete(name);
+  window.history.replaceState(null, "", url);
+}
+
+function SortHeader({ label, field, sortField, sortDir, onSort, align = "left" }: {
+  label: string;
+  field: PayslipSortField;
+  sortField: PayslipSortField;
+  sortDir: "asc" | "desc";
+  onSort: (f: PayslipSortField) => void;
+  align?: "left" | "right";
+}) {
+  const active = sortField === field;
+  const Icon = !active ? ArrowUpDown : sortDir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(field)}
+      className={cn(
+        "inline-flex cursor-pointer items-center gap-1 rounded-sm transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50",
+        align === "right" && "w-full justify-end",
+        active && "text-foreground",
+      )}
+    >
+      {label}
+      <Icon className={cn("size-3.5", !active && "opacity-40")} aria-hidden="true" />
+    </button>
+  );
+}
+
+function FilterSelect({ value, onChange, placeholder, options, className }: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  options: { value: string; label: string }[];
+  className?: string;
+}) {
+  return (
+    <Select value={value || ALL} onValueChange={(v) => onChange(v === ALL || v === null ? "" : v)}>
+      <SelectTrigger size="sm" className={cn("min-w-28", value && "border-primary-500/40 bg-primary/5", className)} aria-label={placeholder}>
+        <SelectValue>{(v: string) => options.find((o) => o.value === v)?.label ?? placeholder}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={ALL}>{placeholder}: todos</SelectItem>
+        {options.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
+
+// ─── Vista ──────────────────────────────────────────────────────
 function PayslipsList() {
   const queryClient = useQueryClient();
-  const { data: profiles = [] } = useQuery({
-    queryKey: ["profiles"],
-    queryFn: getProfiles,
-  });
+  const { data: profiles = [], isLoading: profilesLoading } = useQuery({ queryKey: ["profiles"], queryFn: getProfiles });
 
   const [selectedProfile, setSelectedProfile] = useState<number | null>(null);
   const [selectedPayslip, setSelectedPayslip] = useState<number | null>(null);
-  const [yearFilter, setYearFilter] = useState<string>("");
-  const [searchFilter, setSearchFilter] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [monthFilter, setMonthFilter] = useState<string>("");
-  const [typeFilter, setTypeFilter] = useState<string>("");
+  const [search, setSearch] = useState("");
+  const [yearFilter, setYearFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
   const [sortField, setSortField] = useState<PayslipSortField>("period");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
-  const [deleteTarget, setDeleteTarget] = useState<(Payslip & { concepts: PayslipConcept[] }) | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; label: string } | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  // Tras montar (no en el render inicial) para no desincronizar la hidratación.
+  useEffect(() => {
+    const fromUrl = readParam("nomina");
+    if (fromUrl) setSelectedPayslip(fromUrl);
+  }, []);
+
+  useEffect(() => {
+    if (selectedProfile || profiles.length === 0) return;
+    const fromUrl = readParam("perfil");
+    setSelectedProfile(profiles.some((p) => p.id === fromUrl) ? fromUrl : profiles[0].id);
+  }, [profiles, selectedProfile]);
 
   const profileId = selectedProfile ?? profiles[0]?.id;
+  const profile = profiles.find((p) => p.id === profileId);
+  const pageSize = monthFilter ? MONTH_FILTER_LIMIT : PAGE_SIZE;
 
-  const { data: payslipsData, isLoading } = useQuery({
-    queryKey: ["payslips", profileId, yearFilter, searchFilter, statusFilter, typeFilter, sortField, sortDir, page],
+  const { data: payslipsData, isLoading, isFetching } = useQuery({
+    queryKey: ["payslips", profileId, yearFilter, search, statusFilter, typeFilter, sortField, sortDir, monthFilter ? 1 : page, pageSize],
     queryFn: () =>
       getPayslips({
         profileId,
         year: yearFilter ? Number(yearFilter) : undefined,
-        search: searchFilter || undefined,
+        search: search || undefined,
         status: statusFilter || undefined,
         type: (typeFilter as "ordinal" | "extra") || undefined,
         sortBy: sortField,
         sortDir,
-        page,
-        limit: 20,
+        page: monthFilter ? 1 : page,
+        limit: pageSize,
       }),
+    enabled: !!profileId,
+    placeholderData: (prev) => prev,
+  });
+
+  // Resumen del perfil (independiente de filtros y paginación).
+  const { data: summary } = useQuery({
+    queryKey: ["dashboard", [profileId]],
+    queryFn: () => getDashboard([profileId!]),
+    enabled: !!profileId,
+  });
+  const { data: reviewData } = useQuery({
+    queryKey: ["payslips", profileId, "review-count"],
+    queryFn: () => getPayslips({ profileId, status: "review", limit: 1 }),
     enabled: !!profileId,
   });
 
-  const payslips = payslipsData?.data ?? [];
-  const totalPayslips = payslipsData?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(totalPayslips / 20));
-
-  // Client-side filters for month (status is now server-side)
-  const filteredPayslips = payslips
-    .filter((p) => {
-      if (monthFilter && p.periodMonth !== Number(monthFilter)) return false;
-      return true;
-    });
-
-  const handleSort = (field: PayslipSortField) => {
-    setPage(1);
-
-    if (sortField === field) {
-      setSortDir((current) => (current === "asc" ? "desc" : "asc"));
-      return;
-    }
-
-    setSortField(field);
-    setSortDir(getPayslipSortDirection(field));
-  };
-
-  const { data: detail } = useQuery({
+  const { data: detail, isLoading: detailLoading, dataUpdatedAt } = useQuery({
     queryKey: ["payslip", selectedPayslip],
-    queryFn: () => getPayslip(selectedPayslip!),
+    queryFn: () => getPayslip(selectedPayslip!) as Promise<PayslipWithConcepts>,
     enabled: !!selectedPayslip,
   });
+
+  const openPayslip = (id: number | null) => {
+    setSelectedPayslip(id);
+    setUrlParam("nomina", id);
+    document.querySelector("main")?.scrollTo?.({ top: 0 });
+    window.scrollTo({ top: 0 });
+  };
 
   const deleteMut = useMutation({
     mutationFn: deletePayslip,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["payslips"] });
-      setSelectedPayslip(null);
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      openPayslip(null);
+      toast.success("Nómina eliminada");
     },
+    onError: () => toast.error("No se pudo eliminar la nómina"),
   });
 
   const reprocessMut = useMutation({
     mutationFn: reprocessPayslip,
-    onSuccess: () => {
+    onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ["payslips"] });
-      queryClient.invalidateQueries({ queryKey: ["payslip", selectedPayslip] });
+      queryClient.invalidateQueries({ queryKey: ["payslip", updated.id] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success(updated.parsingStatus === "parsed" ? "Nómina reprocesada" : "Reprocesada: revisa los conceptos");
     },
+    onError: () => toast.error("No se pudo reprocesar la nómina"),
   });
 
-  useEffect(() => {
-    if (!selectedProfile && profiles.length > 0 && profiles[0]) {
-      setSelectedProfile(profiles[0].id);
+  const handleSort = (field: PayslipSortField) => {
+    setPage(1);
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir(field === "fileName" || field === "parsingStatus" ? "asc" : "desc");
     }
-  }, [profiles, selectedProfile]);
+  };
 
-  const years = Array.from(
-    new Set(payslips.map((p) => p.periodYear).filter(Boolean))
-  ).sort((a, b) => (b ?? 0) - (a ?? 0));
+  const handleExport = async (format: "csv" | "json") => {
+    if (!profileId) return;
+    setExporting(true);
+    try {
+      await exportData(profileId, yearFilter ? Number(yearFilter) : undefined, format);
+    } catch {
+      toast.error("No se pudo exportar. Inténtalo de nuevo.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
-  if (selectedPayslip && detail) {
+  const rows = useMemo(() => {
+    const data = payslipsData?.data ?? [];
+    return monthFilter ? data.filter((p) => p.periodMonth === Number(monthFilter)) : data;
+  }, [payslipsData, monthFilter]);
+
+  const total = payslipsData?.total ?? 0;
+  const totalPages = monthFilter ? 1 : Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // Años desde el resumen anual del perfil: si salen de la página actual,
+  // al filtrar por un año el desplegable se quedaba solo con ese año.
+  const years = (summary?.annualSummaries ?? []).map((s) => s.year).sort((a, b) => b - a);
+  const hasFilters = Boolean(search || yearFilter || monthFilter || statusFilter || typeFilter);
+  const clearFilters = () => { setSearch(""); setYearFilter(""); setMonthFilter(""); setStatusFilter(""); setTypeFilter(""); setPage(1); };
+
+  // ─── Detalle ──────────────────────────────────────────────────
+  if (selectedPayslip) {
     return (
-      <PayslipDetail
-        payslip={detail}
-        onBack={() => setSelectedPayslip(null)}
-        onDelete={() => setDeleteTarget(detail)}
-        onReprocess={() => reprocessMut.mutate(detail.id)}
-        isReprocessing={reprocessMut.isPending}
-      />
+      <>
+        {detailLoading || !detail ? (
+          <div>
+            <PageHeaderSkeleton />
+            <StatGrid>{Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}</StatGrid>
+            <div className="mt-6 grid gap-6 lg:grid-cols-3">
+              <ListCardSkeleton rows={6} className="lg:col-span-2" />
+              <ListCardSkeleton rows={3} />
+            </div>
+          </div>
+        ) : (
+          <PayslipDetail
+            // Remonta al recargar los datos (p.ej. tras reprocesar), si no el
+            // estado local de conceptos seguía mostrando los anteriores.
+            key={`${detail.id}-${dataUpdatedAt}`}
+            payslip={detail}
+            profileName={profiles.find((p) => p.id === detail.profileId)?.name}
+            onBack={() => openPayslip(null)}
+            onDelete={() => setDeleteTarget({ id: detail.id, label: formatPeriod(detail.periodMonth, detail.periodYear, true) })}
+            onReprocess={() => reprocessMut.mutate(detail.id)}
+            isReprocessing={reprocessMut.isPending}
+          />
+        )}
+        <ConfirmModal
+          open={!!deleteTarget}
+          title="Eliminar nómina"
+          message={`¿Eliminar la nómina de ${deleteTarget?.label ?? ""}? Se borrarán también sus conceptos y notas. Esta acción no se puede deshacer.`}
+          confirmLabel="Eliminar"
+          variant="danger"
+          onConfirm={() => { if (deleteTarget) deleteMut.mutate(deleteTarget.id); setDeleteTarget(null); }}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      </>
     );
   }
 
-  return (
-    <div className="animate-fade-in space-y-6">
-      {/* Hero */}
-      <Card className="p-0 overflow-hidden">
-        <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-        <div className="px-6 py-5 sm:px-8 sm:py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Mis Nóminas</p>
-              <p className="text-2xl font-bold text-foreground">
-                {filteredPayslips.length} nómina{filteredPayslips.length !== 1 ? "s" : ""}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2.5">
-              <Badge variant="secondary" className="bg-accent-50 text-accent-800 dark:bg-accent-500/10 dark:text-accent-300 gap-1.5">
-                <FileText className="w-3.5 h-3.5" aria-hidden="true" />
-                <span className="font-mono">{totalPayslips}</span>
-                total
-              </Badge>
-            </div>
-          </div>
-          <div className="flex gap-2 mt-4">
-            {profileId && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => exportData(profileId, yearFilter ? Number(yearFilter) : undefined, "csv")}
-                className="gap-1.5"
-                aria-label="Exportar CSV"
-              >
-                <Download className="w-3.5 h-3.5" aria-hidden="true" />
-                CSV
-              </Button>
-            )}
-            <a href="/app/upload" className="inline-flex items-center gap-1.5 bg-accent-50 hover:bg-accent-100 dark:bg-accent-500/10 dark:hover:bg-accent-500/20 rounded-lg px-3 py-1.5 text-xs font-medium text-accent-700 dark:text-accent-400 transition-colors">
-              <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-              Subir nóminas
-            </a>
-          </div>
-        </div>
-      </Card>
-
-      {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
-        <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filtrar por perfil">
-          {profiles.map((p) => (
-            <Button
-              key={p.id}
-              type="button"
-              variant={profileId === p.id ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() => { setSelectedProfile(p.id); setSelectedPayslip(null); setPage(1); }}
-              aria-pressed={profileId === p.id}
-              className={cn("gap-1.5", profileId === p.id ? "shadow-sm" : "text-muted-foreground")}
-            >
-              <div
-                className={cn("w-2.5 h-2.5 rounded-full transition-opacity", profileId === p.id ? "opacity-100" : "opacity-40")}
-                style={{ backgroundColor: p.color }}
-              />
-              {p.name}
-            </Button>
-          ))}
-        </div>
+  // ─── Listado ──────────────────────────────────────────────────
+  if (profilesLoading) {
+    return (
+      <div>
+        <PageHeaderSkeleton />
+        <StatGrid>{Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}</StatGrid>
+        <ListCardSkeleton rows={8} className="mt-6" />
       </div>
+    );
+  }
 
-      {/* Extended Filters Bar */}
-      <Card className="p-3 mb-6 flex-row flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Buscar por archivo o empresa..."
-            value={searchFilter}
-            onChange={(e) => { setSearchFilter(e.target.value); setPage(1); }}
-            className="pl-9"
-          />
-        </div>
+  if (profiles.length === 0) {
+    return (
+      <>
+        <PageHeader title="Mis nóminas" description="Todas tus nóminas, con sus conceptos, en un solo sitio." />
+        <EmptyState icon={FileText} title="Aún no tienes perfiles" description="Crea un perfil y sube tus primeras nóminas para verlas aquí." actionLabel="Crear perfil" actionHref="/app/profiles" />
+      </>
+    );
+  }
 
-        {years.length > 0 && (
-          <Select value={yearFilter || ALL} onValueChange={(v) => { setYearFilter(v === ALL || v === null ? "" : v); setPage(1); }}>
-            <SelectTrigger className="w-auto" size="sm">
-              <SelectValue placeholder="Año">{(v: string) => (v === ALL ? "Año" : v)}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Año</SelectItem>
-              {years.map((y) => (
-                <SelectItem key={y} value={String(y ?? "")}>{y}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
-        <Select value={monthFilter || ALL} onValueChange={(v) => setMonthFilter(v === ALL || v === null ? "" : v)}>
-          <SelectTrigger className="w-auto" size="sm">
-            <SelectValue placeholder="Mes">{(v: string) => (v === ALL ? "Mes" : MONTH_NAMES[Number(v) - 1])}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Mes</SelectItem>
-            {MONTH_NAMES.map((m, i) => (
-              <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={statusFilter || ALL} onValueChange={(v) => { setStatusFilter(v === ALL || v === null ? "" : v); setPage(1); }}>
-          <SelectTrigger className="w-auto" size="sm">
-            <SelectValue placeholder="Estado">{(v: string) => (STATUS_MAP[v]?.label ?? "Estado")}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Estado</SelectItem>
-            <SelectItem value="parsed">Procesada</SelectItem>
-            <SelectItem value="pending">Procesando</SelectItem>
-            <SelectItem value="review">Revisar</SelectItem>
-            <SelectItem value="error">Error</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={typeFilter || ALL} onValueChange={(v) => { setTypeFilter(v === ALL || v === null ? "" : v); setPage(1); }}>
-          <SelectTrigger className="w-auto" size="sm">
-            <SelectValue placeholder="Tipo">{(v: string) => (TYPE_FILTER_LABELS[v] ?? "Tipo")}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Tipo</SelectItem>
-            <SelectItem value="ordinal">Mensual</SelectItem>
-            <SelectItem value="extra">Paga Extra</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {(searchFilter || yearFilter || monthFilter || statusFilter || typeFilter) && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => { setSearchFilter(""); setYearFilter(""); setMonthFilter(""); setStatusFilter(""); setTypeFilter(""); setPage(1); }}
-            className="gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
-          >
-            <X className="w-3 h-3" /> Limpiar
-          </Button>
-        )}
-      </Card>
-
-      {/* Summary bar */}
-      {filteredPayslips.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          <Card className="p-3 text-center">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Bruto Medio</p>
-            <p className="text-sm font-bold font-mono text-foreground mt-0.5">
-              {formatCurrency(filteredPayslips.reduce((s, p) => s + (p.grossSalary ?? 0), 0) / filteredPayslips.length)}
-            </p>
-          </Card>
-          <Card className="p-3 text-center">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Neto Medio</p>
-            <p className="text-sm font-bold font-mono text-success-700 dark:text-success-500 mt-0.5">
-              {formatCurrency(filteredPayslips.reduce((s, p) => s + (p.netSalary ?? 0), 0) / filteredPayslips.length)}
-            </p>
-          </Card>
-          <Card className="p-3 text-center">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total Bruto</p>
-            <p className="text-sm font-bold font-mono text-foreground mt-0.5">
-              {formatCurrency(filteredPayslips.reduce((s, p) => s + (p.grossSalary ?? 0), 0))}
-            </p>
-          </Card>
-          <Card className="p-3 text-center">
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total Neto</p>
-            <p className="text-sm font-bold font-mono text-success-700 dark:text-success-500 mt-0.5">
-              {formatCurrency(filteredPayslips.reduce((s, p) => s + (p.netSalary ?? 0), 0))}
-            </p>
-          </Card>
-        </div>
-      )}
-
-      {/* Table */}
-      {isLoading ? (
-        <Card className="p-6 space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex gap-4">
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-4 flex-1" />
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-4 w-16" />
-            </div>
-          ))}
-        </Card>
-      ) : filteredPayslips.length === 0 ? (
-        <Card className="text-center py-16">
-          <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
-            <Search className="w-8 h-8 text-muted-foreground" />
-          </div>
-          <h3 className="font-semibold text-foreground text-sm mb-1">No hay nóminas</h3>
-          <p className="text-muted-foreground text-xs mb-5">Sube nóminas para este perfil.</p>
-          <a href="/app/upload" className={cn(buttonVariants(), "gap-1.5")}>
-            Subir nóminas <ArrowRight className="w-3.5 h-3.5" />
-          </a>
-        </Card>
-      ) : (
-        <Card className="p-0 overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50 hover:bg-muted/50">
-                <TableHead aria-sort={sortField === "period" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
-                  <button
-                    type="button"
-                    onClick={() => handleSort("period")}
-                    className="inline-flex items-center gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground"
-                  >
-                    <span>Período</span>
-                    <SortIndicator active={sortField === "period"} direction={sortDir} />
-                  </button>
-                </TableHead>
-                <TableHead aria-sort={sortField === "fileName" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
-                  <button
-                    type="button"
-                    onClick={() => handleSort("fileName")}
-                    className="inline-flex items-center gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground"
-                  >
-                    <span>Archivo</span>
-                    <SortIndicator active={sortField === "fileName"} direction={sortDir} />
-                  </button>
-                </TableHead>
-                <TableHead className="text-right" aria-sort={sortField === "grossSalary" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
-                  <button
-                    type="button"
-                    onClick={() => handleSort("grossSalary")}
-                    className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground"
-                  >
-                    <span>Bruto</span>
-                    <SortIndicator active={sortField === "grossSalary"} direction={sortDir} />
-                  </button>
-                </TableHead>
-                <TableHead className="text-right" aria-sort={sortField === "netSalary" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
-                  <button
-                    type="button"
-                    onClick={() => handleSort("netSalary")}
-                    className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground"
-                  >
-                    <span>Neto</span>
-                    <SortIndicator active={sortField === "netSalary"} direction={sortDir} />
-                  </button>
-                </TableHead>
-                <TableHead className="text-center" aria-sort={sortField === "parsingStatus" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
-                  <button
-                    type="button"
-                    onClick={() => handleSort("parsingStatus")}
-                    className="inline-flex items-center justify-center gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground"
-                  >
-                    <span>Estado</span>
-                    <SortIndicator active={sortField === "parsingStatus"} direction={sortDir} />
-                  </button>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredPayslips.map((p) => {
-                const status = STATUS_MAP[p.parsingStatus] ?? STATUS_MAP.error;
-                return (
-                  <TableRow
-                    key={p.id}
-                    onClick={() => setSelectedPayslip(p.id)}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedPayslip(p.id); } }}
-                    role="button"
-                    tabIndex={0}
-                    className="cursor-pointer group focus-visible:outline-2 focus-visible:outline-accent-500"
-                  >
-                    <TableCell className="py-3.5">
-                      <span className="text-sm font-semibold text-foreground">{formatPeriod(p.periodMonth, p.periodYear)}</span>
-                      {p.payslipType === "extra" && (
-                        <Badge variant="secondary" className="ml-2 bg-accent-50 text-accent-700 dark:bg-accent-500/10 dark:text-accent-400 text-[10px]">Extra</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-3.5">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
-                        <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors truncate max-w-[200px]">{p.fileName}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-3.5 text-right font-mono tabular-nums text-foreground">{formatCurrency(p.grossSalary)}</TableCell>
-                    <TableCell className="py-3.5 text-right font-mono tabular-nums font-semibold text-success-700 dark:text-success-500">{formatCurrency(p.netSalary)}</TableCell>
-                    <TableCell className="py-3.5 text-center">
-                      <Badge variant="secondary" className={status.cls}>{status.label}</Badge>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </Card>
-      )}
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 text-sm">
-          <p className="text-muted-foreground text-xs">
-            {totalPayslips} nómina{totalPayslips !== 1 ? "s" : ""} en total
-          </p>
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              Anterior
-            </Button>
-            <span className="text-xs text-muted-foreground px-2">
-              {page} / {totalPages}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-            >
-              Siguiente
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <ConfirmModal
-        open={!!deleteTarget}
-        title="Eliminar nómina"
-        message={`¿Eliminar la nómina "${deleteTarget?.fileName ?? ""}"? Esta acción no se puede deshacer.`}
-        confirmLabel="Eliminar"
-        variant="danger"
-        onConfirm={() => { if (deleteTarget) deleteMut.mutate(deleteTarget.id); setDeleteTarget(null); }}
-        onCancel={() => setDeleteTarget(null)}
-      />
-    </div>
-  );
-}
-
-// ─── Payslip Detail ─────────────────────────────────────────────
-function PayslipDetail({
-  payslip,
-  onBack,
-  onDelete,
-  onReprocess,
-  isReprocessing,
-}: {
-  payslip: Payslip & { concepts: PayslipConcept[] };
-  onBack: () => void;
-  onDelete: () => void;
-  onReprocess: () => void;
-  isReprocessing: boolean;
-}) {
-  const queryClient = useQueryClient();
-  const [editing, setEditing] = useState(false);
-  const [concepts, setConcepts] = useState(payslip.concepts);
-  const [grossSalary, setGrossSalary] = useState(payslip.grossSalary ?? 0);
-  const [netSalary, setNetSalary] = useState(payslip.netSalary ?? 0);
-  const [periodMonth, setPeriodMonth] = useState(payslip.periodMonth ?? 1);
-  const [periodYear, setPeriodYear] = useState(payslip.periodYear ?? new Date().getFullYear());
-
-  const saveMut = useMutation({
-    mutationFn: () =>
-      updatePayslipConcepts(payslip.id, {
-        concepts: concepts.map((c) => ({
-          category: c.category,
-          name: c.name,
-          amount: c.amount,
-          isPercentage: c.isPercentage,
-        })),
-        grossSalary,
-        netSalary,
-        periodMonth,
-        periodYear,
-      }),
-    onSuccess: () => {
-      setEditing(false);
-      queryClient.invalidateQueries({ queryKey: ["payslip", payslip.id] });
-      queryClient.invalidateQueries({ queryKey: ["payslips"] });
-    },
-  });
-
-  const typeMut = useMutation({
-    mutationFn: (type: "ordinal" | "extra") => updatePayslipType(payslip.id, type),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["payslip", payslip.id] });
-      queryClient.invalidateQueries({ queryKey: ["payslips"] });
-    },
-  });
-
-  const devengos = concepts.filter((c) => c.category === "devengo");
-  const deducciones = concepts.filter((c) => c.category === "deduccion");
-
-  const addConcept = (category: "devengo" | "deduccion") => {
-    setConcepts([
-      ...concepts,
-      { id: 0, payslipId: payslip.id, category, name: "", amount: 0, isPercentage: false },
-    ]);
-  };
-
-  const updateConcept = (index: number, field: string, value: string | number) => {
-    const updated = [...concepts];
-    (updated[index] as unknown as Record<string, unknown>)[field] = value;
-    setConcepts(updated);
-  };
-
-  const removeConcept = (index: number) => {
-    setConcepts(concepts.filter((_, i) => i !== index));
-  };
+  const kpis = summary?.kpis;
+  const reviewCount = reviewData?.total ?? 0;
+  const isEmptyProfile = !isLoading && total === 0 && !hasFilters;
 
   return (
-    <div className="animate-fade-in">
-      <Button variant="ghost" size="sm" onClick={onBack} className="gap-1.5 text-muted-foreground mb-5">
-        <ArrowLeft className="w-3.5 h-3.5" />
-        Volver al listado
-      </Button>
+    <div>
+      <PageHeader
+        title="Mis nóminas"
+        description={
+          kpis
+            ? `${kpis.totalPayslips} ${kpis.totalPayslips === 1 ? "nómina procesada" : "nóminas procesadas"} de ${profile?.name ?? "este perfil"}${kpis.extrasCount ? `, ${kpis.extrasCount} ${kpis.extrasCount === 1 ? "paga extra" : "pagas extra"}` : ""}.`
+            : "Todas tus nóminas, con sus conceptos, en un solo sitio."
+        }
+        actions={
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="outline" className="gap-1.5" disabled={exporting || isEmptyProfile} />}>
+              {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+              Exportar
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-48">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>{yearFilter ? `Nóminas de ${yearFilter}` : "Todo el histórico"}</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => handleExport("csv")}>CSV (Excel, Numbers…)</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("json")}>JSON</DropdownMenuItem>
+              </DropdownMenuGroup>
+              {!yearFilter && years.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <p className="px-1.5 py-1 text-[11px] text-muted-foreground">Filtra por año para exportar solo ese año.</p>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        }
+      >
+        {profiles.length > 1 && (
+          <ProfileSelector
+            profiles={profiles}
+            value={profileId ?? 0}
+            onChange={(v) => { setSelectedProfile(v as number); setUrlParam("perfil", v as number); setPage(1); setYearFilter(""); }}
+          />
+        )}
+      </PageHeader>
 
-      {/* Header */}
-      <Card className="p-5 mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-primary-50 dark:bg-primary-500/10 ring-1 ring-primary-100 dark:ring-primary-500/20 flex items-center justify-center flex-shrink-0">
-              <FileText className="w-6 h-6 text-primary-600 dark:text-primary-400" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-foreground">{payslip.fileName}</h2>
-              <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                {payslip.company && (
-                  <span className="flex items-center gap-1">
-                    <Building2 className="w-3 h-3" /> {payslip.company}
+      {isEmptyProfile ? (
+        <EmptyState
+          icon={Upload}
+          title={`${profile?.name ?? "Este perfil"} aún no tiene nóminas`}
+          description="Sube los PDF y en unos segundos verás aquí cada nómina con sus devengos y deducciones."
+          actionLabel="Subir nóminas"
+          actionHref={`/app/upload?perfil=${profileId}`}
+          actionIcon={Upload}
+        />
+      ) : (
+        <>
+          <StatGrid>
+            {kpis ? (
+              <>
+                <StatCard label="Neto medio" value={formatCurrency(kpis.avgNet)} icon={CircleDollarSign} emphasis hint="Por nómina" />
+                <StatCard label="Bruto medio" value={formatCurrency(kpis.avgGross)} icon={Landmark} hint="Por nómina" />
+                <StatCard
+                  className="hidden sm:flex"
+                  label="Pagas extra"
+                  value={kpis.extrasCount}
+                  icon={Gift}
+                  hint={kpis.extrasCount ? `${formatCurrency(kpis.extrasTotalNet)} netos en total` : "Ninguna registrada"}
+                />
+                <StatCard
+                  className="hidden sm:flex"
+                  label="Para revisar"
+                  value={reviewCount}
+                  icon={FileSearch}
+                  hint={reviewCount ? "Faltan conceptos por completar" : "Todo procesado correctamente"}
+                />
+              </>
+            ) : (
+              Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
+            )}
+          </StatGrid>
+
+          <SectionCard
+            className="mt-6"
+            flush
+            footer={
+              rows.length > 0 ? (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span>
+                    {monthFilter
+                      ? `${rows.length} ${rows.length === 1 ? "nómina" : "nóminas"} de ${MONTHS_FULL[Number(monthFilter) - 1]}${total > MONTH_FILTER_LIMIT ? ` (entre las ${MONTH_FILTER_LIMIT} más recientes)` : ""}`
+                      : `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, total)} de ${total}`}
                   </span>
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon-sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} aria-label="Página anterior">
+                        <ChevronLeft className="size-4" />
+                      </Button>
+                      <span className="px-2 tabular-nums">{page} / {totalPages}</span>
+                      <Button variant="ghost" size="icon-sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} aria-label="Página siguiente">
+                        <ChevronRight className="size-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : undefined
+            }
+          >
+            {/* Filtros */}
+            <div className="flex flex-col gap-2.5 border-b border-border p-4 lg:flex-row lg:items-center">
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                <Input
+                  type="search"
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                  placeholder="Buscar por empresa o archivo…"
+                  aria-label="Buscar nóminas"
+                  className="h-8 pl-9"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {years.length > 0 && (
+                  <FilterSelect
+                    value={yearFilter}
+                    onChange={(v) => { setYearFilter(v); setPage(1); }}
+                    placeholder="Año"
+                    options={years.map((y) => ({ value: String(y), label: String(y) }))}
+                  />
                 )}
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-3 h-3" />
-                  {payslip.periodMonth && payslip.periodYear
-                    ? `${payslip.periodMonth}/${payslip.periodYear}`
-                    : "Sin fecha"}
-                </span>
-                <button
-                  onClick={() => typeMut.mutate(payslip.payslipType === "extra" ? "ordinal" : "extra")}
-                  disabled={typeMut.isPending}
-                  title="Haz clic para cambiar el tipo"
-                >
-                  <Badge
-                    variant="secondary"
-                    className={cn(
-                      "text-[10px] cursor-pointer transition-colors",
-                      payslip.payslipType === "extra"
-                        ? "bg-accent-50 text-accent-700 hover:bg-accent-100 dark:bg-accent-500/10 dark:text-accent-400"
-                        : ""
-                    )}
-                  >
-                    {payslip.payslipType === "extra" ? "Paga Extra" : "Mensual"}
-                  </Badge>
-                </button>
+                <FilterSelect
+                  value={monthFilter}
+                  onChange={(v) => { setMonthFilter(v); setPage(1); }}
+                  placeholder="Mes"
+                  options={MONTHS_FULL.map((m, i) => ({ value: String(i + 1), label: capitalize(m) }))}
+                />
+                <FilterSelect value={statusFilter} onChange={(v) => { setStatusFilter(v); setPage(1); }} placeholder="Estado" options={STATUS_OPTIONS} />
+                <FilterSelect value={typeFilter} onChange={(v) => { setTypeFilter(v); setPage(1); }} placeholder="Tipo" options={TYPE_OPTIONS} />
+                {hasFilters && (
+                  <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 text-muted-foreground">
+                    <X className="size-3.5" /> Limpiar
+                  </Button>
+                )}
               </div>
             </div>
-          </div>
-          <div className="flex gap-2">
-            {!editing && (
-              <Button variant="ghost" size="sm" onClick={() => setEditing(true)} className="gap-1.5">
-                <Edit3 className="w-3.5 h-3.5" /> Editar
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" onClick={onReprocess} disabled={isReprocessing} className="gap-1.5">
-              <RefreshCw className={cn("w-3.5 h-3.5", isReprocessing && "animate-spin")} />
-              {isReprocessing ? "…" : "Reprocesar"}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onDelete} className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive">
-              <Trash2 className="w-3.5 h-3.5" /> Eliminar
-            </Button>
-          </div>
-        </div>
-      </Card>
 
-      {/* Metadata (editable) */}
-      {editing && (
-        <Card className="p-5 mb-6 grid grid-cols-2 sm:grid-cols-4 gap-4 animate-slide-up">
-          <div className="space-y-1.5">
-            <Label>Mes</Label>
-            <Input type="number" min={1} max={12}
-              value={periodMonth} onChange={(e) => setPeriodMonth(Number(e.target.value))} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Año</Label>
-            <Input type="number" min={1990} max={2100}
-              value={periodYear} onChange={(e) => setPeriodYear(Number(e.target.value))} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Bruto</Label>
-            <Input type="number" step="0.01"
-              value={grossSalary} onChange={(e) => setGrossSalary(Number(e.target.value))} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Neto</Label>
-            <Input type="number" step="0.01"
-              value={netSalary} onChange={(e) => setNetSalary(Number(e.target.value))} />
-          </div>
-        </Card>
+            {isLoading ? (
+              <div className="space-y-3 p-5">
+                {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-9 animate-pulse rounded-md bg-muted/60" />)}
+              </div>
+            ) : rows.length === 0 ? (
+              <EmptyState compact icon={Search} title="Ninguna nómina coincide" description="Prueba con otros filtros o límpialos para ver todas.">
+                <Button variant="outline" size="sm" onClick={clearFilters}>Limpiar filtros</Button>
+              </EmptyState>
+            ) : (
+              <div className={cn("transition-opacity", isFetching && "opacity-60")}>
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="pl-5 text-xs" aria-sort={sortField === "period" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
+                        <SortHeader label="Periodo" field="period" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                      </TableHead>
+                      <TableHead className="hidden text-xs md:table-cell" aria-sort={sortField === "fileName" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
+                        <SortHeader label="Empresa · archivo" field="fileName" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                      </TableHead>
+                      <TableHead className="hidden text-right text-xs sm:table-cell" aria-sort={sortField === "grossSalary" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
+                        <SortHeader label="Bruto" field="grossSalary" sortField={sortField} sortDir={sortDir} onSort={handleSort} align="right" />
+                      </TableHead>
+                      <TableHead className="text-right text-xs" aria-sort={sortField === "netSalary" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
+                        <SortHeader label="Neto" field="netSalary" sortField={sortField} sortDir={sortDir} onSort={handleSort} align="right" />
+                      </TableHead>
+                      <TableHead className="hidden text-xs lg:table-cell" aria-sort={sortField === "parsingStatus" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
+                        <SortHeader label="Estado" field="parsingStatus" sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+                      </TableHead>
+                      <TableHead className="w-10 pr-5"><span className="sr-only">Abrir</span></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((p) => {
+                      const needsAttention = p.parsingStatus !== "parsed";
+                      return (
+                        <TableRow
+                          key={p.id}
+                          onClick={() => openPayslip(p.id)}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPayslip(p.id); } }}
+                          tabIndex={0}
+                          aria-label={`Abrir nómina de ${formatPeriod(p.periodMonth, p.periodYear, true)}`}
+                          className="group cursor-pointer outline-none focus-visible:bg-muted/60"
+                        >
+                          <TableCell className="py-3 pl-5">
+                            <div className="flex items-center gap-3">
+                              <div className="hidden size-9 shrink-0 flex-col items-center justify-center rounded-lg border border-border bg-muted/40 leading-none sm:flex">
+                                <span className="text-[10px] font-medium uppercase text-muted-foreground">{p.periodMonth ? MONTHS_SHORT[p.periodMonth - 1] : "—"}</span>
+                                <span className="mt-0.5 text-[11px] font-semibold tabular-nums text-foreground">{p.periodYear ? String(p.periodYear).slice(2) : ""}</span>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                                  {capitalize(formatPeriod(p.periodMonth, p.periodYear, true))}
+                                  {p.payslipType === "extra" && <ExtraBadge />}
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground md:hidden">
+                                  {p.company ?? p.fileName}
+                                </p>
+                                {needsAttention && <StatusBadge status={p.parsingStatus} className="mt-1 h-5 lg:hidden" />}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="hidden max-w-64 py-3 md:table-cell">
+                            <p className="truncate text-sm text-foreground">{p.company ?? "Empresa sin detectar"}</p>
+                            <p className="truncate text-xs text-muted-foreground" title={p.fileName}>{p.fileName}</p>
+                          </TableCell>
+                          <TableCell className="hidden py-3 text-right text-sm tabular-nums text-muted-foreground sm:table-cell">{formatCurrency(p.grossSalary)}</TableCell>
+                          <TableCell className="py-3 text-right text-sm font-semibold tabular-nums text-foreground">{formatCurrency(p.netSalary)}</TableCell>
+                          <TableCell className="hidden py-3 lg:table-cell"><StatusBadge status={p.parsingStatus} /></TableCell>
+                          <TableCell className="py-3 pr-5 text-right">
+                            <ChevronRight className="ml-auto size-4 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </SectionCard>
+
+          {reviewCount > 0 && !statusFilter && (
+            <div className="mt-4 flex flex-col gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="flex items-center gap-2 text-sm text-foreground">
+                <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                {reviewCount} {reviewCount === 1 ? "nómina necesita" : "nóminas necesitan"} revisión: no se detectaron todos sus conceptos.
+              </p>
+              <Button variant="outline" size="sm" onClick={() => { setStatusFilter("review"); setPage(1); }}>Ver cuáles</Button>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Concepts grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Devengos */}
-        <Card className="p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-2.5 h-2.5 rounded-full bg-success-500" />
-            <h3 className="font-semibold text-foreground text-sm">Devengos</h3>
-            <span className="text-[11px] text-muted-foreground ml-auto">{devengos.length}</span>
-          </div>
-          <div className="space-y-2">
-            {devengos.map((c, i) => {
-              const realIndex = concepts.indexOf(c);
-              return (
-                <div key={i} className="flex items-center gap-2">
-                  {editing ? (
-                    <>
-                      <Input value={c.name} onChange={(e) => updateConcept(realIndex, "name", e.target.value)}
-                        className="flex-1" placeholder="Concepto" />
-                      <Input type="number" step="0.01" value={c.amount}
-                        onChange={(e) => updateConcept(realIndex, "amount", Number(e.target.value))}
-                        className="w-24 text-right font-mono" />
-                      <Button variant="ghost" size="icon-sm" onClick={() => removeConcept(realIndex)} className="hover:bg-destructive/10 hover:text-destructive">
-                        <X className="w-3 h-3" />
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-xs text-muted-foreground flex-1">{c.name}</span>
-                      <span className="text-xs font-mono font-semibold text-foreground">{formatCurrency(c.amount)}</span>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-            {devengos.length === 0 && <p className="text-xs text-muted-foreground">Sin devengos detectados</p>}
-            {editing && (
-              <Button variant="link" size="sm" onClick={() => addConcept("devengo")} className="gap-1 px-0 h-auto text-primary-600 dark:text-primary-400 mt-1">
-                <Plus className="w-3 h-3" /> Añadir devengo
-              </Button>
-            )}
-          </div>
-        </Card>
-
-        {/* Deducciones */}
-        <Card className="p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-2.5 h-2.5 rounded-full bg-danger-500" />
-            <h3 className="font-semibold text-foreground text-sm">Deducciones</h3>
-            <span className="text-[11px] text-muted-foreground ml-auto">{deducciones.length}</span>
-          </div>
-          <div className="space-y-2">
-            {deducciones.map((c, i) => {
-              const realIndex = concepts.indexOf(c);
-              return (
-                <div key={i} className="flex items-center gap-2">
-                  {editing ? (
-                    <>
-                      <Input value={c.name} onChange={(e) => updateConcept(realIndex, "name", e.target.value)}
-                        className="flex-1" placeholder="Concepto" />
-                      <Input type="number" step="0.01" value={c.amount}
-                        onChange={(e) => updateConcept(realIndex, "amount", Number(e.target.value))}
-                        className="w-24 text-right font-mono" />
-                      <Button variant="ghost" size="icon-sm" onClick={() => removeConcept(realIndex)} className="hover:bg-destructive/10 hover:text-destructive">
-                        <X className="w-3 h-3" />
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-xs text-muted-foreground flex-1">{c.name}</span>
-                      <span className="text-xs font-mono font-semibold text-danger-600">{formatCurrency(c.amount)}</span>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-            {deducciones.length === 0 && <p className="text-xs text-muted-foreground">Sin deducciones detectadas</p>}
-            {editing && (
-              <Button variant="link" size="sm" onClick={() => addConcept("deduccion")} className="gap-1 px-0 h-auto text-primary-600 dark:text-primary-400 mt-1">
-                <Plus className="w-3 h-3" /> Añadir deducción
-              </Button>
-            )}
-          </div>
-        </Card>
-      </div>
-
-      {/* Totals */}
-      {!editing && (
-        <Card className="mt-6 p-5 flex-row items-center justify-between">
-          <div>
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Bruto</p>
-            <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(payslip.grossSalary)}</p>
-          </div>
-          <div className="w-px h-10 bg-muted" />
-          <div className="text-right">
-            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Líquido a Percibir</p>
-            <p className="text-lg font-bold text-success-700 dark:text-success-500 font-mono">{formatCurrency(payslip.netSalary)}</p>
-          </div>
-        </Card>
-      )}
-
-      {/* Actions */}
-      {editing && (
-        <div className="mt-6 flex gap-3 animate-slide-up">
-          <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} className="gap-2">
-            <Save className="w-4 h-4" />
-            {saveMut.isPending ? "Guardando..." : "Guardar cambios"}
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => { setEditing(false); setConcepts(payslip.concepts); }}
-          >
-            Cancelar
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

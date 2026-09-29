@@ -1,258 +1,408 @@
-import { useState, useCallback, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useDropzone } from "react-dropzone";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useDropzone, type FileRejection } from "react-dropzone";
 import {
-  Upload, FileText, X, CheckCircle2, AlertCircle, Loader2, Users, ArrowRight,
+  ArrowRight, Building2, CalendarDays, CheckCircle2, CircleAlert, FileText, FileUp, Gift,
+  Loader2, Lock, RotateCcw, ScanLine, Sparkles, Upload, Users, X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { getProfiles, uploadPayslips, type Payslip } from "../lib/api";
+import { formatCurrency } from "../lib/format";
 import { Providers } from "./Providers";
-import { Card } from "@/components/ui/card";
+import { PageHeader, PageHeaderSkeleton, SectionCard, Segmented } from "./app";
+import { EmptyState } from "./ui/EmptyState";
+import { ProfileSelector } from "./ui/ProfileSelector";
+import { StatusBadge, ExtraBadge, formatPeriod } from "./payroll/shared";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "cn";
+
+const MAX_SIZE = 10 * 1024 * 1024;
+
+type ItemState = "queued" | "uploading" | "done" | "failed";
+
+interface QueueItem {
+  id: string;
+  file: File;
+  state: ItemState;
+  result?: Payslip;
+  error?: string;
+}
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toLocaleString("es-ES", { maximumFractionDigits: 1 })} MB`;
 }
 
+function readProfileParam(): number | null {
+  if (typeof window === "undefined") return null;
+  const v = Number(new URLSearchParams(window.location.search).get("perfil"));
+  return Number.isInteger(v) && v > 0 ? v : null;
+}
+
+// ─── Fila de la cola ────────────────────────────────────────────
+function QueueRow({ item, onRemove, onRetry, disabled }: {
+  item: QueueItem;
+  onRemove: () => void;
+  onRetry: () => void;
+  disabled: boolean;
+}) {
+  const r = item.result;
+  return (
+    <li className="flex items-center gap-3 px-5 py-3.5">
+      <div
+        className={cn(
+          "flex size-9 shrink-0 items-center justify-center rounded-lg border border-border",
+          item.state === "done" ? "bg-primary/10" : item.state === "failed" ? "bg-destructive/10" : "bg-muted/60",
+        )}
+      >
+        {item.state === "uploading" ? (
+          <Loader2 className="size-4 animate-spin text-primary-600 dark:text-primary" />
+        ) : item.state === "done" ? (
+          <CheckCircle2 className="size-4 text-primary-600 dark:text-primary" />
+        ) : item.state === "failed" ? (
+          <CircleAlert className="size-4 text-destructive" />
+        ) : (
+          <FileText className="size-4 text-muted-foreground" />
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-foreground">{item.file.name}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {item.state === "queued" && `${formatFileSize(item.file.size)} · en cola`}
+          {item.state === "uploading" && "Extrayendo conceptos…"}
+          {item.state === "failed" && (item.error ?? "No se pudo procesar")}
+          {item.state === "done" && r && (
+            <>
+              {formatPeriod(r.periodMonth, r.periodYear)}
+              {r.company && <> · {r.company}</>}
+            </>
+          )}
+        </p>
+        {item.state === "uploading" && (
+          <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-muted">
+            <div className="h-full w-full animate-pulse rounded-full bg-gradient-to-r from-primary-500/30 via-primary-500 to-primary-500/30 dark:from-primary/30 dark:via-primary dark:to-primary/30" />
+          </div>
+        )}
+      </div>
+
+      {item.state === "done" && r && (
+        <div className="hidden text-right sm:block">
+          <p className="text-sm font-semibold tabular-nums text-foreground">{formatCurrency(r.netSalary)}</p>
+          <p className="text-[11px] text-muted-foreground tabular-nums">de {formatCurrency(r.grossSalary)}</p>
+        </div>
+      )}
+      {item.state === "done" && r && <StatusBadge status={r.parsingStatus} className="hidden md:inline-flex" />}
+
+      {item.state === "queued" && (
+        <Button variant="ghost" size="icon-sm" onClick={onRemove} disabled={disabled} aria-label={`Quitar ${item.file.name}`} className="text-muted-foreground hover:text-destructive">
+          <X className="size-4" />
+        </Button>
+      )}
+      {item.state === "failed" && (
+        <Button variant="ghost" size="sm" onClick={onRetry} disabled={disabled} className="gap-1.5">
+          <RotateCcw className="size-3.5" /> Reintentar
+        </Button>
+      )}
+      {item.state === "done" && r && (
+        <a
+          href={`/app/payslips?nomina=${r.id}`}
+          className={cn(buttonVariants({ variant: "ghost", size: "icon-sm" }), "text-muted-foreground")}
+          aria-label={`Ver nómina de ${formatPeriod(r.periodMonth, r.periodYear)}`}
+        >
+          <ArrowRight className="size-4" />
+        </a>
+      )}
+    </li>
+  );
+}
+
+// ─── Resumen de resultados ──────────────────────────────────────
+function ResultsSummary({ items }: { items: QueueItem[] }) {
+  const done = items.filter((i) => i.state === "done" && i.result);
+  const review = done.filter((i) => i.result!.parsingStatus !== "parsed");
+  const failed = items.filter((i) => i.state === "failed");
+  if (done.length + failed.length === 0) return null;
+
+  const ok = done.length - review.length;
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-start gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
+          <Sparkles className="size-4 text-primary-600 dark:text-primary" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-foreground">
+            {ok > 0 ? `${ok} ${ok === 1 ? "nómina lista" : "nóminas listas"}` : "Subida terminada"}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {[
+              review.length > 0 && `${review.length} para revisar`,
+              failed.length > 0 && `${failed.length} con error`,
+              review.length === 0 && failed.length === 0 && "Todo se ha extraído correctamente",
+            ].filter(Boolean).join(" · ")}
+          </p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <a href="/app/payroll" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>Ver dashboard</a>
+        <a href="/app/payslips" className={cn(buttonVariants({ size: "sm" }), "gap-1.5")}>
+          Mis nóminas <ArrowRight className="size-3.5" />
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ─── Vista ──────────────────────────────────────────────────────
 function UploadManager() {
   const queryClient = useQueryClient();
-  const { data: profiles = [] } = useQuery({
-    queryKey: ["profiles"],
-    queryFn: getProfiles,
-  });
+  const { data: profiles = [], isLoading } = useQuery({ queryKey: ["profiles"], queryFn: getProfiles });
 
   const [selectedProfile, setSelectedProfile] = useState<number | null>(null);
   const [payslipType, setPayslipType] = useState<"ordinal" | "extra">("ordinal");
-  const [files, setFiles] = useState<File[]>([]);
-  const [results, setResults] = useState<Payslip[]>([]);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
 
+  useEffect(() => {
+    if (selectedProfile || profiles.length === 0) return;
+    const fromUrl = readProfileParam();
+    setSelectedProfile(profiles.some((p) => p.id === fromUrl) ? fromUrl : profiles[0].id);
+  }, [profiles, selectedProfile]);
+
+  const patch = (id: string, changes: Partial<QueueItem>) =>
+    setQueue((q) => q.map((item) => (item.id === id ? { ...item, ...changes } : item)));
+
+  // Un archivo por petición: progreso y resultado individuales, y un PDF
+  // problemático no tumba al resto.
   const uploadMut = useMutation({
-    mutationFn: (args: { profileId: number; files: File[]; payslipType: "ordinal" | "extra" }) =>
-      uploadPayslips(args.profileId, args.files, args.payslipType),
-    onSuccess: (data) => {
-      setResults(data);
-      setFiles([]);
+    mutationFn: async (items: QueueItem[]) => {
+      if (!selectedProfile) return;
+      for (const item of items) {
+        patch(item.id, { state: "uploading", error: undefined });
+        try {
+          const [result] = await uploadPayslips(selectedProfile, [item.file], payslipType);
+          patch(item.id, { state: "done", result });
+        } catch (err) {
+          patch(item.id, { state: "failed", error: err instanceof Error ? err.message : "No se pudo procesar" });
+        }
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["payslips"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics"] });
     },
   });
 
-  const onDrop = useCallback((accepted: File[]) => {
-    setFiles((prev) => [...prev, ...accepted]);
-    setResults([]);
+  const onDrop = useCallback((accepted: File[], rejected: FileRejection[]) => {
+    if (accepted.length) {
+      setQueue((q) => [
+        // Una nueva tanda sustituye a los resultados ya terminados.
+        ...q.filter((i) => i.state === "queued"),
+        ...accepted.map((file) => ({ id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`, file, state: "queued" as const })),
+      ]);
+    }
+    for (const r of rejected) {
+      const tooBig = r.errors.some((e) => e.code === "file-too-large");
+      toast.error(tooBig ? `${r.file.name} supera los 10 MB` : `${r.file.name} no es un PDF`);
+    }
   }, []);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const busy = uploadMut.isPending;
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: { "application/pdf": [".pdf"] },
+    maxSize: MAX_SIZE,
     multiple: true,
+    noClick: true,
+    disabled: busy,
   });
 
-  const handleUpload = () => {
-    if (!selectedProfile || files.length === 0) return;
-    uploadMut.mutate({ profileId: selectedProfile, files, payslipType });
-  };
+  const pending = queue.filter((i) => i.state === "queued");
+  const totalSize = useMemo(() => pending.reduce((s, i) => s + i.file.size, 0), [pending]);
+  const doneCount = queue.filter((i) => i.state === "done" || i.state === "failed").length;
+  const activeProfile = profiles.find((p) => p.id === selectedProfile);
 
-  const removeFile = (index: number) => setFiles((prev) => prev.filter((_, i) => i !== index));
+  if (isLoading) {
+    return (
+      <>
+        <PageHeaderSkeleton />
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Skeleton className="h-96 rounded-xl lg:col-span-2" />
+          <Skeleton className="h-72 rounded-xl" />
+        </div>
+      </>
+    );
+  }
 
-  // Auto-select first profile
-  useEffect(() => {
-    if (!selectedProfile && profiles.length > 0) {
-      setSelectedProfile(profiles[0].id);
-    }
-  }, [profiles, selectedProfile]);
-
-  const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+  if (profiles.length === 0) {
+    return (
+      <>
+        <PageHeader title="Sube tus" accent="nóminas." description="Arrastra los PDF de tus nóminas y extraemos cada concepto automáticamente." />
+        <EmptyState
+          icon={Users}
+          title="Primero, crea un perfil"
+          description="Las nóminas se guardan dentro de un perfil (tú, tu pareja…). Crea uno y vuelve aquí para subirlas."
+          actionLabel="Crear perfil"
+          actionHref="/app/profiles"
+          actionIcon={ArrowRight}
+        />
+      </>
+    );
+  }
 
   return (
-    <div className="max-w-2xl animate-fade-in space-y-6">
-      {/* Hero */}
-      <Card className="p-0 overflow-hidden">
-        <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-        <div className="px-6 py-5 sm:px-8 sm:py-6">
-          <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Subir Nóminas</p>
-          <p className="text-base font-semibold text-foreground">Sube archivos PDF para extraer datos automáticamente</p>
-        </div>
-      </Card>
+    <div>
+      <PageHeader
+        title="Sube tus"
+        accent="nóminas."
+        description="Arrastra los PDF digitales de tus nóminas: extraemos periodo, empresa, bruto, neto y cada concepto en segundos."
+      />
 
-      {profiles.length === 0 ? (
-        <Card className="p-8 text-center">
-          <div className="w-14 h-14 rounded-2xl bg-accent-50 dark:bg-accent-500/10 flex items-center justify-center mx-auto mb-4">
-            <Users className="w-7 h-7 text-accent-600 dark:text-accent-400" aria-hidden="true" />
-          </div>
-          <h3 className="font-semibold text-foreground mb-1">Perfil necesario</h3>
-          <p className="text-sm text-muted-foreground mb-5">Antes de subir nóminas, necesitas crear un perfil de empleado.</p>
-          <a href="/app/profiles" className={cn(buttonVariants(), "gap-1.5")}>
-            Crear perfil
-            <ArrowRight className="w-4 h-4" />
-          </a>
-        </Card>
-      ) : (
-        <>
-          {/* Profile selector */}
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Perfil</label>
-            <div className="flex gap-2 flex-wrap" role="group" aria-label="Seleccionar perfil">
-              {profiles.map((p) => (
-                <Button
-                  key={p.id}
-                  type="button"
-                  variant={selectedProfile === p.id ? "secondary" : "ghost"}
-                  onClick={() => setSelectedProfile(p.id)}
-                  aria-pressed={selectedProfile === p.id}
-                  className={cn("gap-2", selectedProfile === p.id ? "shadow-sm" : "text-muted-foreground")}
-                >
-                  <div
-                    className={cn("w-3.5 h-3.5 rounded-full transition-opacity", selectedProfile === p.id ? "opacity-100" : "opacity-40")}
-                    style={{ backgroundColor: p.color }}
-                  />
-                  {p.name}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          {/* Type selector */}
-          <div>
-            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Tipo de nómina</label>
-            <div className="flex gap-2" role="group" aria-label="Tipo de nómina">
-              <Button
-                type="button"
-                variant={payslipType === "ordinal" ? "secondary" : "ghost"}
-                onClick={() => setPayslipType("ordinal")}
-                aria-pressed={payslipType === "ordinal"}
-                className={payslipType === "ordinal" ? "shadow-sm" : "text-muted-foreground"}
-              >
-                Mensual
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setPayslipType("extra")}
-                aria-pressed={payslipType === "extra"}
-                className={cn(
-                  payslipType === "extra"
-                    ? "bg-accent-50 dark:bg-accent-500/10 shadow-sm border border-accent-200 dark:border-accent-500/20 text-accent-700 dark:text-accent-400"
-                    : "text-muted-foreground"
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <SectionCard>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Perfil</p>
+                {profiles.length > 1 ? (
+                  <ProfileSelector profiles={profiles} value={selectedProfile ?? profiles[0].id} onChange={(v) => setSelectedProfile(v as number)} />
+                ) : (
+                  <p className="text-sm font-medium text-foreground">{profiles[0].name}</p>
                 )}
-              >
-                Paga Extra
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1.5">El tipo se detectará automáticamente si el PDF lo indica</p>
-          </div>
-
-          {/* Dropzone */}
-          <Card
-            {...getRootProps()}
-            aria-label="Zona de carga de archivos PDF"
-            className={cn(
-              "border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200",
-              isDragActive
-                ? "border-primary-400 bg-primary-50/60 dark:bg-primary-500/10 shadow-card-hover"
-                : "border-border hover:shadow-card-hover"
-            )}
-          >
-            <input {...getInputProps()} />
-            <div className={cn(
-              "w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-colors",
-              isDragActive ? "bg-primary-100 dark:bg-primary-500/20" : "bg-muted"
-            )}>
-              <Upload className={cn("w-7 h-7 transition-colors", isDragActive ? "text-primary-600 dark:text-primary-400" : "text-muted-foreground")} aria-hidden="true" />
-            </div>
-            {isDragActive ? (
-              <p className="text-primary-700 dark:text-primary-400 font-semibold text-sm">Suelta los archivos aquí...</p>
-            ) : (
-              <>
-                <p className="text-foreground font-semibold text-sm">Arrastra tus nóminas PDF aquí</p>
-                <p className="text-muted-foreground text-xs mt-1.5">
-                  o <span className="text-primary-600 dark:text-primary-400 font-medium">haz clic para seleccionar</span> · Solo PDF · Máx 10 MB
-                </p>
-              </>
-            )}
-          </Card>
-
-          {/* Selected files */}
-          {files.length > 0 && (
-            <div className="mt-6 animate-slide-up">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  {files.length} archivo{files.length > 1 ? "s" : ""} seleccionado{files.length > 1 ? "s" : ""}
-                </h3>
-                <span className="text-xs text-muted-foreground font-mono">{formatFileSize(totalSize)}</span>
               </div>
               <div className="space-y-2">
-                {files.map((f, i) => (
-                  <Card key={i} className="flex-row items-center gap-3 px-4 py-3">
-                    <div className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center flex-shrink-0">
-                      <FileText className="w-4 h-4 text-destructive" aria-hidden="true" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{f.name}</p>
-                      <p className="text-xs text-muted-foreground">{formatFileSize(f.size)}</p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={(e) => { e.stopPropagation(); removeFile(i); }}
-                      aria-label={`Eliminar ${f.name}`}
-                      className="hover:text-destructive"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </Card>
-                ))}
+                <p className="text-xs font-medium text-muted-foreground">Tipo de nómina</p>
+                <Segmented
+                  aria-label="Tipo de nómina"
+                  size="md"
+                  value={payslipType}
+                  onChange={setPayslipType}
+                  options={[
+                    { value: "ordinal", label: "Mensual", icon: CalendarDays },
+                    { value: "extra", label: "Paga extra", icon: Gift },
+                  ]}
+                />
               </div>
-              <Button
-                onClick={handleUpload}
-                disabled={uploadMut.isPending}
-                className="w-full mt-4 py-3 h-auto gap-2"
-              >
-                {uploadMut.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Procesando...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4" />
-                    Subir {files.length} archivo{files.length > 1 ? "s" : ""}
-                  </>
+            </div>
+
+            <div
+              {...getRootProps()}
+              aria-label="Zona para soltar archivos PDF"
+              className={cn(
+                "relative mt-6 overflow-hidden rounded-xl border-2 border-dashed px-6 py-12 text-center transition-all duration-200",
+                isDragActive ? "border-primary-500 bg-primary/5 dark:border-primary" : "border-border bg-muted/30",
+                busy && "opacity-60",
+              )}
+            >
+              <input {...getInputProps()} />
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,var(--color-primary)_0%,transparent_60%)] opacity-[0.06]" aria-hidden="true" />
+              <div
+                className={cn(
+                  "relative mx-auto flex size-14 items-center justify-center rounded-2xl border border-border bg-card shadow-sm transition-transform",
+                  isDragActive && "scale-110",
                 )}
+              >
+                <FileUp className="size-6 text-primary-600 dark:text-primary" aria-hidden="true" />
+              </div>
+              <p className="relative mt-4 text-base font-semibold text-foreground">
+                {isDragActive ? "Suelta los archivos aquí" : "Arrastra tus nóminas en PDF"}
+              </p>
+              <p className="relative mt-1 text-sm text-muted-foreground">
+                {activeProfile ? <>Se guardarán en <span className="font-medium text-foreground">{activeProfile.name}</span> · </> : null}
+                varios a la vez · máx. 10 MB por archivo
+              </p>
+              <Button type="button" variant="outline" onClick={open} disabled={busy} className="relative mt-5 gap-1.5">
+                <Upload className="size-4" /> Elegir archivos
               </Button>
             </div>
+          </SectionCard>
+
+          {queue.length > 0 && (
+            <SectionCard
+              title={busy ? `Procesando ${Math.min(doneCount + 1, queue.length)} de ${queue.length}` : pending.length > 0 ? `${pending.length} ${pending.length === 1 ? "archivo listo" : "archivos listos"} para subir` : "Resultado"}
+              description={pending.length > 0 && !busy ? `${formatFileSize(totalSize)} en total` : undefined}
+              action={
+                !busy && pending.length > 0 ? (
+                  <Button variant="ghost" size="sm" onClick={() => setQueue((q) => q.filter((i) => i.state !== "queued"))} className="text-muted-foreground">
+                    Vaciar
+                  </Button>
+                ) : undefined
+              }
+              flush
+              footer={
+                pending.length > 0 ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-1.5"><Lock className="size-3.5" /> El PDF se descarta tras extraer los datos</span>
+                    <Button onClick={() => uploadMut.mutate(pending)} disabled={busy || !selectedProfile} className="gap-1.5">
+                      {busy ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                      {busy ? "Procesando…" : `Subir ${pending.length} ${pending.length === 1 ? "nómina" : "nóminas"}`}
+                    </Button>
+                  </div>
+                ) : undefined
+              }
+            >
+              <ul className="divide-y divide-border">
+                {queue.map((item) => (
+                  <QueueRow
+                    key={item.id}
+                    item={item}
+                    disabled={busy}
+                    onRemove={() => setQueue((q) => q.filter((i) => i.id !== item.id))}
+                    onRetry={() => uploadMut.mutate([item])}
+                  />
+                ))}
+              </ul>
+            </SectionCard>
           )}
 
-          {/* Results */}
-          {results.length > 0 && (
-            <Card className="mt-6 border-success-100 dark:border-success-500/20 bg-success-50/50 dark:bg-success-500/10 p-5 animate-slide-up flex-row items-start gap-3">
-              <CheckCircle2 className="w-5 h-5 text-success-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
-              <div>
-                <h3 className="font-semibold text-success-700 dark:text-success-500 text-sm">
-                  {results.length} nómina{results.length > 1 ? "s" : ""} subida{results.length > 1 ? "s" : ""}
-                </h3>
-                <p className="text-xs text-success-700/80 dark:text-success-500/80 mt-1">
-                  Se están procesando en segundo plano.{" "}
-                  <a href="/app/payslips" className="font-semibold underline underline-offset-2">
-                    Ver nóminas →
-                  </a>
-                </p>
-              </div>
-            </Card>
-          )}
+          {!busy && <ResultsSummary items={queue} />}
+        </div>
 
-          {uploadMut.isError && (
-            <Card className="mt-4 border-destructive/20 bg-destructive/5 p-5 animate-slide-up flex-row items-start gap-3" role="alert">
-              <AlertCircle className="w-5 h-5 text-destructive mt-0.5 flex-shrink-0" aria-hidden="true" />
-              <div>
-                <h3 className="font-semibold text-destructive text-sm">Error al subir</h3>
-                <p className="text-xs text-destructive/80 mt-0.5">{uploadMut.error.message}</p>
+        <div className="space-y-6">
+          <SectionCard title="Qué puedes subir">
+            <ul className="space-y-4">
+              {[
+                { icon: FileText, title: "PDF digital", text: "El que descargas del portal del empleado o te envía la empresa." },
+                { icon: Building2, title: "Empresa privada y organismos públicos", text: "Reconocemos los dos formatos más habituales en España." },
+                { icon: ScanLine, title: "Sin fotos ni escaneos", text: "Leemos el texto del PDF directamente, sin OCR." },
+              ].map(({ icon: Icon, title, text }) => (
+                <li key={title} className="flex gap-3">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/60">
+                    <Icon className="size-4 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{title}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{text}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
+
+          <SectionCard title="Después de subir">
+            <ol className="space-y-3 text-sm">
+              {[
+                ["Procesada", "Lista para el dashboard y la analítica."],
+                ["Revisar", "No se detectó algún concepto: ábrela y complétalo a mano."],
+                ["Paga extra", "Si el PDF lo indica se marca sola; si no, cámbialo en el detalle."],
+              ].map(([label, text], i) => (
+                <li key={label} className="flex gap-3">
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary-700 dark:text-primary">{i + 1}</span>
+                  <p className="text-muted-foreground"><span className="font-medium text-foreground">{label}.</span> {text}</p>
+                </li>
+              ))}
+            </ol>
+            {payslipType === "extra" && (
+              <div className="mt-4 flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                <ExtraBadge /> Las nóminas de esta tanda se guardarán como paga extra.
               </div>
-            </Card>
-          )}
-        </>
-      )}
+            )}
+          </SectionCard>
+        </div>
+      </div>
     </div>
   );
 }

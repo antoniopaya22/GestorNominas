@@ -1,23 +1,28 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  UserPlus, Edit3, Trash2, Users, Check,
+  AlertTriangle, BarChart3, Check, FileText, MoreHorizontal, Pencil, Plus, Trash2, Upload, Users,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
-  getProfiles,
-  createProfile,
-  updateProfile,
-  deleteProfile,
-  type Profile,
+  createProfile, deleteProfile, getPayslips, getProfiles, updateProfile, type Profile,
 } from "../lib/api";
+import { formatCurrency } from "../lib/format";
 import { Providers } from "./Providers";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { PageHeader, PageHeaderSkeleton } from "./app";
+import { EmptyState } from "./ui/EmptyState";
+import { ConfirmModal } from "./ui/ConfirmModal";
+import { ProfileDot, adaptiveProfileColor, formatPeriod } from "./payroll/shared";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ConfirmModal } from "./ui/ConfirmModal";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "cn";
 
 const COLORS = [
@@ -26,212 +31,288 @@ const COLORS = [
   "#14b8a6", "#06b6d4",
 ];
 
-function ProfilesManager() {
+function formatSince(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+}
+
+// ─── Formulario (alta / edición) ────────────────────────────────
+function ProfileDialog({
+  open, profile, onOpenChange,
+}: {
+  open: boolean;
+  profile: Profile | null;
+  onOpenChange: (open: boolean) => void;
+}) {
   const queryClient = useQueryClient();
-  const { data: profiles = [], isLoading } = useQuery({
-    queryKey: ["profiles"],
-    queryFn: getProfiles,
-  });
+  const [name, setName] = useState(profile?.name ?? "");
+  const [color, setColor] = useState(profile?.color ?? COLORS[0]);
+  const editing = profile !== null;
 
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [name, setName] = useState("");
-  const [color, setColor] = useState(COLORS[0]);
-  const [toDelete, setToDelete] = useState<Profile | null>(null);
-
-  const createMut = useMutation({
-    mutationFn: createProfile,
+  const saveMut = useMutation({
+    mutationFn: () =>
+      editing ? updateProfile(profile.id, { name: name.trim(), color }) : createProfile({ name: name.trim(), color }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profiles"] });
-      setName("");
-      setColor(COLORS[0]);
+      toast.success(editing ? "Perfil actualizado" : "Perfil creado");
+      onOpenChange(false);
     },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo guardar el perfil"),
   });
-
-  const updateMut = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: { name: string; color: string } }) =>
-      updateProfile(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["profiles"] });
-      setEditingId(null);
-      setName("");
-    },
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: deleteProfile,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["profiles"] }),
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    if (editingId) {
-      updateMut.mutate({ id: editingId, data: { name, color } });
-    } else {
-      createMut.mutate({ name, color });
-    }
-  };
-
-  const startEdit = (p: Profile) => {
-    setEditingId(p.id);
-    setName(p.name);
-    setColor(p.color);
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setName("");
-    setColor(COLORS[0]);
-  };
-
-  if (isLoading) {
-    return (
-      <div className="max-w-2xl space-y-4 animate-fade-in">
-        <Card className="p-0 overflow-hidden">
-          <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-          <div className="px-6 py-5 sm:px-8 sm:py-6">
-            <Skeleton className="h-4 w-32 mb-1" />
-            <Skeleton className="h-5 w-56" />
-          </div>
-        </Card>
-        <Card className="p-6">
-          <Skeleton className="h-10 w-full mb-4" />
-          <Skeleton className="h-10 w-40" />
-        </Card>
-      </div>
-    );
-  }
 
   return (
-    <div className="max-w-2xl animate-fade-in space-y-6">
-      {/* Hero */}
-      <Card className="p-0 overflow-hidden">
-        <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-        <div className="px-6 py-5 sm:px-8 sm:py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Perfiles</p>
-              <p className="text-base font-semibold text-foreground">Gestiona los perfiles de empleados</p>
-            </div>
-            {profiles.length > 0 && (
-              <Badge variant="secondary" className="bg-accent-50 text-accent-700 dark:bg-accent-500/10 dark:text-accent-400">
-                {profiles.length} perfil{profiles.length !== 1 ? "es" : ""}
-              </Badge>
-            )}
-          </div>
-        </div>
-      </Card>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <form onSubmit={(e) => { e.preventDefault(); if (name.trim()) saveMut.mutate(); }}>
+          <DialogHeader>
+            <DialogTitle>{editing ? "Editar perfil" : "Nuevo perfil"}</DialogTitle>
+            <DialogDescription>
+              {editing ? "Cambia el nombre o el color con el que aparece en gráficas y listados." : "Cada perfil tiene su propio histórico de nóminas y su analítica."}
+            </DialogDescription>
+          </DialogHeader>
 
-      {/* Form */}
-      <Card className="p-5">
-        <form onSubmit={handleSubmit}>
-        <div className="flex items-center gap-2 mb-4">
-          <UserPlus className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
-          <h3 className="font-semibold text-foreground text-sm">
-            {editingId ? "Editar perfil" : "Nuevo perfil"}
-          </h3>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
-          <div className="flex-1 space-y-1.5">
+          <div className="mt-5 flex items-center gap-4 rounded-xl border border-border bg-muted/40 p-4">
+            <ProfileDot color={color} name={name.trim() || "?"} size="lg" />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-foreground">{name.trim() || "Nombre del perfil"}</p>
+              <p className="text-xs text-muted-foreground">Vista previa</p>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-1.5">
             <Label htmlFor="profile-name">Nombre</Label>
             <Input
               id="profile-name"
-              type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ej: Antonio, Mi pareja..."
+              placeholder="Ej.: Yo, Mi pareja…"
+              maxLength={60}
+              autoFocus
+              required
             />
           </div>
-          <div className="space-y-1.5">
-            <Label>Color</Label>
-            <div className="flex gap-1.5" role="group" aria-label="Seleccionar color">
-              {COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  aria-label={`Color ${c}`}
-                  aria-pressed={color === c}
-                  className={cn(
-                    "w-7 h-7 rounded-lg border-2 transition-all duration-150 cursor-pointer flex items-center justify-center",
-                    color === c ? "border-foreground scale-110 shadow-sm" : "border-transparent hover:scale-105"
-                  )}
-                  style={{ backgroundColor: c }}
-                >
-                  {color === c && <Check className="w-3.5 h-3.5 text-white" />}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button type="submit" className="whitespace-nowrap">
-              {editingId ? "Guardar" : "Crear perfil"}
-            </Button>
-            {editingId && (
-              <Button type="button" variant="secondary" onClick={cancelEdit}>
-                Cancelar
-              </Button>
-            )}
-          </div>
-        </div>
-        </form>
-      </Card>
 
-      {/* List */}
-      <div className="space-y-3">
-        {profiles.map((p) => (
-          <Card
-            key={p.id}
-            className="p-4 flex-row items-center justify-between group hover:shadow-card-hover transition-shadow"
+          <div className="mt-5 space-y-2">
+            <Label id="profile-color-label">Color</Label>
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="profile-color-label">
+              {COLORS.map((c) => {
+                const selected = color === c;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    aria-label={`Color ${c}`}
+                    onClick={() => setColor(c)}
+                    className={cn(
+                      "flex size-8 cursor-pointer items-center justify-center rounded-full ring-offset-2 ring-offset-background transition-all outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      selected ? "ring-2 ring-foreground/70" : "hover:scale-110",
+                    )}
+                    style={{ backgroundColor: c }}
+                  >
+                    {selected && <Check className="size-4 text-white" strokeWidth={3} />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <DialogFooter className="mt-6">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button type="submit" disabled={!name.trim() || saveMut.isPending}>
+              {saveMut.isPending ? "Guardando…" : editing ? "Guardar cambios" : "Crear perfil"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Tarjeta de perfil ──────────────────────────────────────────
+function ProfileCard({
+  profile, total, latest, loading, onEdit, onDelete,
+}: {
+  profile: Profile;
+  total: number | undefined;
+  latest: { periodMonth: number | null; periodYear: number | null; netSalary: number | null } | undefined;
+  loading: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <article className="group relative flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgb(0_0_0/0.03)] transition-shadow hover:shadow-md">
+      <div className="h-1 w-full" style={{ backgroundColor: adaptiveProfileColor(profile.color) }} aria-hidden="true" />
+      <div className="flex items-start gap-3.5 p-5 pb-4">
+        <ProfileDot color={profile.color} name={profile.name} size="lg" />
+        <div className="min-w-0 flex-1 pt-0.5">
+          <h2 className="truncate text-base font-semibold text-foreground">{profile.name}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">Desde {formatSince(profile.createdAt)}</p>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button variant="ghost" size="icon-sm" aria-label={`Opciones de ${profile.name}`} className="-mr-1.5 text-muted-foreground" />}
           >
-            <div className="flex items-center gap-3.5">
-              <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-base shadow-sm"
-                style={{ backgroundColor: p.color }}
-              >
-                {p.name.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <div className="font-semibold text-foreground text-sm">{p.name}</div>
-                <div className="text-[11px] text-muted-foreground mt-0.5">
-                  Creado: {new Date(p.createdAt).toLocaleDateString("es-ES", {
-                    day: "numeric", month: "short", year: "numeric",
-                  })}
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => startEdit(p)}
-                aria-label={`Editar perfil ${p.name}`}
-                className="gap-1.5"
-              >
-                <Edit3 className="w-3.5 h-3.5" /> Editar
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setToDelete(p)}
-                aria-label={`Eliminar perfil ${p.name}`}
-                className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Eliminar
-              </Button>
-            </div>
-          </Card>
-        ))}
-        {profiles.length === 0 && (
-          <Card className="text-center py-14">
-            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
-              <Users className="w-7 h-7 text-muted-foreground" aria-hidden="true" />
-            </div>
-            <h3 className="font-semibold text-foreground text-sm mb-1">Sin perfiles</h3>
-            <p className="text-xs text-muted-foreground">Crea tu primer perfil con el formulario de arriba.</p>
-          </Card>
-        )}
+            <MoreHorizontal className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-40">
+            <DropdownMenuItem onClick={onEdit} className="gap-2"><Pencil className="size-4" /> Editar</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onDelete} variant="destructive" className="gap-2"><Trash2 className="size-4" /> Eliminar</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+
+      <dl className="mx-5 grid grid-cols-2 divide-x divide-border rounded-lg border border-border bg-muted/30">
+        <div className="px-3.5 py-3">
+          <dt className="text-[11px] font-medium text-muted-foreground">Nóminas</dt>
+          <dd className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
+            {loading ? <Skeleton className="mt-1 h-5 w-8" /> : total ?? 0}
+          </dd>
+        </div>
+        <div className="min-w-0 px-3.5 py-3">
+          <dt className="truncate text-[11px] font-medium text-muted-foreground">
+            {latest ? `Neto · ${formatPeriod(latest.periodMonth, latest.periodYear)}` : "Última nómina"}
+          </dt>
+          <dd className="mt-0.5 truncate text-lg font-semibold tabular-nums text-foreground">
+            {loading ? <Skeleton className="mt-1 h-5 w-20" /> : latest ? formatCurrency(latest.netSalary) : "—"}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="mt-auto flex items-center gap-1 p-3 pt-4">
+        <a href={`/app/payslips?perfil=${profile.id}`} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "flex-1 gap-1.5 text-muted-foreground hover:text-foreground")}>
+          <FileText className="size-3.5" /> Nóminas
+        </a>
+        <a href={`/app/analytics?perfil=${profile.id}`} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "flex-1 gap-1.5 text-muted-foreground hover:text-foreground")}>
+          <BarChart3 className="size-3.5" /> Analítica
+        </a>
+        <a href={`/app/upload?perfil=${profile.id}`} className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "flex-1 gap-1.5 text-muted-foreground hover:text-foreground")}>
+          <Upload className="size-3.5" /> Subir
+        </a>
+      </div>
+    </article>
+  );
+}
+
+function ProfileCardSkeleton() {
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="flex items-center gap-3.5">
+        <Skeleton className="size-12 rounded-full" />
+        <div className="space-y-2"><Skeleton className="h-4 w-28" /><Skeleton className="h-3 w-20" /></div>
+      </div>
+      <Skeleton className="mt-5 h-16 w-full rounded-lg" />
+      <Skeleton className="mt-4 h-8 w-full" />
+    </div>
+  );
+}
+
+// ─── Vista ──────────────────────────────────────────────────────
+function ProfilesManager() {
+  const queryClient = useQueryClient();
+  const { data: profiles = [], isLoading, error } = useQuery({ queryKey: ["profiles"], queryFn: getProfiles });
+
+  // Una consulta ligera por perfil: total de nóminas + la más reciente.
+  const summaries = useQueries({
+    queries: profiles.map((p) => ({
+      queryKey: ["payslips", p.id, "summary"],
+      queryFn: () => getPayslips({ profileId: p.id, sortBy: "period", sortDir: "desc", page: 1, limit: 1 }),
+    })),
+  });
+
+  const [dialog, setDialog] = useState<{ open: boolean; profile: Profile | null; key: number }>({ open: false, profile: null, key: 0 });
+  const [toDelete, setToDelete] = useState<Profile | null>(null);
+
+  const openDialog = (profile: Profile | null) => setDialog((d) => ({ open: true, profile, key: d.key + 1 }));
+
+  const deleteMut = useMutation({
+    mutationFn: deleteProfile,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["payslips"] });
+      toast.success("Perfil eliminado");
+    },
+    onError: () => toast.error("No se pudo eliminar el perfil"),
+  });
+
+  const newButton = (
+    <Button onClick={() => openDialog(null)} className="gap-1.5">
+      <Plus className="size-4" /> Nuevo perfil
+    </Button>
+  );
+
+  const totalPayslips = summaries.reduce((s, q) => s + (q.data?.total ?? 0), 0);
+
+  return (
+    <div>
+      {isLoading ? (
+        <>
+          <PageHeaderSkeleton />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => <ProfileCardSkeleton key={i} />)}
+          </div>
+        </>
+      ) : error ? (
+        <EmptyState icon={AlertTriangle} title="No se pudieron cargar los perfiles" description="Vuelve a intentarlo en unos segundos.">
+          <Button variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: ["profiles"] })}>Reintentar</Button>
+        </EmptyState>
+      ) : (
+        <>
+          <PageHeader
+            title="Perfiles"
+            description={
+              profiles.length > 0
+                ? `${profiles.length} ${profiles.length === 1 ? "perfil" : "perfiles"} · ${totalPayslips} ${totalPayslips === 1 ? "nómina" : "nóminas"} en total. Cada perfil tiene su propio histórico y analítica.`
+                : "Las personas cuyas nóminas gestionas: tú, tu pareja, otra fuente de ingresos…"
+            }
+            actions={profiles.length > 0 ? newButton : undefined}
+          />
+
+          {profiles.length === 0 ? (
+            <EmptyState icon={Users} title="Crea tu primer perfil" description="Un perfil agrupa las nóminas de una persona. Puedes crear varios y compararlos en el dashboard.">
+              {newButton}
+            </EmptyState>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {profiles.map((p, i) => (
+                <ProfileCard
+                  key={p.id}
+                  profile={p}
+                  total={summaries[i]?.data?.total}
+                  latest={summaries[i]?.data?.data[0]}
+                  loading={!!summaries[i]?.isLoading}
+                  onEdit={() => openDialog(p)}
+                  onDelete={() => setToDelete(p)}
+                />
+              ))}
+              <button
+                type="button"
+                onClick={() => openDialog(null)}
+                className="flex min-h-40 cursor-pointer sm:min-h-56 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-card/40 p-6 text-center transition-colors outline-none hover:border-primary-500/50 hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <span className="flex size-11 items-center justify-center rounded-full border border-border bg-card">
+                  <Plus className="size-5 text-primary-600 dark:text-primary" />
+                </span>
+                <span>
+                  <span className="block text-sm font-medium text-foreground">Añadir perfil</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">Otra persona u otra fuente de ingresos</span>
+                </span>
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* key: remonta el formulario con los valores del perfil a editar */}
+      <ProfileDialog
+        key={dialog.key}
+        open={dialog.open}
+        profile={dialog.profile}
+        onOpenChange={(open) => setDialog((d) => ({ ...d, open }))}
+      />
 
       <ConfirmModal
         open={!!toDelete}
