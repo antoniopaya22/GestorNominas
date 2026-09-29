@@ -10,10 +10,10 @@ const envSchema = z.object({
   // valor por defecto es solo para desarrollo local/tests contra un Postgres
   // local — el cliente de postgres-js es perezoso, no conecta hasta la
   // primera query, así que no rompe tests que no tocan la BBDD.
-  DATABASE_URL: z.string().default("postgresql://postgres:postgres@localhost:5432/gestornominas"),
+  DATABASE_URL: z.string().default("postgresql://postgres:postgres@localhost:5432/sueldia"),
   JWT_SECRET: isProd
     ? z.string().min(32, "JWT_SECRET must be at least 32 characters in production")
-    : z.string().min(16).default("gestor-nominas-dev-secret-change-me"),
+    : z.string().min(16).default("sueldia-dev-secret-change-me"),
   JWT_EXPIRES_IN: z.string().default("7d"),
 });
 

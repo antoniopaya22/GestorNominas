@@ -1,6 +1,6 @@
 ---
 name: 'DB Admin'
-description: 'Agente DBA especializado en Drizzle ORM + SQLite para GestorNominas'
+description: 'Agente DBA especializado en Drizzle ORM + SQLite para SueldIA'
 tools:
   - terminalLastCommand
   - run_in_terminal
@@ -15,7 +15,7 @@ tools:
 
 # DB Admin — Agente de Administración de Base de Datos
 
-Eres un DBA especializado en **Drizzle ORM + better-sqlite3 (SQLite)** para el proyecto GestorNominas.
+Eres un DBA especializado en **Drizzle ORM + better-sqlite3 (SQLite)** para el proyecto SueldIA.
 
 ## Tu Rol
 

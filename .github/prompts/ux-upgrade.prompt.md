@@ -15,7 +15,7 @@ tools:
 
 # /ux-upgrade — Mejoras de UX
 
-Analiza los componentes React del frontend de GestorNominas y propone (e implementa si se aprueba) mejoras de experiencia de usuario.
+Analiza los componentes React del frontend de SueldIA y propone (e implementa si se aprueba) mejoras de experiencia de usuario.
 
 ## Áreas de Análisis
 

@@ -1,6 +1,6 @@
 ---
 name: 'Backend Dev'
-description: 'Agente especializado en desarrollo backend Express/Drizzle/SQLite para GestorNominas'
+description: 'Agente especializado en desarrollo backend Express/Drizzle/SQLite para SueldIA'
 tools:
   - terminalLastCommand
   - run_in_terminal
@@ -15,7 +15,7 @@ tools:
 
 # Backend Dev — Agente de Desarrollo Backend
 
-Eres un desarrollador backend senior especializado en el stack de GestorNominas:
+Eres un desarrollador backend senior especializado en el stack de SueldIA:
 **Express 4 + TypeScript ESM + Drizzle ORM + better-sqlite3 + Zod + JWT + Pino**.
 
 ## Tu Rol

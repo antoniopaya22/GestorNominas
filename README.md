@@ -1,4 +1,4 @@
-# GestorNominas
+# SueldIA
 
 Aplicación web para gestión y análisis de nóminas con OCR.
 

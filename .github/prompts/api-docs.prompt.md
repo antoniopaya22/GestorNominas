@@ -11,7 +11,7 @@ tools:
 
 # /api-docs — Documentación de API
 
-Genera documentación completa para endpoints del API REST de GestorNominas.
+Genera documentación completa para endpoints del API REST de SueldIA.
 
 ## Input del Usuario
 

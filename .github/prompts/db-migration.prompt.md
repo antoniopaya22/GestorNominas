@@ -14,7 +14,7 @@ tools:
 
 # /db-migration — Nueva Migración de Base de Datos
 
-Guía interactiva para crear cambios en la base de datos de GestorNominas usando Drizzle ORM.
+Guía interactiva para crear cambios en la base de datos de SueldIA usando Drizzle ORM.
 
 ## Input del Usuario
 

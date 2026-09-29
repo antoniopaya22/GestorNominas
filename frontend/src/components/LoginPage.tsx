@@ -40,7 +40,7 @@ export default function LoginPage() {
               <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
             </svg>
           </div>
-          <h1 className="text-xl font-bold text-foreground">Gestor de Nóminas</h1>
+          <h1 className="text-xl font-bold text-foreground">SueldIA</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {mode === "login" ? "Inicia sesión en tu cuenta" : "Crea una cuenta nueva"}
           </p>

@@ -1,10 +1,10 @@
 ---
 name: 'TypeScript Standards'
-description: 'Convenciones de TypeScript para todo el proyecto GestorNominas'
+description: 'Convenciones de TypeScript para todo el proyecto SueldIA'
 applyTo: '**/*.ts,**/*.tsx'
 ---
 
-# Convenciones TypeScript — GestorNominas
+# Convenciones TypeScript — SueldIA
 
 ## Módulos ESM
 - Usar `import`/`export` — nunca `require()`/`module.exports`

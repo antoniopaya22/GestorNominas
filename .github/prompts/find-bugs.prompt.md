@@ -12,7 +12,7 @@ tools:
 
 # /find-bugs — Detector de Bugs
 
-Escanea el codebase de GestorNominas buscando bugs potenciales, errores lógicos y problemas de robustez.
+Escanea el codebase de SueldIA buscando bugs potenciales, errores lógicos y problemas de robustez.
 
 ## Proceso
 

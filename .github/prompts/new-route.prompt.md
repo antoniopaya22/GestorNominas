@@ -14,7 +14,7 @@ tools:
 
 # /new-route — Scaffolding de Ruta Express
 
-Crea una nueva ruta Express completa siguiendo los patrones exactos de GestorNominas.
+Crea una nueva ruta Express completa siguiendo los patrones exactos de SueldIA.
 
 ## Input del Usuario
 

@@ -1,4 +1,4 @@
-# GestorNominas — Instrucciones para Agentes de IA
+# SueldIA — Instrucciones para Agentes de IA
 
 ## Visión General
 

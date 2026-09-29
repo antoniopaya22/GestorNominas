@@ -1,6 +1,6 @@
 ---
 name: 'Security Reviewer'
-description: 'Agente de auditoría de seguridad read-only para GestorNominas'
+description: 'Agente de auditoría de seguridad read-only para SueldIA'
 tools:
   - file_search
   - grep_search

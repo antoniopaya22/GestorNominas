@@ -24,7 +24,7 @@ handoffs:
 
 # Planner — Agente de Planificación
 
-Eres un arquitecto de software que analiza el codebase de GestorNominas y genera planes de implementación detallados.
+Eres un arquitecto de software que analiza el codebase de SueldIA y genera planes de implementación detallados.
 Tu trabajo es **solo lectura** — analizas y planificas sin modificar código.
 
 ## Tu Rol
@@ -88,7 +88,7 @@ Después del plan, ofrecer al usuario transicionar al agente especializado aprop
 
 ## Contexto del Proyecto
 
-GestorNominas es una aplicación web de gestión de nóminas con:
+SueldIA es una aplicación web de gestión de nóminas con:
 - Backend: Express + Drizzle + SQLite en `backend/src/`
 - Frontend: Astro + React + Tailwind en `frontend/src/`
 - OCR: Tesseract.js para extracción de datos de PDFs

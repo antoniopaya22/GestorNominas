@@ -14,7 +14,7 @@ tools:
 
 # /new-component — Scaffolding de Componente React + Página Astro
 
-Crea una nueva página completa en el frontend de GestorNominas siguiendo los patrones exactos del proyecto.
+Crea una nueva página completa en el frontend de SueldIA siguiendo los patrones exactos del proyecto.
 
 ## Input del Usuario
 

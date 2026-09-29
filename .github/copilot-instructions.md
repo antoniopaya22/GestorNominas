@@ -1,8 +1,8 @@
-# GestorNominas — Instrucciones Globales para Copilot
+# SueldIA — Instrucciones Globales para Copilot
 
 ## Descripción del Proyecto
 
-GestorNominas es una aplicación web de gestión y análisis de nóminas con OCR. Permite a los usuarios subir PDFs de nóminas, extraer datos automáticamente (texto directo o OCR con Tesseract), y proporciona dashboards analíticos, alertas y exportación de datos.
+SueldIA es una aplicación web de gestión y análisis de nóminas con OCR. Permite a los usuarios subir PDFs de nóminas, extraer datos automáticamente (texto directo o OCR con Tesseract), y proporciona dashboards analíticos, alertas y exportación de datos.
 
 ## Stack Tecnológico
 
@@ -80,7 +80,7 @@ GestorNominas es una aplicación web de gestión y análisis de nóminas con OCR
 ## Estructura del Proyecto
 
 ```
-GestorNominas/
+SueldIA/
 ├── .github/                    # Configuración Copilot/agentes
 ├── backend/
 │   ├── src/

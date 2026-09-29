@@ -12,7 +12,7 @@ tools:
 
 # /security-audit — Auditoría de Seguridad
 
-Realiza una auditoría de seguridad completa de GestorNominas basada en OWASP Top 10, adaptada al stack del proyecto.
+Realiza una auditoría de seguridad completa de SueldIA basada en OWASP Top 10, adaptada al stack del proyecto.
 
 ## Alcance
 
@@ -63,7 +63,7 @@ Analizar sistemáticamente:
 ## Formato del Reporte
 
 ```markdown
-# 🔒 Auditoría de Seguridad — GestorNominas
+# 🔒 Auditoría de Seguridad — SueldIA
 
 **Fecha**: [fecha]
 **Alcance**: [archivos analizados]
