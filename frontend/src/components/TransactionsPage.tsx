@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Receipt, Plus, Trash2, Search, CheckCircle2,
@@ -374,6 +374,17 @@ function TransactionsView() {
     setFormPayee("");
     setFormMemo("");
   };
+
+  // La acción "Nueva transacción" de la cabecera de la app enlaza aquí con ?nueva=1.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("nueva")) return;
+    openCreateForm("expense");
+    params.delete("nueva");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openEditForm = (transaction: Transaction) => {
     if (transaction.type === "transfer" && transaction.transferDirection === "inflow") {

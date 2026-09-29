@@ -1,20 +1,5 @@
 import * as React from "react";
-import {
-  Home,
-  Wallet,
-  ChartColumn,
-  Landmark,
-  Tags,
-  Receipt,
-  ArrowDownToLine,
-  FileText,
-  Upload,
-  Users,
-  Settings,
-  PieChart,
-  ChevronsUpDown,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronsUpDown, LogOut, Monitor, Moon, Search, Settings, Sun, Check } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -30,6 +15,7 @@ import {
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -37,6 +23,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -47,114 +34,40 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "cn";
+import { supabase } from "@/lib/supabase";
+import { clearAuth, getMe } from "@/lib/api";
+import { useTheme, type ThemePreference } from "@/hooks/use-theme";
+import { CommandMenu } from "@/components/app/CommandMenu";
+import {
+  HOME_ITEM,
+  SETTINGS_ITEM,
+  WORKSPACES,
+  findWorkspace,
+  getActiveWorkspace,
+  getBreadcrumbTrail,
+  isActivePath,
+  type NavItem,
+  type WorkspaceMeta,
+} from "@/components/app/navigation";
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  exact?: boolean;
+// ─── Marca ──────────────────────────────────────────────────────
+function BrandMark({ className }: { className?: string }) {
+  return <img src="/logo-mark.svg" alt="" className={cn("aspect-square size-8 shrink-0", className)} />;
 }
 
-type WorkspaceKey = "finanzas" | "nominas";
-
-interface WorkspaceMeta {
-  key: WorkspaceKey;
-  label: string;
-  icon: LucideIcon;
-  href: string;
-  items: NavItem[];
-}
-
-// Única fuente de verdad para la navegación de /app/* — el switcher de
-// workspace, los grupos del sidebar y las breadcrumbs se derivan todos de
-// aquí a partir de `currentPath`, sin duplicar la lista en ningún otro sitio.
-const HOME_ITEM: NavItem = { href: "/app", label: "Inicio", icon: Home };
-const SETTINGS_ITEM: NavItem = { href: "/app/settings", label: "Ajustes", icon: Settings };
-
-const WORKSPACES: WorkspaceMeta[] = [
-  {
-    key: "finanzas",
-    label: "Finanzas",
-    icon: Wallet,
-    href: "/app/finance",
-    items: [
-      { href: "/app/finance", label: "Dashboard", icon: Wallet, exact: true },
-      { href: "/app/finance/analytics", label: "Analítica", icon: PieChart },
-      { href: "/app/accounts", label: "Cuentas", icon: Landmark },
-      { href: "/app/categories", label: "Categorías", icon: Tags },
-      { href: "/app/transactions", label: "Transacciones", icon: Receipt },
-      { href: "/app/import", label: "Importar", icon: ArrowDownToLine },
-    ],
-  },
-  {
-    key: "nominas",
-    label: "Nóminas",
-    icon: FileText,
-    href: "/app/payroll",
-    items: [
-      { href: "/app/payroll", label: "Dashboard", icon: ChartColumn },
-      { href: "/app/upload", label: "Subir Nóminas", icon: Upload },
-      { href: "/app/payslips", label: "Mis Nóminas", icon: FileText },
-      { href: "/app/analytics", label: "Analítica", icon: PieChart },
-      { href: "/app/profiles", label: "Perfiles", icon: Users },
-    ],
-  },
-];
-
-function normalizePath(path: string): string {
-  return path !== "/app" && path.endsWith("/") ? path.slice(0, -1) : path;
-}
-
-function isActivePath(currentPath: string, href: string, exact = false): boolean {
-  const normalized = normalizePath(currentPath);
-  if (href === "/app") return normalized === "/app";
-  if (exact) return normalized === href;
-  return normalized === href || normalized.startsWith(`${href}/`);
-}
-
-// Si la ruta actual no pertenece a ningún workspace (Inicio, Ajustes), se
-// muestra Finanzas por defecto — es una elección arbitraria pero
-// determinista (misma en servidor y cliente, sin depender de localStorage).
-function getActiveWorkspace(currentPath: string): WorkspaceMeta {
+function Wordmark() {
   return (
-    WORKSPACES.find((ws) => ws.items.some((item) => isActivePath(currentPath, item.href, item.exact))) ??
-    WORKSPACES[0]
+    <span className="font-semibold tracking-tight">
+      Sueld<span className="text-primary-500 dark:text-primary">IA</span>
+    </span>
   );
 }
 
-interface Crumb {
-  label: string;
-  href?: string;
-}
-
-function getBreadcrumbTrail(currentPath: string): Crumb[] {
-  if (isActivePath(currentPath, HOME_ITEM.href, true)) {
-    return [{ label: HOME_ITEM.label }];
-  }
-  if (isActivePath(currentPath, SETTINGS_ITEM.href)) {
-    return [{ label: HOME_ITEM.label, href: HOME_ITEM.href }, { label: SETTINGS_ITEM.label }];
-  }
-  for (const ws of WORKSPACES) {
-    const item = ws.items.find((i) => isActivePath(currentPath, i.href, i.exact));
-    if (!item) continue;
-    if (item.href === ws.href) {
-      return [{ label: HOME_ITEM.label, href: HOME_ITEM.href }, { label: ws.label }];
-    }
-    return [
-      { label: HOME_ITEM.label, href: HOME_ITEM.href },
-      { label: ws.label, href: ws.href },
-      { label: item.label },
-    ];
-  }
-  return [{ label: HOME_ITEM.label, href: HOME_ITEM.href }];
-}
-
-function BrandMark() {
-  return <img src="/logo-mark.svg" alt="" className="aspect-square size-8 shrink-0" />;
-}
-
+// ─── Espacios de trabajo ───────────────────────────────────────
 function WorkspaceSwitcher({ active }: { active: WorkspaceMeta }) {
   return (
     <SidebarMenu>
@@ -170,25 +83,29 @@ function WorkspaceSwitcher({ active }: { active: WorkspaceMeta }) {
           >
             <BrandMark />
             <div className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-semibold">
-                Sueld<span className="text-primary-500 dark:text-primary">IA</span>
-              </span>
-              <span className="truncate text-xs text-sidebar-foreground/70">{active.label}</span>
+              <Wordmark />
+              <span className="truncate text-xs text-sidebar-foreground/60">{active.label}</span>
             </div>
-            <ChevronsUpDown className="ml-auto size-4 text-sidebar-foreground/50" />
+            <ChevronsUpDown className="ml-auto size-4 text-sidebar-foreground/40" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-(--anchor-width) min-w-56 rounded-lg" align="start" side="bottom" sideOffset={4}>
+          <DropdownMenuContent className="w-(--anchor-width) min-w-60 rounded-xl p-1.5" align="start" side="bottom" sideOffset={6}>
             <DropdownMenuGroup>
-              <DropdownMenuLabel className="text-xs text-muted-foreground">Espacios de trabajo</DropdownMenuLabel>
+              <DropdownMenuLabel className="px-2 text-[11px]">Espacios de trabajo</DropdownMenuLabel>
               {WORKSPACES.map((ws) => (
-                <DropdownMenuItem key={ws.key} render={<a href={ws.href} />} className="gap-2 p-2">
-                  <div className="flex size-6 items-center justify-center rounded-md border border-border">
-                    <ws.icon className="size-3.5 shrink-0" />
+                <DropdownMenuItem key={ws.key} render={<a href={ws.href} />} className="gap-2.5 rounded-lg p-2">
+                  <div
+                    className={cn(
+                      "flex size-8 items-center justify-center rounded-lg border",
+                      ws.key === active.key ? "border-primary/30 bg-primary/10 text-primary-700 dark:text-primary" : "border-border bg-muted/60 text-muted-foreground",
+                    )}
+                  >
+                    <ws.icon className="size-4 shrink-0" />
                   </div>
-                  {ws.label}
-                  {ws.key === active.key && (
-                    <span className="ml-auto text-xs text-muted-foreground">Actual</span>
-                  )}
+                  <div className="grid flex-1 leading-tight">
+                    <span className="text-sm font-medium">{ws.label}</span>
+                    <span className="text-xs text-muted-foreground">{ws.description}</span>
+                  </div>
+                  {ws.key === active.key && <Check className="size-4 text-primary-600 dark:text-primary" />}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuGroup>
@@ -199,38 +116,236 @@ function WorkspaceSwitcher({ active }: { active: WorkspaceMeta }) {
   );
 }
 
-function NavGroup({ title, items, currentPath }: { title: string; items: NavItem[]; currentPath: string }) {
+// Item activo: "pastilla" blanca con anillo fino e icono en verde de marca.
+const NAV_BUTTON_CLASS =
+  "h-9 gap-2.5 text-sidebar-foreground/75 hover:text-sidebar-foreground [&>svg]:text-sidebar-foreground/55 hover:[&>svg]:text-sidebar-foreground data-active:bg-card data-active:text-foreground data-active:shadow-[0_1px_2px_rgb(0_0_0/0.06)] data-active:ring-1 data-active:ring-sidebar-border data-active:[&>svg]:text-primary-600 dark:data-active:bg-sidebar-accent dark:data-active:[&>svg]:text-primary";
+
+function NavLink({ item, currentPath }: { item: NavItem; currentPath: string }) {
+  const Icon = item.icon;
   return (
-    <SidebarGroup>
-      <SidebarGroupLabel>{title}</SidebarGroupLabel>
-      <SidebarGroupContent>
-        <SidebarMenu>
-          {items.map((item) => {
-            const Icon = item.icon;
-            return (
-              <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton
-                  render={<a href={item.href} />}
-                  isActive={isActivePath(currentPath, item.href, item.exact)}
-                  tooltip={item.label}
-                >
-                  <Icon />
-                  <span>{item.label}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        render={<a href={item.href} />}
+        isActive={isActivePath(currentPath, item.href, item.exact)}
+        tooltip={item.label}
+        className={NAV_BUTTON_CLASS}
+      >
+        <Icon />
+        <span>{item.label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 
-// El sitio se sirve como HTML estático (sin SSR), así que no hay un
-// request al que leerle la cookie en el servidor como en el patrón
-// habitual de Next.js — sidebar.tsx ya escribe `sidebar_state` al hacer
-// toggle (ver SIDEBAR_COOKIE_NAME en ui/sidebar.tsx), así que se lee aquí
-// en el propio cliente, una vez, como estado inicial de React.
+// ─── Usuario ────────────────────────────────────────────────────
+interface ShellUser {
+  name: string;
+  email: string;
+  avatarUrl?: string;
+}
+
+// Nombre/email/avatar salen de la sesión de Supabase (Google); si no hay
+// sesión (desarrollo local con la API simulada) se cae a /auth/me.
+function useShellUser(): ShellUser | null {
+  const [user, setUser] = React.useState<ShellUser | null>(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    let fromSession = false;
+    // En paralelo: la sesión aporta el avatar de Google; /auth/me cubre el
+    // caso sin sesión (desarrollo local con la API simulada).
+    supabase.auth.getSession().then(({ data }) => {
+      const sessionUser = data.session?.user;
+      if (!sessionUser || cancelled) return;
+      fromSession = true;
+      const meta = sessionUser.user_metadata ?? {};
+      setUser({
+        name: meta.full_name ?? meta.name ?? sessionUser.email ?? "",
+        email: sessionUser.email ?? "",
+        avatarUrl: meta.avatar_url ?? meta.picture,
+      });
+    });
+    getMe()
+      .then((me) => {
+        if (!cancelled && !fromSession) setUser({ name: me.name, email: me.email });
+      })
+      .catch(() => {
+        // Sin sesión ni API: el menú se muestra sin datos.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return user;
+}
+
+function initialsOf(name: string) {
+  return name.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
+}
+
+const THEME_OPTIONS: Array<{ value: ThemePreference; label: string; icon: typeof Sun }> = [
+  { value: "light", label: "Claro", icon: Sun },
+  { value: "dark", label: "Oscuro", icon: Moon },
+  { value: "system", label: "Sistema", icon: Monitor },
+];
+
+function NavUser() {
+  const user = useShellUser();
+  const { preference, setPreference } = useTheme();
+  const { isMobile } = useSidebar();
+
+  const logout = async () => {
+    await clearAuth();
+    window.location.href = "/login";
+  };
+
+  const avatar = (
+    <Avatar className="size-8 rounded-lg">
+      {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt="" referrerPolicy="no-referrer" />}
+      <AvatarFallback className="rounded-lg bg-primary/12 text-xs font-semibold text-primary-700 dark:text-primary">
+        {initialsOf(user?.name ?? "")}
+      </AvatarFallback>
+    </Avatar>
+  );
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <SidebarMenuButton
+                size="lg"
+                tooltip="Tu cuenta"
+                className="data-popup-open:bg-sidebar-accent data-popup-open:text-sidebar-accent-foreground"
+              />
+            }
+          >
+            {avatar}
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-medium">{user?.name || "Tu cuenta"}</span>
+              <span className="truncate text-xs text-sidebar-foreground/60">{user?.email}</span>
+            </div>
+            <ChevronsUpDown className="ml-auto size-4 text-sidebar-foreground/40" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            className="w-(--anchor-width) min-w-60 rounded-xl p-1.5"
+            side={isMobile ? "top" : "right"}
+            align="end"
+            sideOffset={8}
+          >
+            <div className="flex items-center gap-2.5 px-2 py-2">
+              {avatar}
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-medium">{user?.name || "Tu cuenta"}</span>
+                <span className="truncate text-xs text-muted-foreground">{user?.email}</span>
+              </div>
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem render={<a href={SETTINGS_ITEM.href} />} className="gap-2 rounded-lg px-2 py-1.5">
+                <Settings className="size-4" />
+                Ajustes
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="px-2 text-[11px]">Tema</DropdownMenuLabel>
+              <div className="grid grid-cols-3 gap-1 px-1 pb-1" role="radiogroup" aria-label="Tema">
+                {THEME_OPTIONS.map((opt) => {
+                  const selected = preference === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setPreference(opt.value)}
+                      className={cn(
+                        "flex cursor-pointer flex-col items-center gap-1 rounded-lg border py-2 text-[11px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                        selected ? "border-primary/40 bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      <opt.icon className={cn("size-4", selected && "text-primary-600 dark:text-primary")} />
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={logout} className="gap-2 rounded-lg px-2 py-1.5 text-destructive focus:text-destructive">
+                <LogOut className="size-4" />
+                Cerrar sesión
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
+}
+
+// ─── Cabecera ───────────────────────────────────────────────────
+function AppHeader({ currentPath, onOpenSearch }: { currentPath: string; onOpenSearch: () => void }) {
+  const crumbs = getBreadcrumbTrail(currentPath);
+  // En Inicio/Ajustes la acción rápida es subir nómina; nunca se muestra en su propia página.
+  const action = (findWorkspace(currentPath) ?? WORKSPACES[1]).primaryAction;
+  const showAction = !isActivePath(currentPath, action.href.split("?")[0]);
+  const ActionIcon = action.icon;
+
+  return (
+    <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-background/80 px-3 backdrop-blur-md supports-backdrop-filter:bg-background/65 sm:px-5">
+      <SidebarTrigger className="-ml-1 text-muted-foreground hover:text-foreground" />
+      <div aria-hidden="true" className="mr-1 h-4 w-px shrink-0 bg-border" />
+      <a href={HOME_ITEM.href} className="md:hidden" aria-label="Inicio">
+        <BrandMark className="size-6" />
+      </a>
+      <Breadcrumb className="min-w-0">
+        <BreadcrumbList className="flex-nowrap">
+          {crumbs.map((crumb, i) => {
+            const last = i === crumbs.length - 1;
+            return (
+              <React.Fragment key={crumb.label}>
+                {i > 0 && <BreadcrumbSeparator className={cn(!last && "hidden sm:flex")} />}
+                <BreadcrumbItem className={cn(!last && "hidden sm:inline-flex")}>
+                  {crumb.href && !last ? (
+                    <BreadcrumbLink render={<a href={crumb.href} />}>{crumb.label}</BreadcrumbLink>
+                  ) : (
+                    <BreadcrumbPage className="truncate font-medium">{crumb.label}</BreadcrumbPage>
+                  )}
+                </BreadcrumbItem>
+              </React.Fragment>
+            );
+          })}
+        </BreadcrumbList>
+      </Breadcrumb>
+
+      <div className="ml-auto flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onOpenSearch}
+          className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-border bg-card/70 px-2.5 text-sm text-muted-foreground shadow-xs transition-colors hover:bg-card hover:text-foreground md:w-56"
+          aria-label="Buscar (Ctrl+K)"
+        >
+          <Search className="size-4" />
+          <span className="hidden flex-1 text-left md:inline">Buscar…</span>
+          <kbd className="hidden rounded border border-border bg-muted px-1.5 py-px text-[10px] font-medium md:inline">⌘K</kbd>
+        </button>
+        {showAction && (
+          <a href={action.href} className={cn(buttonVariants({ size: "sm" }), "h-8 gap-1.5 px-3")}>
+            <ActionIcon className="size-4" />
+            <span className="hidden sm:inline">{action.label}</span>
+          </a>
+        )}
+      </div>
+    </header>
+  );
+}
+
+// ─── Shell ──────────────────────────────────────────────────────
+// El sitio es HTML estático (sin SSR): la cookie `sidebar_state` que escribe
+// ui/sidebar.tsx se lee tras montar para no provocar hydration mismatch.
 function readSidebarCookie(): boolean {
   if (typeof document === "undefined") return true;
   const match = document.cookie.match(/(?:^|; )sidebar_state=(true|false)/);
@@ -243,85 +358,63 @@ interface AppShellProps {
 }
 
 export function AppShell({ currentPath, children }: AppShellProps) {
-  // El HTML estático siempre se genera con `true` (sin `document` en build
-  // no hay cookie que leer) — leerla ya en el useState inicial provocaría un
-  // hydration mismatch en visitas donde el cliente sí tiene la cookie a
-  // `false`. Se corrige en un efecto, tras el montaje, como una actualización
-  // de estado normal (posible micro-flash, pero sin mismatch de hidratación).
   const [sidebarOpen, setSidebarOpen] = React.useState(true);
+  const [searchOpen, setSearchOpen] = React.useState(false);
   React.useEffect(() => {
     setSidebarOpen(readSidebarCookie());
   }, []);
+
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const activeWorkspace = getActiveWorkspace(currentPath);
-  const breadcrumbTrail = getBreadcrumbTrail(currentPath);
 
   return (
     <TooltipProvider>
       <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <Sidebar collapsible="icon">
-          <SidebarHeader>
+        <Sidebar collapsible="icon" variant="inset">
+          <SidebarHeader className="pb-0">
             <WorkspaceSwitcher active={activeWorkspace} />
           </SidebarHeader>
-          <SidebarContent>
-            <SidebarGroup>
+          <SidebarContent className="pt-2">
+            <SidebarGroup className="py-1">
               <SidebarGroupContent>
                 <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      render={<a href={HOME_ITEM.href} />}
-                      isActive={isActivePath(currentPath, HOME_ITEM.href, true)}
-                      tooltip={HOME_ITEM.label}
-                    >
-                      <Home />
-                      <span>{HOME_ITEM.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  <NavLink item={HOME_ITEM} currentPath={currentPath} />
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
-            <NavGroup title={activeWorkspace.label} items={activeWorkspace.items} currentPath={currentPath} />
+            <SidebarGroup className="py-1">
+              <SidebarGroupLabel className="text-[11px] tracking-wide text-sidebar-foreground/50">{activeWorkspace.label}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu className="gap-0.5">
+                  {activeWorkspace.items.map((item) => (
+                    <NavLink key={item.href} item={item} currentPath={currentPath} />
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
           </SidebarContent>
           <SidebarFooter>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  render={<a href={SETTINGS_ITEM.href} />}
-                  isActive={isActivePath(currentPath, SETTINGS_ITEM.href)}
-                  tooltip={SETTINGS_ITEM.label}
-                >
-                  <Settings />
-                  <span>{SETTINGS_ITEM.label}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
+            <NavUser />
           </SidebarFooter>
           <SidebarRail />
         </Sidebar>
-        <SidebarInset>
-          <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                {breadcrumbTrail.map((crumb, i) => (
-                  <React.Fragment key={crumb.label}>
-                    {i > 0 && <BreadcrumbSeparator />}
-                    <BreadcrumbItem>
-                      {crumb.href && i < breadcrumbTrail.length - 1 ? (
-                        <BreadcrumbLink render={<a href={crumb.href} />}>{crumb.label}</BreadcrumbLink>
-                      ) : (
-                        <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                      )}
-                    </BreadcrumbItem>
-                  </React.Fragment>
-                ))}
-              </BreadcrumbList>
-            </Breadcrumb>
-          </header>
-          <div className="flex-1 overflow-auto">
-            <div className="mx-auto max-w-7xl px-4 py-6 md:px-8 md:py-8">{children}</div>
+        <SidebarInset className="md:h-[calc(100svh-1rem)] md:overflow-hidden md:ring-1 md:ring-black/[0.04] dark:md:ring-white/[0.06]">
+          <div className="flex min-h-0 flex-1 flex-col md:overflow-y-auto">
+            <AppHeader currentPath={currentPath} onOpenSearch={() => setSearchOpen(true)} />
+            <div className="app-page mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-9">{children}</div>
           </div>
         </SidebarInset>
+        <CommandMenu open={searchOpen} onOpenChange={setSearchOpen} />
       </SidebarProvider>
     </TooltipProvider>
   );

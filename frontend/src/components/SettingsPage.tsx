@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { User, Moon, Sun, LogOut } from "lucide-react";
+import { User, Moon, Sun, Monitor, LogOut } from "lucide-react";
 import { Providers } from "./Providers";
 import { useAuth } from "./AuthProvider";
 import { toast } from "sonner";
@@ -9,7 +9,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { Segmented } from "@/components/app/Segmented";
+import { useTheme, type ThemePreference } from "@/hooks/use-theme";
 
 function SettingsView() {
   const { user, logout } = useAuth();
@@ -22,16 +23,7 @@ function SettingsView() {
     onError: () => toast.error("Error al actualizar el perfil"),
   });
 
-  // Dark mode
-  const [darkMode, setDarkMode] = useState(() => {
-    if (typeof document === "undefined") return false;
-    return document.documentElement.classList.contains("dark");
-  });
-  const toggleDarkMode = (next: boolean) => {
-    setDarkMode(next);
-    document.documentElement.classList.toggle("dark", next);
-    localStorage.setItem("theme", next ? "dark" : "light");
-  };
+  const { preference, resolved, setPreference } = useTheme();
 
   return (
     <div className="space-y-8 max-w-2xl">
@@ -79,13 +71,22 @@ function SettingsView() {
         <CardContent>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {darkMode ? <Moon className="w-5 h-5 text-primary-600" /> : <Sun className="w-5 h-5 text-amber-500" />}
+              {resolved === "dark" ? <Moon className="w-5 h-5 text-primary-600 dark:text-primary" /> : <Sun className="w-5 h-5 text-amber-500" />}
               <div>
-                <p className="text-sm font-medium text-foreground">Modo oscuro</p>
-                <p className="text-xs text-muted-foreground">Cambia entre tema claro y oscuro</p>
+                <p className="text-sm font-medium text-foreground">Tema</p>
+                <p className="text-xs text-muted-foreground">Claro, oscuro o el mismo que tu sistema</p>
               </div>
             </div>
-            <Switch checked={darkMode} onCheckedChange={toggleDarkMode} aria-label="Modo oscuro" />
+            <Segmented<ThemePreference>
+              aria-label="Tema"
+              value={preference}
+              onChange={setPreference}
+              options={[
+                { value: "light", label: "Claro", icon: Sun },
+                { value: "dark", label: "Oscuro", icon: Moon },
+                { value: "system", label: "Sistema", icon: Monitor },
+              ]}
+            />
           </div>
         </CardContent>
       </Card>
