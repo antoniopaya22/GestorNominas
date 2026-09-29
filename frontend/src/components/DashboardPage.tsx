@@ -1,27 +1,27 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, RadarChart, Radar,
-  PolarGrid, PolarAngleAxis, PolarRadiusAxis, ComposedChart,
+  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, ComposedChart,
 } from "recharts";
 import {
-  TrendingUp, TrendingDown, DollarSign, Percent, Calendar, FileText,
-  BarChart3, PieChart as PieIcon,
-  Activity, Filter, Wallet, Shield, ArrowUp, ArrowDown, ArrowUpDown,
+  CalendarRange, FileText, BarChart3, ArrowUp, ArrowDown, ArrowUpDown,
+  AreaChart as AreaIcon, LineChart as LineIcon, CircleDollarSign, Landmark, Receipt, Percent, Gift, X,
 } from "lucide-react";
 import { getDashboard, getProfiles, type DashboardData } from "../lib/api";
 import { Providers } from "./Providers";
-import { formatCurrency, formatCompact, formatMonthLabel } from "../lib/format";
+import { formatCurrency, formatCompact, formatMonthLabel, formatPct } from "../lib/format";
 import { ChartTooltip } from "./ui/ChartTooltip";
 import { ProfileSelector } from "./ui/ProfileSelector";
 import { EmptyState } from "./ui/EmptyState";
-import { KpiCard } from "./ui/KpiCard";
-import { SectionHeader } from "./ui/SectionHeader";
-import { Card } from "@/components/ui/card";
+import {
+  PageHeader, StatCard, StatGrid, SectionCard, ChartCard, Segmented,
+  PageHeaderSkeleton, StatCardSkeleton, ChartCardSkeleton,
+  chartAxis, chartGrid, chartColors, chartPalette, chartCursor, chartBarCursor, chartActiveDot, chartTooltipStyle,
+  type StatDelta,
+} from "./app";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -30,39 +30,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "cn";
 
-// ─── Design tokens ──────────────────────────────────────────────
-const CHART_COLORS = [
-  "var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)",
-  "#f59e0b", "#3b82f6", "#ef4444", "#8b5cf6",
-  "#ec4899", "#14b8a6",
-];
-
 const DEFAULT_RANGE_FROM = "2021-11";
-
-// Tooltip siempre oscuro a propósito (como ChartTooltip.tsx) — contraste
-// garantizado contra cualquier color de serie, en ambos temas de la app.
-const DASHBOARD_TOOLTIP_CONTENT_STYLE = {
-  background: "#0f172a",
-  color: "#fff",
-  border: "none",
-  borderRadius: "12px",
-  fontSize: "12px",
-  padding: "8px 12px",
-};
-
-const DASHBOARD_TOOLTIP_ITEM_STYLE = {
-  color: "#fff",
-};
-
-const DASHBOARD_TOOLTIP_LABEL_STYLE = {
-  color: "#cbd5e1",
-};
-
-// Colores de ejes/rejilla leídos de las custom properties de Tailwind en
-// tiempo de ejecución (ver global.css) para que los charts de Recharts
-// (SVG, fuera del alcance de `dark:`) seiguen el tema activo.
-const CHART_GRID = "var(--color-border)";
-const CHART_AXIS = "var(--color-muted-foreground)";
 
 type ConceptBreakdownItem = DashboardData["conceptBreakdown"][number];
 type ConceptSortColumn = "name" | "category" | "average" | "total" | "count";
@@ -98,30 +66,16 @@ function compareConceptRows(left: ConceptBreakdownItem, right: ConceptBreakdownI
   }
 }
 
-interface SortIndicatorProps {
-  active: boolean;
-  direction: SortDirection;
-}
-
-function SortIndicator({ active, direction }: SortIndicatorProps) {
-  if (!active) {
-    return <ArrowUpDown className="w-3.5 h-3.5 opacity-60" />;
-  }
-
-  return direction === "asc"
-    ? <ArrowUp className="w-3.5 h-3.5" />
-    : <ArrowDown className="w-3.5 h-3.5" />;
+function SortIndicator({ active, direction }: { active: boolean; direction: SortDirection }) {
+  if (!active) return <ArrowUpDown className="size-3.5 opacity-50" />;
+  return direction === "asc" ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />;
 }
 
 function toMonthIndex(month: string): number | null {
   const [yearPart, monthPart] = month.split("-");
   const year = Number(yearPart);
   const monthNumber = Number(monthPart);
-
-  if (!Number.isInteger(year) || !Number.isInteger(monthNumber) || monthNumber < 1 || monthNumber > 12) {
-    return null;
-  }
-
+  if (!Number.isInteger(year) || !Number.isInteger(monthNumber) || monthNumber < 1 || monthNumber > 12) return null;
   return year * 12 + (monthNumber - 1);
 }
 
@@ -136,68 +90,95 @@ function buildContinuousMonths(months: string[]): string[] {
     .map(toMonthIndex)
     .filter((value): value is number => value !== null)
     .sort((left, right) => left - right);
-
-  if (monthIndices.length === 0) {
-    return [];
-  }
-
+  if (monthIndices.length === 0) return [];
   const uniqueMonthIndices = Array.from(new Set(monthIndices));
   const firstMonth = uniqueMonthIndices[0];
   const lastMonth = uniqueMonthIndices[uniqueMonthIndices.length - 1];
   const continuousMonths: string[] = [];
-
   for (let monthIndex = firstMonth; monthIndex <= lastMonth; monthIndex += 1) {
     continuousMonths.push(fromMonthIndex(monthIndex));
   }
-
   return continuousMonths;
 }
 
 function buildAvailableMonths(evolution: DashboardData["evolution"] | undefined): string[] {
-  if (!evolution) {
-    return [];
-  }
-
+  if (!evolution) return [];
   const months = new Set<string>();
+  Object.values(evolution).forEach((entries) => entries.forEach((entry) => months.add(entry.month)));
+  return Array.from(months).sort((left, right) => (toMonthIndex(left) ?? 0) - (toMonthIndex(right) ?? 0));
+}
 
-  Object.values(evolution).forEach((entries) => {
-    entries.forEach((entry) => {
-      months.add(entry.month);
-    });
-  });
+// Los colores de perfil los elige el usuario: uno muy oscuro (p.ej. el navy
+// de marca) desaparece en modo oscuro, así que se cambia por el token de
+// serie secundaria, que se adapta al tema.
+function adaptiveSeriesColor(hex: string | undefined, fallback: string): string {
+  if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return fallback;
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance < 0.2 ? "var(--chart-2)" : hex;
+}
 
-  return Array.from(months).sort((left, right) => {
-    const leftIndex = toMonthIndex(left) ?? 0;
-    const rightIndex = toMonthIndex(right) ?? 0;
-    return leftIndex - rightIndex;
+// irpfEvolution/monthlySavings traen una fila por nómina: con varios perfiles
+// hay que agregarlas por mes o las series alternan entre personas.
+function aggregateByMonth(data: DashboardData) {
+  const irpf = new Map<string, { amount: number; gross: number }>();
+  const savings = new Map<string, { gross: number; net: number }>();
+  data.monthlySavings.forEach((m, i) => {
+    const s = savings.get(m.month) ?? { gross: 0, net: 0 };
+    s.gross += m.gross;
+    s.net += m.net;
+    savings.set(m.month, s);
+    const irpfRow = data.irpfEvolution[i];
+    if (irpfRow && irpfRow.month === m.month) {
+      const e = irpf.get(m.month) ?? { amount: 0, gross: 0 };
+      e.amount += irpfRow.amount;
+      e.gross += m.gross;
+      irpf.set(m.month, e);
+    }
   });
+  const byMonth = (a: string, b: string) => (toMonthIndex(a) ?? 0) - (toMonthIndex(b) ?? 0);
+  const irpfSeries = [...irpf.entries()].sort(([a], [b]) => byMonth(a, b)).map(([month, e]) => ({
+    month,
+    monthLabel: formatMonthLabel(month),
+    amount: Math.round(e.amount * 100) / 100,
+    rate: e.gross ? Math.round((e.amount / e.gross) * 10000) / 100 : 0,
+  }));
+  const retentionSeries = [...savings.entries()].sort(([a], [b]) => byMonth(a, b)).map(([month, s]) => ({
+    month,
+    monthLabel: formatMonthLabel(month),
+    retentionRate: s.gross ? Math.round((s.net / s.gross) * 10000) / 100 : 0,
+  }));
+  return { irpfSeries, retentionSeries };
+}
+
+function lastDelta(series: number[], label: string, invert = false): StatDelta | undefined {
+  const values = series.filter((v) => v > 0);
+  if (values.length < 2) return undefined;
+  const [prev, curr] = values.slice(-2);
+  const change = ((curr - prev) / prev) * 100;
+  const trend = Math.abs(change) < 0.05 ? "flat" : change > 0 ? "up" : "down";
+  const tone = trend === "flat" ? "neutral" : (trend === "up") !== invert ? "positive" : "negative";
+  return { value: `${change > 0 ? "+" : ""}${formatPct(change)}`, trend, tone, label };
 }
 
 // ─── Skeleton ───────────────────────────────────────────────────
 function DashboardSkeleton() {
   return (
-    <div className="animate-fade-in space-y-8">
-      <Card className="p-0 overflow-hidden">
-        <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-        <div className="px-6 py-6 sm:px-8 sm:py-7">
-          <Skeleton className="h-4 w-32 mb-1" />
-          <Skeleton className="h-10 w-56 mb-4" />
-          <div className="flex gap-2.5">
-            <Skeleton className="h-8 w-28 rounded-lg" />
-            <Skeleton className="h-8 w-28 rounded-lg" />
-            <Skeleton className="h-8 w-28 rounded-lg" />
-          </div>
-        </div>
-      </Card>
-      <Card className="p-6">
-        <Skeleton className="h-5 w-40 mb-4" />
-        <Skeleton className="h-[300px] w-full rounded-xl" />
-      </Card>
+    <div>
+      <PageHeaderSkeleton />
+      <StatGrid>
+        {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
+      </StatGrid>
+      <ChartCardSkeleton className="mt-6" height={320} />
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <ChartCardSkeleton className="lg:col-span-2" />
+        <ChartCardSkeleton />
+      </div>
     </div>
   );
 }
 
-// ─── Main Dashboard ─────────────────────────────────────────────
+// ─── Vista ──────────────────────────────────────────────────────
 function DashboardView() {
   const { data: profiles = [], isLoading: profilesLoading } = useQuery({
     queryKey: ["profiles"],
@@ -222,10 +203,7 @@ function DashboardView() {
     enabled: profiles.length > 0,
   });
 
-  const availableMonths = useMemo(
-    () => buildAvailableMonths(fullDashboardData?.evolution),
-    [fullDashboardData],
-  );
+  const availableMonths = useMemo(() => buildAvailableMonths(fullDashboardData?.evolution), [fullDashboardData]);
 
   const selectedRangeFrom = rangeFrom && availableMonths.includes(rangeFrom) ? rangeFrom : "";
   const selectedRangeTo = rangeTo && availableMonths.includes(rangeTo) ? rangeTo : "";
@@ -242,24 +220,12 @@ function DashboardView() {
 
   const handleRangeFromChange = (value: string) => {
     setRangeFrom(value);
-    setRangeTo((current) => {
-      if (!current || !value || current >= value) {
-        return current;
-      }
-
-      return value;
-    });
+    setRangeTo((current) => (!current || !value || current >= value ? current : value));
   };
 
   const handleRangeToChange = (value: string) => {
     setRangeTo(value);
-    setRangeFrom((current) => {
-      if (!current || !value || current <= value) {
-        return current;
-      }
-
-      return value;
-    });
+    setRangeFrom((current) => (!current || !value || current <= value ? current : value));
   };
 
   const clearDateRange = () => {
@@ -268,678 +234,416 @@ function DashboardView() {
   };
 
   const activeRangeLabel = availableMonths.length > 0
-    ? `${formatMonthLabel(selectedRangeFrom || availableMonths[0])} - ${formatMonthLabel(selectedRangeTo || availableMonths[availableMonths.length - 1])}`
+    ? `${formatMonthLabel(selectedRangeFrom || availableMonths[0])} – ${formatMonthLabel(selectedRangeTo || availableMonths[availableMonths.length - 1])}`
     : "Todo el histórico";
 
-  // ─── Derived data ───────────────────────────────────────────
-  const {
-    evolutionData, profileNames, profileColors,
-    topDevengos, topDeducciones, radarData,
-    monthlyNetData, retentionRate,
-  } = useMemo(() => {
-    if (!data) return {
-      evolutionData: [], profileNames: [], profileColors: {} as Record<string, string>,
-      topDevengos: [] as DashboardData["conceptBreakdown"],
-      topDeducciones: [] as DashboardData["conceptBreakdown"],
-      radarData: [] as Array<{ concept: string; fullName: string; amount: number }>,
-      monthlyNetData: [] as Array<{ month: string; monthLabel: string; net: number }>,
-      retentionRate: 0,
-    };
+  // ─── Datos derivados ────────────────────────────────────────
+  const derived = useMemo(() => {
+    if (!data) return null;
 
-    // Evolution
     const allMonths = new Set<string>();
-    Object.values(data.evolution).forEach((entries) =>
-      entries.forEach((e) => allMonths.add(e.month))
-    );
+    Object.values(data.evolution).forEach((entries) => entries.forEach((e) => allMonths.add(e.month)));
     const sorted = buildContinuousMonths(Array.from(allMonths));
 
-    const evoData = sorted.map((month) => {
-      const point: Record<string, string | number | null> = {
-        month,
-        monthLabel: formatMonthLabel(month),
-      };
+    const evolutionData = sorted.map((month) => {
+      const point: Record<string, string | number | null> = { month, monthLabel: formatMonthLabel(month) };
+      let gross = 0;
+      let net = 0;
       Object.entries(data.evolution).forEach(([profileName, entries]) => {
         const entry = entries.find((e) => e.month === month);
-        const gross = entry?.gross ?? 0;
-        const net = entry?.net ?? 0;
-        point[`${profileName}_bruto`] = gross;
-        point[`${profileName}_neto`] = net;
-        point[`${profileName}_diff`] = gross - net;
+        const g = entry?.gross ?? 0;
+        const n = entry?.net ?? 0;
+        point[`${profileName}_bruto`] = entry ? g : null;
+        point[`${profileName}_neto`] = entry ? n : null;
+        gross += g;
+        net += n;
       });
+      point.totalBruto = gross;
+      point.totalNeto = net;
+      point.totalDeducciones = gross - net;
       return point;
     });
 
-    const names = Object.keys(data.evolution);
-    const colors: Record<string, string> = {};
-    data.profiles.forEach((p) => { colors[p.name] = p.color; });
+    const profileNames = Object.keys(data.evolution);
+    const profileColors: Record<string, string> = {};
+    data.profiles.forEach((p) => { profileColors[p.name] = p.color; });
 
-    const devengos = data.conceptBreakdown
-      .filter((c) => c.category === "devengo")
-      .sort((a, b) => b.average - a.average)
-      .slice(0, 8);
+    const devengos = data.conceptBreakdown.filter((c) => c.category === "devengo").sort((a, b) => b.average - a.average).slice(0, 7);
+    const deducciones = data.conceptBreakdown.filter((c) => c.category === "deduccion").sort((a, b) => b.average - a.average).slice(0, 7);
 
-    const deducciones = data.conceptBreakdown
-      .filter((c) => c.category === "deduccion")
-      .sort((a, b) => b.average - a.average)
-      .slice(0, 8);
+    const netSeries = evolutionData.map((p) => Number(p.totalNeto) || 0);
+    const grossSeries = evolutionData.map((p) => Number(p.totalBruto) || 0);
+    const { irpfSeries, retentionSeries } = aggregateByMonth(data);
+    const irpfRates = irpfSeries.map((e) => e.rate);
+    const totalIrpf = irpfSeries.reduce((s, e) => s + e.amount, 0);
+    const totalGrossRegular = data.monthlySavings.reduce((s, m) => s + m.gross, 0);
+    const avgIrpfRate = totalGrossRegular ? (totalIrpf / totalGrossRegular) * 100 : 0;
+    const retentionRate = data.kpis.avgGross > 0 ? (data.kpis.avgNet / data.kpis.avgGross) * 100 : 0;
+    const devengosTotal = devengos.reduce((s, c) => s + c.average, 0);
 
-    const radar = deducciones.map((c) => ({
-      concept: c.name.length > 12 ? c.name.substring(0, 12) + "…" : c.name,
-      fullName: c.name,
-      amount: c.average,
-    }));
-
-    const monthlyNet = sorted.map((month) => {
-      let total = 0;
-      Object.values(data.evolution).forEach((entries) => {
-        const entry = entries.find((e) => e.month === month);
-        total += entry?.net ?? 0;
-      });
-      return { month, monthLabel: formatMonthLabel(month), net: total };
-    });
-
-    const retention = data.kpis.avgGross > 0
-      ? ((data.kpis.avgNet / data.kpis.avgGross) * 100)
-      : 0;
-
-    return {
-      evolutionData: evoData,
-      profileNames: names,
-      profileColors: colors,
-      topDevengos: devengos,
-      topDeducciones: deducciones,
-      radarData: radar,
-      monthlyNetData: monthlyNet,
-      retentionRate: retention,
-    };
+    return { evolutionData, profileNames, profileColors, devengos, deducciones, devengosTotal, netSeries, grossSeries, irpfRates, avgIrpfRate, retentionRate, irpfSeries, retentionSeries };
   }, [data]);
 
   const sortedConceptBreakdown = useMemo(() => {
-    if (!data) {
-      return [] as DashboardData["conceptBreakdown"];
-    }
-
+    if (!data) return [] as DashboardData["conceptBreakdown"];
     const directionMultiplier = conceptSort.direction === "asc" ? 1 : -1;
-
     return [...data.conceptBreakdown].sort((left, right) => {
       const primaryResult = compareConceptRows(left, right, conceptSort.column) * directionMultiplier;
-
-      if (primaryResult !== 0) {
-        return primaryResult;
-      }
-
+      if (primaryResult !== 0) return primaryResult;
       return left.name.localeCompare(right.name, "es", { sensitivity: "base" });
     });
   }, [conceptSort, data]);
 
   const handleConceptSort = (column: ConceptSortColumn) => {
-    setConceptSort((current) => {
-      if (current.column === column) {
-        return {
-          column,
-          direction: current.direction === "asc" ? "desc" : "asc",
-        };
-      }
-
-      return {
-        column,
-        direction: getConceptSortDirection(column),
-      };
-    });
+    setConceptSort((current) =>
+      current.column === column
+        ? { column, direction: current.direction === "asc" ? "desc" : "asc" }
+        : { column, direction: getConceptSortDirection(column) },
+    );
   };
 
-  if (profiles.length === 0 && !profilesLoading) return <EmptyState icon={BarChart3} title="Sin datos todavía" description="Sube tus primeras nóminas para ver estadísticas, evolución salarial y desglose de conceptos." actionLabel="Subir nóminas" actionHref="/upload" actionIcon={FileText} />;
-  if (isLoading || !data) return <DashboardSkeleton />;
-  if (data.kpis.totalPayslips === 0) {
-    if (hasDateFilter) {
-      return (
-        <Card className="p-10 text-center animate-fade-in">
-          <div className="w-20 h-20 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-5">
-            <Calendar className="w-10 h-10 text-muted-foreground" />
-          </div>
-          <h3 className="text-lg font-semibold text-foreground mb-1.5">No hay nóminas en el rango seleccionado</h3>
-          <p className="text-muted-foreground text-sm max-w-sm mx-auto mb-6">
-            Prueba con otro periodo o limpia el rango para volver a ver todo el histórico disponible.
-          </p>
-          <div className="flex justify-center">
-            <Button variant="secondary" onClick={clearDateRange}>
-              Ver todo el histórico
-            </Button>
-          </div>
-        </Card>
-      );
-    }
+  const emptyState = (
+    <EmptyState
+      icon={BarChart3}
+      title="Sin nóminas todavía"
+      description="Sube tus primeras nóminas en PDF para ver tu evolución salarial, retenciones y el desglose de cada concepto."
+      actionLabel="Subir nóminas"
+      actionHref="/app/upload"
+      actionIcon={FileText}
+    />
+  );
 
-    return <EmptyState icon={BarChart3} title="Sin datos todavía" description="Sube tus primeras nóminas para ver estadísticas, evolución salarial y desglose de conceptos." actionLabel="Subir nóminas" actionHref="/upload" actionIcon={FileText} />;
+  if (profiles.length === 0 && !profilesLoading) return <><PageHeader title="Nóminas" description="Tu evolución salarial, en un vistazo." />{emptyState}</>;
+  if (isLoading || !data || !derived) return <DashboardSkeleton />;
+
+  const rangeControls = availableMonths.length > 1 && (
+    <div className="flex flex-wrap items-center gap-2">
+      <MonthRangeSelect label="Desde" value={selectedRangeFrom} placeholder="Inicio" options={availableMonths} onChange={handleRangeFromChange} />
+      <span className="text-muted-foreground">–</span>
+      <MonthRangeSelect label="Hasta" value={selectedRangeTo} placeholder="Hoy" options={availableMonths} onChange={handleRangeToChange} />
+      {hasDateFilter && (
+        <Button variant="ghost" size="sm" onClick={clearDateRange} className="gap-1 text-muted-foreground">
+          <X className="size-3.5" /> Todo
+        </Button>
+      )}
+    </div>
+  );
+
+  const header = (
+    <PageHeader
+      eyebrow={
+        <span className="inline-flex items-center gap-1.5">
+          <CalendarRange className="size-3.5" />
+          {hasDateFilter && isFilteredDashboardFetching ? "Actualizando…" : activeRangeLabel}
+        </span>
+      }
+      title="Tus nóminas,"
+      accent="al detalle."
+      description="Evolución, retenciones y desglose de conceptos de los perfiles seleccionados."
+      actions={rangeControls}
+    >
+      {profiles.length > 1 && (
+        <ProfileSelector profiles={profiles} value={profileIds} onChange={(v) => setSelectedProfiles(v as number[])} multi />
+      )}
+    </PageHeader>
+  );
+
+  if (data.kpis.totalPayslips === 0) {
+    return (
+      <>
+        {header}
+        {hasDateFilter ? (
+          <EmptyState icon={CalendarRange} title="No hay nóminas en este rango" description="Prueba con otro periodo o vuelve a ver todo el histórico disponible.">
+            <Button variant="outline" onClick={clearDateRange}>Ver todo el histórico</Button>
+          </EmptyState>
+        ) : emptyState}
+      </>
+    );
   }
 
-  const lastTwo = monthlyNetData.slice(-2);
-  const netTrend = lastTwo.length === 2
-    ? ((lastTwo[1].net - lastTwo[0].net) / (lastTwo[0].net || 1)) * 100
-    : 0;
+  const { evolutionData, profileNames, profileColors, devengos, deducciones, devengosTotal, netSeries, grossSeries, irpfRates, avgIrpfRate, retentionRate, irpfSeries, retentionSeries } = derived;
+  const multiProfile = profileNames.length > 1;
+  const profileColor = (name: string, fallback: string) => (multiProfile ? adaptiveSeriesColor(profileColors[name], fallback) : fallback);
+  const brutoColor = (name: string) => profileColor(name, chartColors.secondary);
+  const netoColor = (name: string) => profileColor(name, chartColors.primary);
+  const irpfData = irpfSeries;
+  const retentionData = retentionSeries;
+  const evolutionDomain: [(min: number) => number, "auto"] = [(min) => Math.max(0, Math.floor((min * 0.85) / 100) * 100), "auto"];
+  const summaries = selectedYear ? data.annualSummaries.filter((s) => s.year === selectedYear) : data.annualSummaries;
 
   return (
-    <div className="animate-fade-in space-y-6">
-      {/* Hero */}
-      <Card className="p-0 overflow-hidden">
-        <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-        <div className="px-6 py-6 sm:px-8 sm:py-7">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            <div>
-              <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Salario neto medio</p>
-              <p className="text-3xl sm:text-4xl font-bold font-mono tracking-tight text-accent-700 dark:text-accent-400">
-                {formatCurrency(data.kpis.avgNet)}
-              </p>
-            </div>
-            {profiles.length > 1 && (
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
-                <ProfileSelector
-                  profiles={profiles}
-                  value={profileIds}
-                  onChange={(v) => setSelectedProfiles(v as number[])}
-                  multi
-                />
-              </div>
-            )}
-          </div>
+    <div>
+      {header}
 
-          {/* Pills */}
-          <div className="flex flex-wrap gap-2.5 mt-5">
-            <Badge variant="secondary" className="bg-accent-50 text-accent-800 dark:bg-accent-500/10 dark:text-accent-300 gap-1.5">
-              <FileText className="w-3.5 h-3.5" aria-hidden="true" />
-              <span className="font-mono">{data.kpis.totalPayslips}</span>
-              nóminas
-            </Badge>
-            <Badge variant="secondary" className="bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-400 gap-1.5">
-              <DollarSign className="w-3.5 h-3.5" aria-hidden="true" />
-              Bruto
-              <span className="font-mono">{formatCurrency(data.kpis.avgGross)}</span>
-            </Badge>
-            <Badge variant="secondary" className="bg-danger-50 text-danger-700 dark:bg-danger-500/10 dark:text-danger-400 gap-1.5">
-              <Percent className="w-3.5 h-3.5" aria-hidden="true" />
-              IRPF
-              <span className="font-mono">{formatCurrency(data.kpis.avgIrpf)}</span>
-            </Badge>
-            {data.kpis.extrasCount > 0 && (
-              <Badge variant="secondary" className="bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-400 gap-1.5">
-                <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
-                <span className="font-mono">{data.kpis.extrasCount}</span>
-                paga{data.kpis.extrasCount > 1 ? "s" : ""} extra
-              </Badge>
-            )}
-            <Badge variant="secondary" className="bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-500 gap-1.5">
-              <TrendingUp className="w-3.5 h-3.5" aria-hidden="true" />
-              Retención
-              <span className="font-mono">{retentionRate.toFixed(1)}%</span>
-            </Badge>
-          </div>
-        </div>
-      </Card>
+      <StatGrid>
+        <StatCard
+          label="Neto medio"
+          value={formatCurrency(data.kpis.avgNet)}
+          icon={CircleDollarSign}
+          delta={lastDelta(netSeries, "último mes")}
+          sparkline={netSeries.filter((v) => v > 0).slice(-12)}
+          emphasis
+        />
+        <StatCard
+          label="Bruto medio"
+          value={formatCurrency(data.kpis.avgGross)}
+          icon={Landmark}
+          delta={lastDelta(grossSeries, "último mes")}
+          sparkline={grossSeries.filter((v) => v > 0).slice(-12)}
+          sparklineColor={chartColors.secondary}
+        />
+        <StatCard
+          label="IRPF efectivo"
+          value={formatPct(avgIrpfRate)}
+          icon={Receipt}
+          hint={`${formatCurrency(data.kpis.avgIrpf)} por nómina`}
+          delta={lastDelta(irpfRates, "último mes", true)}
+          sparkline={irpfRates.slice(-12)}
+          sparklineColor={chartColors.tax}
+        />
+        <StatCard
+          label="Te llega del bruto"
+          value={formatPct(retentionRate)}
+          icon={Percent}
+          hint={
+            data.kpis.extrasCount > 0
+              ? `${data.kpis.totalPayslips} nóminas · ${data.kpis.extrasCount} ${data.kpis.extrasCount === 1 ? "paga extra" : "pagas extra"}`
+              : `${data.kpis.totalPayslips} nóminas`
+          }
+        />
+      </StatGrid>
 
-      {/* Main Chart: Evolution */}
-      <Card className="p-0 overflow-hidden">
-        <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-        <div className="p-6">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between mb-4">
-          <SectionHeader
-            icon={Activity}
-            title="Evolución Salarial"
-            subtitle="Bruto vs Neto mensual"
+      {/* Evolución */}
+      <ChartCard
+        className="mt-6"
+        title="Evolución salarial"
+        description={multiProfile ? "Bruto (discontinuo) y neto por perfil" : "Bruto y neto mes a mes"}
+        height={320}
+        action={
+          <Segmented
+            aria-label="Tipo de gráfico"
+            value={chartType}
+            onChange={setChartType}
+            iconOnly
+            options={[
+              { value: "area", label: "Área", icon: AreaIcon },
+              { value: "line", label: "Línea", icon: LineIcon },
+            ]}
           />
-          <div className="flex flex-col gap-3 sm:items-end">
-            {availableMonths.length > 1 && (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-                <MonthRangeSelect
-                  label="Desde"
-                  value={selectedRangeFrom}
-                  placeholder="Inicio"
-                  options={availableMonths}
-                  onChange={handleRangeFromChange}
-                />
-                <MonthRangeSelect
-                  label="Hasta"
-                  value={selectedRangeTo}
-                  placeholder="Fin"
-                  options={availableMonths}
-                  onChange={handleRangeToChange}
-                />
-                {(selectedRangeFrom || selectedRangeTo) && (
-                  <Button variant="secondary" size="sm" onClick={clearDateRange} className="h-10">
-                    Ver todo
-                  </Button>
-                )}
-              </div>
-            )}
-
-            <div className="flex self-start sm:self-end bg-muted rounded-lg p-0.5" role="group" aria-label="Tipo de gráfico">
-              <button
-                onClick={() => setChartType("area")}
-                aria-pressed={chartType === "area"}
-                className={cn(
-                  "px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer",
-                  chartType === "area" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Área
-              </button>
-              <button
-                onClick={() => setChartType("line")}
-                aria-pressed={chartType === "line"}
-                className={cn(
-                  "px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer",
-                  chartType === "line" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Línea
-              </button>
-            </div>
-
-            <p className="text-[11px] text-muted-foreground sm:text-right">
-              {hasDateFilter && isFilteredDashboardFetching ? "Actualizando rango..." : `Rango: ${activeRangeLabel}`}
-            </p>
+        }
+        legend={
+          <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
+            {profileNames.map((name) => (
+              <span key={name} className="inline-flex items-center gap-3">
+                <LegendKey color={brutoColor(name)} dashed label={multiProfile ? `${name} · bruto` : "Bruto"} />
+                <LegendKey color={netoColor(name)} label={multiProfile ? `${name} · neto` : "Neto"} />
+              </span>
+            ))}
           </div>
-        </div>
-
-        <ResponsiveContainer width="100%" height={400}>
+        }
+      >
+        <ResponsiveContainer width="100%" height="100%">
           {chartType === "area" ? (
-            <AreaChart data={evolutionData} margin={{ top: 5, right: 10, left: 10, bottom: 20 }}>
+            <AreaChart data={evolutionData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <defs>
-                <linearGradient id="gradBlue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--chart-2)" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="var(--chart-2)" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="gradGreen" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0} />
-                </linearGradient>
+                {profileNames.map((name, i) => (
+                  <linearGradient key={name} id={`gradNeto${i}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={netoColor(name)} stopOpacity={0.22} />
+                    <stop offset="100%" stopColor={netoColor(name)} stopOpacity={0} />
+                  </linearGradient>
+                ))}
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
-              <XAxis
-                dataKey="monthLabel"
-                interval={0}
-                minTickGap={0}
-                height={56}
-                angle={-35}
-                textAnchor="end"
-                tickMargin={12}
-                tick={{ fontSize: 11, fill: CHART_AXIS }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis tick={{ fontSize: 11, fill: CHART_AXIS }} tickFormatter={formatCompact} axisLine={false} tickLine={false} width={60} />
-              <Tooltip content={<ChartTooltip />} />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+              <CartesianGrid {...chartGrid} />
+              <XAxis dataKey="monthLabel" {...chartAxis} interval="preserveStartEnd" minTickGap={24} />
+              <YAxis {...chartAxis} tickFormatter={formatCompact} width={56} domain={evolutionDomain} />
+              <Tooltip content={<ChartTooltip />} cursor={chartCursor} />
               {profileNames.map((name) => (
-                <Area
-                  key={`${name}_bruto`}
-                  type="monotone"
-                  dataKey={`${name}_bruto`}
-                  name={`${name} Bruto`}
-                  stroke="var(--chart-2)"
-                  fill="url(#gradBlue)"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 5, strokeWidth: 2, fill: "#fff" }}
-                  connectNulls
-                />
+                <Area key={`${name}_bruto`} type="monotone" dataKey={`${name}_bruto`} name={multiProfile ? `${name} · bruto` : "Bruto"} stroke={brutoColor(name)} strokeWidth={1.75} strokeDasharray="5 4" fill="none" dot={false} activeDot={chartActiveDot} connectNulls />
               ))}
-              {profileNames.map((name) => (
-                <Area
-                  key={`${name}_neto`}
-                  type="monotone"
-                  dataKey={`${name}_neto`}
-                  name={`${name} Neto`}
-                  stroke="var(--chart-1)"
-                  fill="url(#gradGreen)"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 5, strokeWidth: 2, fill: "#fff" }}
-                  connectNulls
-                />
+              {profileNames.map((name, i) => (
+                <Area key={`${name}_neto`} type="monotone" dataKey={`${name}_neto`} name={multiProfile ? `${name} · neto` : "Neto"} stroke={netoColor(name)} strokeWidth={2} fill={`url(#gradNeto${i})`} dot={false} activeDot={chartActiveDot} connectNulls />
               ))}
             </AreaChart>
           ) : (
-            <LineChart data={evolutionData} margin={{ top: 5, right: 10, left: 10, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
-              <XAxis
-                dataKey="monthLabel"
-                interval={0}
-                minTickGap={0}
-                height={56}
-                angle={-35}
-                textAnchor="end"
-                tickMargin={12}
-                tick={{ fontSize: 11, fill: CHART_AXIS }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis tick={{ fontSize: 11, fill: CHART_AXIS }} tickFormatter={formatCompact} axisLine={false} tickLine={false} width={60} />
-              <Tooltip content={<ChartTooltip />} />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-              {profileNames.map((name, idx) => (
-                <Line
-                  key={`${name}_bruto`}
-                  type="monotone"
-                  dataKey={`${name}_bruto`}
-                  name={`${name} Bruto`}
-                  stroke={profileColors[name] ?? CHART_COLORS[idx * 2]}
-                  strokeWidth={2.5}
-                  strokeDasharray="6 3"
-                  dot={{ r: 3, fill: "#fff", strokeWidth: 2 }}
-                  activeDot={{ r: 6, strokeWidth: 2, fill: "#fff" }}
-                  connectNulls
-                />
+            <LineChart data={evolutionData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid {...chartGrid} />
+              <XAxis dataKey="monthLabel" {...chartAxis} interval="preserveStartEnd" minTickGap={24} />
+              <YAxis {...chartAxis} tickFormatter={formatCompact} width={56} domain={evolutionDomain} />
+              <Tooltip content={<ChartTooltip />} cursor={chartCursor} />
+              {profileNames.map((name) => (
+                <Line key={`${name}_bruto`} type="monotone" dataKey={`${name}_bruto`} name={multiProfile ? `${name} · bruto` : "Bruto"} stroke={brutoColor(name)} strokeWidth={2} strokeDasharray="5 4" dot={{ r: 2.5, strokeWidth: 0, fill: brutoColor(name) }} activeDot={chartActiveDot} connectNulls />
               ))}
-              {profileNames.map((name, idx) => (
-                <Line
-                  key={`${name}_neto`}
-                  type="monotone"
-                  dataKey={`${name}_neto`}
-                  name={`${name} Neto`}
-                  stroke={profileColors[name] ?? CHART_COLORS[idx * 2 + 1]}
-                  strokeWidth={2.5}
-                  dot={{ r: 3, fill: "#fff", strokeWidth: 2 }}
-                  activeDot={{ r: 6, strokeWidth: 2, fill: "#fff" }}
-                  connectNulls
-                />
+              {profileNames.map((name) => (
+                <Line key={`${name}_neto`} type="monotone" dataKey={`${name}_neto`} name={multiProfile ? `${name} · neto` : "Neto"} stroke={netoColor(name)} strokeWidth={2.25} dot={{ r: 2.5, strokeWidth: 0, fill: netoColor(name) }} activeDot={chartActiveDot} connectNulls />
               ))}
             </LineChart>
           )}
         </ResponsiveContainer>
-        </div>
-      </Card>
+      </ChartCard>
 
-      {/* Second row: Bruto vs Neto bar + Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="p-0 overflow-hidden lg:col-span-2">
-          <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-          <div className="p-6">
-          <SectionHeader
-            icon={BarChart3}
-            title="Bruto vs Deducciones"
-            subtitle="Desglose mensual"
-          />
-          <ResponsiveContainer width="100%" height={280}>
-            <ComposedChart data={evolutionData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
-              <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: CHART_AXIS }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: CHART_AXIS }} tickFormatter={formatCompact} axisLine={false} tickLine={false} width={60} />
-              <Tooltip content={<ChartTooltip />} />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-              {profileNames.map((name) => (
-                <Bar
-                  key={`${name}_neto_bar`}
-                  dataKey={`${name}_neto`}
-                  name={`${name} Neto`}
-                  stackId={name}
-                  fill="#22c55e"
-                  radius={[0, 0, 0, 0]}
-                  barSize={32}
-                />
-              ))}
-              {profileNames.map((name) => (
-                <Bar
-                  key={`${name}_diff`}
-                  dataKey={`${name}_diff`}
-                  name={`${name} Deducciones`}
-                  stackId={name}
-                  fill="#ef4444"
-                  opacity={0.7}
-                  radius={[4, 4, 0, 0]}
-                  barSize={32}
-                />
-              ))}
+      {/* Del bruto al neto + resumen */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <ChartCard
+          className="lg:col-span-2"
+          title="Del bruto al neto"
+          description="Lo que cobras y lo que se queda por el camino, cada mes"
+          height={260}
+          legend={
+            <div className="flex gap-5 text-xs text-muted-foreground">
+              <LegendKey color={chartColors.primary} label="Neto" />
+              <LegendKey color={chartColors.secondary} label="Deducciones" />
+            </div>
+          }
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={evolutionData} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+              <CartesianGrid {...chartGrid} />
+              <XAxis dataKey="monthLabel" {...chartAxis} interval="preserveStartEnd" minTickGap={24} />
+              <YAxis {...chartAxis} tickFormatter={formatCompact} width={56} />
+              <Tooltip content={<ChartTooltip />} cursor={chartBarCursor} />
+              <Bar dataKey="totalNeto" name="Neto" stackId="s" fill={chartColors.primary} maxBarSize={22} />
+              <Bar dataKey="totalDeducciones" name="Deducciones" stackId="s" fill={chartColors.secondary} fillOpacity={0.55} radius={[4, 4, 0, 0]} maxBarSize={22} />
             </ComposedChart>
           </ResponsiveContainer>
-          </div>
-        </Card>
+        </ChartCard>
 
-        <Card className="p-0 overflow-hidden">
-          <div className="h-1.5 bg-gradient-to-r from-accent-400 to-accent-300" />
-          <div className="p-6">
-          <SectionHeader
-            icon={FileText}
-            title="Resumen"
-            subtitle="Métricas clave"
-          />
-          <div className="space-y-3">
-            <SummaryRow label="Bruto medio" value={formatCurrency(data.kpis.avgGross)} color="text-foreground" />
-            <SummaryRow label="Neto medio" value={formatCurrency(data.kpis.avgNet)} color="text-success-700 dark:text-success-500" />
-            <SummaryRow label="IRPF medio" value={formatCurrency(data.kpis.avgIrpf)} color="text-danger-600" />
-            <div className="border-t border-border pt-3">
-              <SummaryRow label="Total bruto" value={formatCurrency(data.kpis.totalGrossYear)} color="text-foreground" bold />
-              <SummaryRow label="Total neto" value={formatCurrency(data.kpis.totalNetYear)} color="text-success-700 dark:text-success-500" bold />
-            </div>
-            <div className="border-t border-border pt-3">
-              <SummaryRow label="Nóminas" value={String(data.kpis.totalPayslips)} color="text-foreground" />
-              <SummaryRow label="Retención" value={`${retentionRate.toFixed(1)}%`} color="text-primary-600 dark:text-primary-400" />
+        <SectionCard title="Resumen del periodo" description={activeRangeLabel}>
+          <dl className="space-y-3 text-sm">
+            <SummaryRow label="Total bruto" value={formatCurrency(data.kpis.totalGrossYear)} strong />
+            <SummaryRow label="Total neto" value={formatCurrency(data.kpis.totalNetYear)} strong accent />
+            <SummaryRow label="Retenido" value={formatCurrency(data.kpis.totalGrossYear - data.kpis.totalNetYear)} />
+            <div className="border-t border-border" />
+            <SummaryRow label="Nóminas" value={String(data.kpis.totalPayslips)} />
+            <SummaryRow label="Pagas extra" value={data.kpis.extrasCount > 0 ? `${data.kpis.extrasCount} · ${formatCurrency(data.kpis.extrasTotalNet)} netos` : "—"} />
+            <SummaryRow label="IRPF medio" value={formatCurrency(data.kpis.avgIrpf)} />
+          </dl>
+          <div className="mt-5 rounded-lg border border-border bg-muted/40 p-3">
+            <p className="text-xs text-muted-foreground">De cada 100 € brutos te llegan</p>
+            <p className="mt-0.5 text-2xl font-semibold tracking-tight tabular-nums text-foreground">
+              {(retentionRate).toLocaleString("es-ES", { maximumFractionDigits: 1, minimumFractionDigits: 1 })} €
+            </p>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary-500 dark:bg-primary" style={{ width: `${Math.min(retentionRate, 100)}%` }} />
             </div>
           </div>
-          </div>
-        </Card>
+        </SectionCard>
       </div>
 
-      {/* Third row: Devengos pie + Deducciones radar */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {topDevengos.length > 0 && (
-          <Card className="p-0 overflow-hidden">
-            <div className="h-1.5 bg-gradient-to-r from-success-500 to-success-400" />
-            <div className="p-6">
-            <SectionHeader
-              icon={PieIcon}
-              title="Devengos"
-              subtitle="Distribución promedio"
-            />
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={topDevengos}
-                  dataKey="average"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={110}
-                  paddingAngle={2}
-                  strokeWidth={0}
-                >
-                  {topDevengos.map((_, i) => (
-                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value: number, name: string) => [formatCurrency(value), name]}
-                  contentStyle={DASHBOARD_TOOLTIP_CONTENT_STYLE}
-                  itemStyle={DASHBOARD_TOOLTIP_ITEM_STYLE}
-                  labelStyle={DASHBOARD_TOOLTIP_LABEL_STYLE}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
-              {topDevengos.map((c, i) => (
-                <div key={c.name} className="flex items-center gap-2 text-xs">
-                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
-                  <span className="text-muted-foreground truncate">{c.name}</span>
-                  <span className="ml-auto font-mono text-foreground font-medium">{formatCurrency(c.average)}</span>
-                </div>
-              ))}
-            </div>
-            </div>
-          </Card>
-        )}
-
-        {topDeducciones.length > 0 && (
-          <Card className="p-0 overflow-hidden">
-            <div className="h-1.5 bg-gradient-to-r from-danger-500 to-danger-400" />
-            <div className="p-6">
-            <SectionHeader
-              icon={TrendingDown}
-              title="Deducciones"
-              subtitle="Promedio mensual"
-            />
-            {radarData.length >= 3 ? (
-              <>
-                <ResponsiveContainer width="100%" height={300}>
-                  <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-                    <PolarGrid stroke={CHART_GRID} />
-                    <PolarAngleAxis dataKey="concept" tick={{ fontSize: 10, fill: CHART_AXIS }} />
-                    <PolarRadiusAxis tick={{ fontSize: 10, fill: CHART_AXIS }} tickFormatter={formatCompact} />
-                    <Radar
-                      name="Promedio"
-                      dataKey="amount"
-                      stroke="#ef4444"
-                      fill="#ef4444"
-                      fillOpacity={0.15}
-                      strokeWidth={2}
-                    />
-                    <Tooltip
-                      formatter={(value: number) => formatCurrency(value)}
-                      contentStyle={DASHBOARD_TOOLTIP_CONTENT_STYLE}
-                      itemStyle={DASHBOARD_TOOLTIP_ITEM_STYLE}
-                      labelStyle={DASHBOARD_TOOLTIP_LABEL_STYLE}
-                    />
-                  </RadarChart>
+      {/* Devengos y deducciones */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        {devengos.length > 0 && (
+          <SectionCard title="Devengos" description="Reparto medio de lo que cobras">
+            <div className="flex flex-col items-center gap-6 sm:flex-row">
+              <div className="relative size-44 shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={devengos} dataKey="average" nameKey="name" innerRadius="68%" outerRadius="100%" paddingAngle={2} strokeWidth={0}>
+                      {devengos.map((_, i) => <Cell key={i} fill={chartPalette[i % chartPalette.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(value: number, name: string) => [formatCurrency(value), name]} {...chartTooltipStyle} />
+                  </PieChart>
                 </ResponsiveContainer>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-2">
-                  {topDeducciones.map((c) => (
-                    <div key={c.name} className="flex items-center gap-2 text-xs">
-                      <div className="w-2.5 h-2.5 rounded-full bg-danger-500 flex-shrink-0" />
-                      <span className="text-muted-foreground truncate">{c.name}</span>
-                      <span className="ml-auto font-mono text-danger-600 font-medium">{formatCurrency(c.average)}</span>
-                    </div>
-                  ))}
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-[11px] text-muted-foreground">Media bruta</span>
+                  <span className="text-sm font-semibold tabular-nums text-foreground">{formatCompact(devengosTotal)}</span>
                 </div>
-              </>
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={topDeducciones} layout="vertical" margin={{ left: 10, right: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: CHART_AXIS }} tickFormatter={formatCompact} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: CHART_AXIS }} width={130} axisLine={false} tickLine={false} />
-                  <Tooltip
-                    formatter={(value: number) => formatCurrency(value)}
-                    contentStyle={DASHBOARD_TOOLTIP_CONTENT_STYLE}
-                    itemStyle={DASHBOARD_TOOLTIP_ITEM_STYLE}
-                    labelStyle={DASHBOARD_TOOLTIP_LABEL_STYLE}
-                  />
-                  <Bar dataKey="average" fill="#ef4444" radius={[0, 6, 6, 0]} barSize={24} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
+              </div>
+              <ul className="w-full space-y-2">
+                {devengos.map((c, i) => (
+                  <li key={c.name} className="flex items-center gap-2 text-sm">
+                    <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: chartPalette[i % chartPalette.length] }} />
+                    <span className="truncate text-muted-foreground">{c.name}</span>
+                    <span className="ml-auto font-medium tabular-nums text-foreground">{formatCurrency(c.average)}</span>
+                    <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">
+                      {devengosTotal ? formatPct((c.average / devengosTotal) * 100).replace(",0 %", " %") : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
-          </Card>
+          </SectionCard>
+        )}
+
+        {deducciones.length > 0 && (
+          <SectionCard title="Deducciones" description="Media mensual por concepto">
+            <ul className="space-y-3.5">
+              {deducciones.map((c) => {
+                const max = deducciones[0]?.average || 1;
+                const isIrpf = c.name.toLowerCase().includes("irpf");
+                return (
+                  <li key={c.name}>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{c.name}</span>
+                      <span className="font-medium tabular-nums text-foreground">{formatCurrency(c.average)}</span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                      <div className={cn("h-full rounded-full", isIrpf ? "bg-amber-400" : "bg-brand-navy/60 dark:bg-slate-400/70")} style={{ width: `${(c.average / max) * 100}%` }} />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </SectionCard>
         )}
       </div>
 
-      {/* Concept detail table */}
-      {data.conceptBreakdown.length > 0 && (
-        <Card className="p-0 overflow-hidden">
-          <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-          <div className="p-6 pb-3">
-            <SectionHeader
-              icon={FileText}
-              title="Todos los Conceptos"
-              subtitle="Detalle completo por categoría"
-            />
-          </div>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50 hover:bg-muted/50">
-                <TableHead className="px-6" aria-sort={conceptSort.column === "name" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"}>
-                  <button
-                    type="button"
-                    onClick={() => handleConceptSort("name")}
-                    className="inline-flex items-center gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground"
-                  >
-                    <span>Concepto</span>
-                    <SortIndicator active={conceptSort.column === "name"} direction={conceptSort.direction} />
-                  </button>
-                </TableHead>
-                <TableHead aria-sort={conceptSort.column === "category" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"}>
-                  <button
-                    type="button"
-                    onClick={() => handleConceptSort("category")}
-                    className="inline-flex items-center gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground"
-                  >
-                    <span>Tipo</span>
-                    <SortIndicator active={conceptSort.column === "category"} direction={conceptSort.direction} />
-                  </button>
-                </TableHead>
-                <TableHead className="text-right" aria-sort={conceptSort.column === "average" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"}>
-                  <button
-                    type="button"
-                    onClick={() => handleConceptSort("average")}
-                    className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground"
-                  >
-                    <span>Promedio</span>
-                    <SortIndicator active={conceptSort.column === "average"} direction={conceptSort.direction} />
-                  </button>
-                </TableHead>
-                <TableHead className="text-right" aria-sort={conceptSort.column === "total" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"}>
-                  <button
-                    type="button"
-                    onClick={() => handleConceptSort("total")}
-                    className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground"
-                  >
-                    <span>Total</span>
-                    <SortIndicator active={conceptSort.column === "total"} direction={conceptSort.direction} />
-                  </button>
-                </TableHead>
-                <TableHead className="text-right px-6" aria-sort={conceptSort.column === "count" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"}>
-                  <button
-                    type="button"
-                    onClick={() => handleConceptSort("count")}
-                    className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground"
-                  >
-                    <span>Apariciones</span>
-                    <SortIndicator active={conceptSort.column === "count"} direction={conceptSort.direction} />
-                  </button>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedConceptBreakdown.map((c) => (
-                  <TableRow key={c.name}>
-                    <TableCell className="px-6 py-3 font-medium text-foreground">{c.name}</TableCell>
-                    <TableCell className="py-3">
-                      <Badge
-                        variant="secondary"
-                        className={cn(
-                          c.category === "devengo"
-                            ? "bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-500"
-                            : c.category === "deduccion"
-                            ? "bg-danger-50 text-danger-700 dark:bg-danger-500/10 dark:text-danger-400"
-                            : ""
-                        )}
-                      >
-                        {getConceptCategoryLabel(c.category)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="py-3 text-right font-mono font-medium text-foreground">{formatCurrency(c.average)}</TableCell>
-                    <TableCell className="py-3 text-right font-mono font-medium text-foreground">{formatCurrency(c.total)}</TableCell>
-                    <TableCell className="px-6 py-3 text-right text-muted-foreground">{c.count}</TableCell>
-                  </TableRow>
-                ))}
-            </TableBody>
-          </Table>
-        </Card>
+      {/* IRPF y retención */}
+      {irpfSeries.length > 1 && (
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <ChartCard
+            title="IRPF"
+            description="Retención mensual y tipo efectivo"
+            height={240}
+            legend={
+              <div className="flex gap-5 text-xs text-muted-foreground">
+                <LegendKey color={chartColors.tax} label="Importe" />
+                <LegendKey color={chartColors.secondary} label="Tipo (%)" line />
+              </div>
+            }
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={irpfData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+                <CartesianGrid {...chartGrid} />
+                <XAxis dataKey="monthLabel" {...chartAxis} interval="preserveStartEnd" minTickGap={24} />
+                <YAxis yAxisId="left" {...chartAxis} tickFormatter={formatCompact} width={52} />
+                <YAxis yAxisId="right" orientation="right" {...chartAxis} tickFormatter={(v: number) => `${v.toLocaleString("es-ES", { maximumFractionDigits: 1 })} %`} width={48} domain={["dataMin - 1", "dataMax + 1"]} />
+                <Tooltip content={<ChartTooltip valueFormatter={(v) => (v < 100 ? formatPct(v) : formatCurrency(v))} />} cursor={chartBarCursor} />
+                <Bar yAxisId="left" dataKey="amount" name="Importe" fill={chartColors.tax} fillOpacity={0.8} radius={[4, 4, 0, 0]} maxBarSize={20} />
+                <Line yAxisId="right" type="monotone" dataKey="rate" name="Tipo" stroke={chartColors.secondary} strokeWidth={2} dot={false} activeDot={chartActiveDot} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartCard>
+
+          <ChartCard title="Retención neta" description="Porcentaje del bruto que te llega" height={240}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={retentionData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradRetention" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={chartColors.primary} stopOpacity={0.25} />
+                    <stop offset="100%" stopColor={chartColors.primary} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid {...chartGrid} />
+                <XAxis dataKey="monthLabel" {...chartAxis} interval="preserveStartEnd" minTickGap={24} />
+                <YAxis {...chartAxis} domain={["dataMin - 2", "dataMax + 2"]} tickFormatter={(v) => `${Math.round(v)}%`} width={44} />
+                <Tooltip content={<ChartTooltip valueFormatter={formatPct} />} cursor={chartCursor} />
+                <Area type="monotone" dataKey="retentionRate" name="Retención" stroke={chartColors.primary} strokeWidth={2} fill="url(#gradRetention)" dot={false} activeDot={chartActiveDot} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        </div>
       )}
 
-      {/* ─── Annual Summary ──────────────────────────────────── */}
-      {data.annualSummaries && data.annualSummaries.length > 0 && (
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <SectionHeader
-              icon={Wallet}
-              title="Resumen Anual"
-              subtitle="Totales y proyección por año"
-            />
+      {/* Resumen anual */}
+      {data.annualSummaries.length > 0 && (
+        <section className="mt-10">
+          <div className="mb-4 flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Resumen anual</h2>
+              <p className="text-sm text-muted-foreground">Totales, pagas extra y proyección por año</p>
+            </div>
             {data.annualSummaries.length > 1 && (
-              <Select
-                value={selectedYear ? String(selectedYear) : "all"}
-                onValueChange={(v) => setSelectedYear(v === "all" ? null : Number(v))}
-              >
+              <Select value={selectedYear ? String(selectedYear) : "all"} onValueChange={(v) => setSelectedYear(v === "all" || v === null ? null : Number(v))}>
                 <SelectTrigger size="sm" className="w-auto">
                   <SelectValue>{(v: string) => (v === "all" ? "Todos los años" : v)}</SelectValue>
                 </SelectTrigger>
@@ -952,160 +656,87 @@ function DashboardView() {
               </Select>
             )}
           </div>
-
-          <div className="space-y-4">
-            {(selectedYear ? data.annualSummaries.filter((s) => s.year === selectedYear) : data.annualSummaries).map((s) => (
-              <Card key={s.year} className="p-6">
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-500/10 ring-1 ring-primary-100 dark:ring-primary-500/20 flex items-center justify-center">
-                    <Calendar className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-                  </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            {summaries.map((s) => (
+              <SectionCard key={s.year}>
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h4 className="text-base font-bold text-foreground">{s.year}</h4>
-                    <p className="text-xs text-muted-foreground">{s.months} nóminas · {s.pagasExtra > 0 ? `${s.pagasExtra} paga${s.pagasExtra > 1 ? "s" : ""} extra` : "Sin pagas extra"}</p>
+                    <p className="font-serif-accent text-3xl leading-none text-foreground">{s.year}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {s.months} {s.months === 1 ? "nómina" : "nóminas"}
+                      {s.pagasExtra > 0 && ` · ${s.pagasExtra} ${s.pagasExtra === 1 ? "paga extra" : "pagas extra"}`}
+                    </p>
                   </div>
-                  <div className="ml-auto">
-                    <Badge
-                      variant="secondary"
-                      className={s.retentionRate >= 70
-                        ? "bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-500"
-                        : "bg-accent-50 text-accent-700 dark:bg-accent-500/10 dark:text-accent-400"}
-                    >
-                      Retención neta {s.retentionRate}%
-                    </Badge>
-                  </div>
+                  <Badge variant="secondary" className="gap-1 bg-primary/10 text-primary-700 dark:text-primary">
+                    Te llega el {formatPct(s.retentionRate)}
+                  </Badge>
                 </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
-                  <div className="bg-muted rounded-xl p-4">
-                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Bruto Total</p>
-                    <p className="text-lg font-bold text-foreground font-mono mt-1">{formatCurrency(s.totalGross)}</p>
-                  </div>
-                  <div className="bg-success-50/50 dark:bg-success-500/10 rounded-xl p-4">
-                    <p className="text-[11px] font-semibold text-success-600 uppercase tracking-wider">Neto Total</p>
-                    <p className="text-lg font-bold text-success-700 dark:text-success-500 font-mono mt-1">{formatCurrency(s.totalNet)}</p>
-                  </div>
-                  <div className="bg-danger-50/50 dark:bg-danger-500/10 rounded-xl p-4">
-                    <p className="text-[11px] font-semibold text-danger-600 uppercase tracking-wider">Total Deducciones</p>
-                    <p className="text-lg font-bold text-danger-700 dark:text-danger-400 font-mono mt-1">{formatCurrency(s.totalDeductions)}</p>
-                  </div>
-                  <div className="bg-accent-50/50 dark:bg-accent-500/10 rounded-xl p-4">
-                    <p className="text-[11px] font-semibold text-accent-600 uppercase tracking-wider">IRPF Total</p>
-                    <p className="text-lg font-bold text-accent-700 dark:text-accent-400 font-mono mt-1">{formatCurrency(s.totalIrpf)}</p>
-                  </div>
+                <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border">
+                  <YearMetric label="Bruto" value={formatCurrency(s.totalGross)} />
+                  <YearMetric label="Neto" value={formatCurrency(s.totalNet)} accent />
+                  <YearMetric label="Deducciones" value={formatCurrency(s.totalDeductions)} />
+                  <YearMetric label="IRPF" value={formatCurrency(s.totalIrpf)} />
                 </div>
-
-                {s.pagasExtra > 0 && (
-                  <div className="grid grid-cols-2 gap-4 mb-5">
-                    <div className="bg-accent-50/30 dark:bg-accent-500/5 border border-accent-100 dark:border-accent-500/20 rounded-xl p-4">
-                      <p className="text-[11px] font-semibold text-accent-600 uppercase tracking-wider">Desglose pagas extra — Bruto</p>
-                      <p className="text-lg font-bold text-accent-700 dark:text-accent-400 font-mono mt-1">{formatCurrency(s.extraGross)}</p>
-                    </div>
-                    <div className="bg-accent-50/30 dark:bg-accent-500/5 border border-accent-100 dark:border-accent-500/20 rounded-xl p-4">
-                      <p className="text-[11px] font-semibold text-accent-600 uppercase tracking-wider">Desglose pagas extra — Neto</p>
-                      <p className="text-lg font-bold text-accent-700 dark:text-accent-400 font-mono mt-1">{formatCurrency(s.extraNet)}</p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="flex flex-col">
-                    <span className="text-[11px] text-muted-foreground">Media Bruto/mes</span>
-                    <span className="text-sm font-mono font-semibold text-foreground">{formatCurrency(s.avgMonthlyGross)}</span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[11px] text-muted-foreground">Media Neto/mes</span>
-                    <span className="text-sm font-mono font-semibold text-success-700 dark:text-success-500">{formatCurrency(s.avgMonthlyNet)}</span>
-                  </div>
-                  {s.months < 12 && (
+                <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                  <SummaryRow label="Media bruta / mes" value={formatCurrency(s.avgMonthlyGross)} />
+                  <SummaryRow label="Media neta / mes" value={formatCurrency(s.avgMonthlyNet)} />
+                  {s.pagasExtra > 0 && (
                     <>
-                      <div className="flex flex-col">
-                        <span className="text-[11px] text-muted-foreground">Proyección Bruto Anual</span>
-                        <span className="text-sm font-mono font-semibold text-foreground">{formatCurrency(s.projectedAnnualGross)}</span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[11px] text-muted-foreground">Proyección Neto Anual</span>
-                        <span className="text-sm font-mono font-semibold text-success-600">{formatCurrency(s.projectedAnnualNet)}</span>
-                      </div>
+                      <SummaryRow label={<span className="inline-flex items-center gap-1"><Gift className="size-3.5" /> Extras bruto</span>} value={formatCurrency(s.extraGross)} />
+                      <SummaryRow label="Extras neto" value={formatCurrency(s.extraNet)} />
                     </>
                   )}
-                </div>
-              </Card>
+                  {s.months < 12 && (
+                    <>
+                      <SummaryRow label="Proyección bruta" value={formatCurrency(s.projectedAnnualGross)} />
+                      <SummaryRow label="Proyección neta" value={formatCurrency(s.projectedAnnualNet)} />
+                    </>
+                  )}
+                </dl>
+              </SectionCard>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* ─── IRPF & Retention Rate Evolution ─────────────────── */}
-      {data.irpfEvolution && data.irpfEvolution.length > 1 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="p-0 overflow-hidden">
-            <div className="h-1.5 bg-gradient-to-r from-danger-500 to-danger-400" />
-            <div className="p-6">
-            <SectionHeader
-              icon={Shield}
-              title="Evolución IRPF"
-              subtitle="Tipo efectivo y cuantía mensual"
-            />
-            <ResponsiveContainer width="100%" height={280}>
-              <ComposedChart data={data.irpfEvolution.map((d) => ({ ...d, monthLabel: formatMonthLabel(d.month) }))} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
-                <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: CHART_AXIS }} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="left" tick={{ fontSize: 11, fill: CHART_AXIS }} tickFormatter={formatCompact} axisLine={false} tickLine={false} width={60} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: CHART_AXIS }} tickFormatter={(v) => `${v}%`} axisLine={false} tickLine={false} width={45} />
-                <Tooltip content={<ChartTooltip />} />
-                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-                <Bar yAxisId="left" dataKey="amount" name="IRPF (€)" fill="#ef4444" opacity={0.7} radius={[4, 4, 0, 0]} barSize={24} />
-                <Line yAxisId="right" type="monotone" dataKey="rate" name="Tipo (%)" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 3, fill: "#fff", strokeWidth: 2 }} />
-              </ComposedChart>
-            </ResponsiveContainer>
-            </div>
-          </Card>
-
-          <Card className="p-0 overflow-hidden">
-            <div className="h-1.5 bg-gradient-to-r from-success-500 to-success-400" />
-            <div className="p-6">
-            <SectionHeader
-              icon={Percent}
-              title="Tasa de Retención Neta"
-              subtitle="% del salario bruto que cobras"
-            />
-            <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={(data.monthlySavings ?? []).map((d) => ({ ...d, monthLabel: formatMonthLabel(d.month) }))} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="gradRetention" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} vertical={false} />
-                <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: CHART_AXIS }} axisLine={false} tickLine={false} />
-                <YAxis domain={[50, 100]} tick={{ fontSize: 11, fill: CHART_AXIS }} tickFormatter={(v) => `${v}%`} axisLine={false} tickLine={false} width={45} />
-                <Tooltip
-                  formatter={(value: number, name: string) => [name === "Retención (%)" ? `${value}%` : formatCurrency(value), name]}
-                  contentStyle={DASHBOARD_TOOLTIP_CONTENT_STYLE}
-                  itemStyle={DASHBOARD_TOOLTIP_ITEM_STYLE}
-                  labelStyle={DASHBOARD_TOOLTIP_LABEL_STYLE}
-                />
-                <Area type="monotone" dataKey="retentionRate" name="Retención (%)" stroke="var(--chart-1)" strokeWidth={2.5} fill="url(#gradRetention)" dot={{ r: 3, fill: "#fff", strokeWidth: 2 }} activeDot={{ r: 6, strokeWidth: 2, fill: "#fff" }} />
-              </AreaChart>
-            </ResponsiveContainer>
-            </div>
-          </Card>
-        </div>
+      {/* Conceptos */}
+      {data.conceptBreakdown.length > 0 && (
+        <SectionCard className="mt-10" title="Todos los conceptos" description={`${data.conceptBreakdown.length} conceptos detectados en el periodo`} flush>
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <SortableHead label="Concepto" column="name" sort={conceptSort} onSort={handleConceptSort} className="pl-5" />
+                <SortableHead label="Tipo" column="category" sort={conceptSort} onSort={handleConceptSort} />
+                <SortableHead label="Media" column="average" sort={conceptSort} onSort={handleConceptSort} align="right" />
+                <SortableHead label="Total" column="total" sort={conceptSort} onSort={handleConceptSort} align="right" />
+                <SortableHead label="Apariciones" column="count" sort={conceptSort} onSort={handleConceptSort} align="right" className="pr-5" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sortedConceptBreakdown.map((c) => (
+                <TableRow key={c.name}>
+                  <TableCell className="py-3 pl-5 font-medium text-foreground">{c.name}</TableCell>
+                  <TableCell className="py-3">
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className={cn("size-1.5 rounded-full", c.category === "devengo" ? "bg-emerald-500" : c.category === "deduccion" ? "bg-red-500" : "bg-muted-foreground")} />
+                      {getConceptCategoryLabel(c.category)}
+                    </span>
+                  </TableCell>
+                  <TableCell className="py-3 text-right tabular-nums text-foreground">{formatCurrency(c.average)}</TableCell>
+                  <TableCell className="py-3 text-right tabular-nums text-foreground">{formatCurrency(c.total)}</TableCell>
+                  <TableCell className="py-3 pr-5 text-right tabular-nums text-muted-foreground">{c.count}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </SectionCard>
       )}
     </div>
   );
 }
 
-// ─── Helpers ────────────────────────────────────────────────────
-function MonthRangeSelect({
-  label,
-  value,
-  placeholder,
-  options,
-  onChange,
-}: {
+// ─── Piezas ─────────────────────────────────────────────────────
+function MonthRangeSelect({ label, value, placeholder, options, onChange }: {
   label: string;
   value: string;
   placeholder: string;
@@ -1113,35 +744,83 @@ function MonthRangeSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="block min-w-[9rem]">
-      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
-      <Select value={value || "none"} onValueChange={(v) => onChange(v === "none" || v === null ? "" : v)} disabled={options.length === 0}>
-        <SelectTrigger className="min-w-[9rem]">
-          <SelectValue placeholder={placeholder}>{(v: string) => (v === "none" ? placeholder : formatMonthLabel(v))}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="none">{placeholder}</SelectItem>
-          {options.map((month) => (
-            <SelectItem key={month} value={month}>
-              {formatMonthLabel(month)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </label>
+    <Select value={value || "none"} onValueChange={(v) => onChange(v === "none" || v === null ? "" : v)} disabled={options.length === 0}>
+      <SelectTrigger size="sm" className="min-w-28 bg-card" aria-label={label}>
+        <SelectValue placeholder={placeholder}>{(v: string) => (v === "none" ? placeholder : formatMonthLabel(v))}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none">{placeholder}</SelectItem>
+        {options.map((month) => (
+          <SelectItem key={month} value={month}>{formatMonthLabel(month)}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
-function SummaryRow({ label, value, color, bold }: { label: string; value: string; color: string; bold?: boolean }) {
+function SortableHead({ label, column, sort, onSort, align = "left", className }: {
+  label: string;
+  column: ConceptSortColumn;
+  sort: { column: ConceptSortColumn; direction: SortDirection };
+  onSort: (column: ConceptSortColumn) => void;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  const active = sort.column === column;
   return (
-    <div className="flex items-center justify-between py-1">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className={cn("text-sm font-mono", bold ? "font-bold" : "font-medium", color)}>{value}</span>
+    <TableHead
+      className={cn(align === "right" && "text-right", className)}
+      aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        className={cn(
+          "inline-flex cursor-pointer items-center gap-1 text-xs font-medium transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring",
+          align === "right" && "w-full justify-end",
+          active ? "text-foreground" : "text-muted-foreground",
+        )}
+      >
+        {label}
+        <SortIndicator active={active} direction={sort.direction} />
+      </button>
+    </TableHead>
+  );
+}
+
+function SummaryRow({ label, value, strong, accent }: { label: ReactNode; value: string; strong?: boolean; accent?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={cn("tabular-nums", strong ? "font-semibold" : "font-medium", accent ? "text-primary-700 dark:text-primary" : "text-foreground")}>{value}</dd>
     </div>
   );
 }
 
-// ─── Export ─────────────────────────────────────────────────────
+function YearMetric({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="bg-card p-3.5">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={cn("mt-1 font-semibold tabular-nums", accent ? "text-primary-700 dark:text-primary" : "text-foreground")}>{value}</p>
+    </div>
+  );
+}
+
+function LegendKey({ color, label, dashed, line }: { color: string; label: string; dashed?: boolean; line?: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {dashed || line ? (
+        <svg width="14" height="4" aria-hidden="true">
+          <line x1="0" y1="2" x2="14" y2="2" stroke={color} strokeWidth="2" strokeDasharray={dashed ? "4 3" : undefined} strokeLinecap="round" />
+        </svg>
+      ) : (
+        <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
+      )}
+      {label}
+    </span>
+  );
+}
+
 export default function DashboardPage() {
   return (
     <Providers>

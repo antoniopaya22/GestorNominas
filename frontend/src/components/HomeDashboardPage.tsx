@@ -1,40 +1,61 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Wallet, FileText, ArrowUpRight, ArrowDownRight,
-  PiggyBank, Receipt, TrendingUp, BarChart3,
-  ArrowRight, DollarSign, Users, Upload,
-  Landmark, CheckCircle2, Circle, CreditCard,
-  Download,
+  Bar, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid,
+} from "recharts";
+import {
+  ArrowDownRight, ArrowRight, ArrowUpRight, ArrowLeftRight, CreditCard, Download, FileText,
+  Landmark, PiggyBank, Plus, Receipt, TrendingUp, Upload, Users, Wallet, Banknote, CircleDollarSign,
+  type LucideIcon,
 } from "lucide-react";
 import {
-  getDashboard, getFinanceSummary, getAccounts, getTransactions,
-  type Account, type Transaction,
+  getDashboard, getFinanceSummary, getFinanceTrends, getAccounts, getTransactions, getPayslips, getPayslip, getMe,
+  type Transaction, type Account,
 } from "../lib/api";
 import { Providers } from "./Providers";
-import { formatCurrency } from "../lib/format";
-import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
+import { formatCurrency, formatCompact, formatMonthLabel, formatPct } from "../lib/format";
+import { ChartTooltip } from "./ui/ChartTooltip";
+import {
+  PageHeader, StatCard, StatGrid, SectionCard, ChartCard, CardLink,
+  PageHeaderSkeleton, StatCardSkeleton, ChartCardSkeleton, ListCardSkeleton,
+  chartAxis, chartGrid, chartColors, chartBarCursor, DeltaBadge, type StatDelta,
+} from "./app";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "cn";
 
 // ─── Helpers ────────────────────────────────────────────────────
+const MONTHS_FULL = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
 function greeting(): string {
   const h = new Date().getHours();
   if (h < 7) return "Buenas noches";
   if (h < 13) return "Buenos días";
-  if (h < 20) return "Buenas tardes";
+  if (h < 21) return "Buenas tardes";
   return "Buenas noches";
 }
 
-function formatDate(d: string) {
+function todayLabel(): string {
+  const s = new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function shortDate(d: string) {
   return new Date(d + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
 
-const ACCOUNT_ICONS: Record<string, typeof Wallet> = {
+function pctDelta(current: number, previous: number | undefined, label: string, invert = false): StatDelta | undefined {
+  if (previous == null || previous === 0) return undefined;
+  const change = ((current - previous) / Math.abs(previous)) * 100;
+  if (!Number.isFinite(change)) return undefined;
+  const trend = Math.abs(change) < 0.05 ? "flat" : change > 0 ? "up" : "down";
+  const good = trend === "flat" ? "neutral" : (trend === "up") !== invert ? "positive" : "negative";
+  return { value: `${change > 0 ? "+" : ""}${formatPct(change)}`, trend, tone: good, label };
+}
+
+const ACCOUNT_ICONS: Record<Account["type"], LucideIcon> = {
   bank: Landmark,
   credit_card: CreditCard,
-  cash: DollarSign,
+  cash: Banknote,
   investment: TrendingUp,
   other: Wallet,
 };
@@ -42,385 +63,409 @@ const ACCOUNT_ICONS: Record<string, typeof Wallet> = {
 // ─── Skeleton ───────────────────────────────────────────────────
 function HomeSkeleton() {
   return (
-    <div className="animate-fade-in space-y-8">
-      {/* Hero skeleton */}
-      <Card className="p-8">
-        <Skeleton className="h-8 w-56 mb-2" />
-        <Skeleton className="h-12 w-72 mb-1" />
-        <Skeleton className="h-5 w-48" />
-      </Card>
-      {/* Cards skeleton */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6"><Skeleton className="h-40 w-full" /></Card>
-        <Card className="p-6"><Skeleton className="h-40 w-full" /></Card>
-      </div>
-      {/* Bottom skeleton */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="p-5 lg:col-span-2"><Skeleton className="h-48 w-full" /></Card>
-        <Card className="p-5"><Skeleton className="h-48 w-full" /></Card>
+    <div>
+      <PageHeaderSkeleton />
+      <StatGrid>
+        {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
+      </StatGrid>
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <ChartCardSkeleton className="lg:col-span-2" height={260} />
+        <ListCardSkeleton rows={4} />
       </div>
     </div>
   );
 }
 
-// ─── Main View ──────────────────────────────────────────────────
-function HomeDashboardView() {
-  const { data: payrollData, isLoading: loadingPayroll } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: () => getDashboard(),
-  });
+// ─── Bienvenida (sin datos) ─────────────────────────────────────
+const ONBOARDING_STEPS = [
+  { icon: Users, title: "Crea un perfil", text: "Una persona por perfil: tú, tu pareja… cada uno con su histórico.", href: "/app/profiles", cta: "Crear perfil" },
+  { icon: Upload, title: "Sube tus nóminas", text: "Arrastra los PDF y extraemos bruto, neto, IRPF y cada concepto.", href: "/app/upload", cta: "Subir nóminas" },
+  { icon: Download, title: "Conecta tus finanzas", text: "Importa tu CSV de YNAB o crea cuentas para ver gastos e ingresos.", href: "/app/import", cta: "Importar datos" },
+];
 
-  const { data: financeSummary, isLoading: loadingFinance } = useQuery({
-    queryKey: ["finance-summary"],
-    queryFn: getFinanceSummary,
-  });
-
-  const { data: accounts = [] } = useQuery({
-    queryKey: ["accounts"],
-    queryFn: getAccounts,
-  });
-
-  const { data: txData } = useQuery({
-    queryKey: ["transactions", { limit: 5, page: 1 }],
-    queryFn: () => getTransactions({ limit: 5, page: 1 }),
-  });
-
-  const isLoading = loadingPayroll || loadingFinance;
-  if (isLoading) return <HomeSkeleton />;
-
-  const kpis = payrollData?.kpis;
-  const hasPayroll = !!kpis && kpis.totalPayslips > 0;
-  const hasFinance = !!financeSummary && (financeSummary.totalBalance !== 0 || financeSummary.monthExpenses !== 0);
-  const hasData = hasFinance || hasPayroll;
-  const recentTx = txData?.data ?? [];
-
-  // ── Onboarding: no data yet ───────────────────────────────────
-  if (!hasData) {
-    return (
-      <div className="animate-fade-in max-w-2xl mx-auto py-8">
-        <div className="text-center mb-10">
-          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center mx-auto mb-5 shadow-lg shadow-primary-500/20">
-            <BarChart3 className="w-10 h-10 text-white" />
-          </div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">Te damos la bienvenida</h2>
-          <p className="text-muted-foreground max-w-md mx-auto leading-relaxed">
-            Empieza importando tus datos financieros o subiendo tus nóminas en PDF para ver todo tu resumen aquí.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <a href="/app/import" className="card p-6 group cursor-pointer hover:shadow-card-hover transition-all duration-200 hover:border-primary-200 dark:hover:border-primary-500/30">
-            <div className="w-12 h-12 rounded-2xl bg-primary-50 dark:bg-primary-500/10 ring-1 ring-primary-100 dark:ring-primary-500/20 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform duration-200">
-              <Download className="w-6 h-6 text-primary-600 dark:text-primary-400" />
-            </div>
-            <h3 className="font-bold text-foreground mb-1">Importar datos YNAB</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">Sube tu CSV exportado de YNAB para importar cuentas y transacciones automáticamente.</p>
-          </a>
-          <a href="/app/upload" className="card p-6 group cursor-pointer hover:shadow-card-hover transition-all duration-200 hover:border-accent-200 dark:hover:border-accent-500/30">
-            <div className="w-12 h-12 rounded-2xl bg-accent-50 dark:bg-accent-500/10 ring-1 ring-accent-100 dark:ring-accent-500/20 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform duration-200">
-              <Upload className="w-6 h-6 text-accent-600 dark:text-accent-400" />
-            </div>
-            <h3 className="font-bold text-foreground mb-1">Subir nóminas</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">Sube archivos PDF de tus nóminas y extraeremos los datos automáticamente.</p>
-          </a>
-          <a href="/app/accounts" className="card p-6 group cursor-pointer hover:shadow-card-hover transition-all duration-200 hover:border-success-100 dark:hover:border-success-500/30">
-            <div className="w-12 h-12 rounded-2xl bg-success-50 dark:bg-success-500/10 ring-1 ring-success-100 dark:ring-success-500/20 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform duration-200">
-              <Landmark className="w-6 h-6 text-success-600" />
-            </div>
-            <h3 className="font-bold text-foreground mb-1">Crear cuentas</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">Añade tus cuentas bancarias, tarjetas o efectivo para gestionar tus finanzas.</p>
-          </a>
-          <a href="/app/profiles" className="card p-6 group cursor-pointer hover:shadow-card-hover transition-all duration-200 hover:border-border">
-            <div className="w-12 h-12 rounded-2xl bg-muted ring-1 ring-border flex items-center justify-center mb-4 group-hover:scale-105 transition-transform duration-200">
-              <Users className="w-6 h-6 text-muted-foreground" />
-            </div>
-            <h3 className="font-bold text-foreground mb-1">Crear perfiles</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">Crea perfiles de empleados para organizar las nóminas por persona.</p>
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Main dashboard: has data ──────────────────────────────────
+function Onboarding({ firstName }: { firstName?: string }) {
   return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Hero / Balance header */}
-      <Card className="p-0 overflow-hidden">
-        <div className="h-1.5 bg-gradient-to-r from-primary-500 to-primary-400" />
-        <div className="px-6 py-6 sm:px-8 sm:py-7">
-          <p className="text-muted-foreground text-sm font-medium mb-1">{greeting()}</p>
-          {hasFinance ? (
-            <>
-              <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Balance total</p>
-              <p className={cn("text-3xl sm:text-4xl font-bold font-mono tracking-tight", financeSummary.totalBalance >= 0 ? "text-primary-700 dark:text-primary-400" : "text-danger-600")}>
-                {formatCurrency(financeSummary.totalBalance)}
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Salario neto medio</p>
-              <p className="text-3xl sm:text-4xl font-bold font-mono tracking-tight text-accent-700 dark:text-accent-400">
-                {formatCurrency(kpis!.avgNet)}
-              </p>
-            </>
-          )}
+    <div>
+      <PageHeader
+        eyebrow={todayLabel()}
+        title={firstName ? `Hola, ${firstName}.` : "Hola."}
+        accent="Empecemos."
+        description="Tres pasos y tendrás tus nóminas y tus finanzas explicadas en un mismo sitio."
+      />
+      <div className="grid gap-4 md:grid-cols-3">
+        {ONBOARDING_STEPS.map((step, i) => (
+          <a
+            key={step.href}
+            href={step.href}
+            className="group relative flex flex-col rounded-xl border border-border bg-card p-6 shadow-[0_1px_2px_rgb(0_0_0/0.03)] transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+          >
+            <span className="absolute top-5 right-5 font-serif-accent text-3xl text-muted-foreground/30">0{i + 1}</span>
+            <div className="flex size-10 items-center justify-center rounded-xl border border-border bg-primary/10">
+              <step.icon className="size-5 text-primary-600 dark:text-primary" />
+            </div>
+            <h3 className="mt-5 font-semibold text-foreground">{step.title}</h3>
+            <p className="mt-1.5 flex-1 text-sm text-muted-foreground">{step.text}</p>
+            <span className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-primary-700 dark:text-primary">
+              {step.cta}
+              <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-          {/* Mini KPI pills */}
-          <div className="flex flex-wrap gap-2.5 mt-5">
-            {hasFinance && (
-              <>
-                <Badge variant="secondary" className="bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-500 gap-1.5">
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                  Ingresos
-                  <span className="font-mono">{formatCurrency(financeSummary.monthIncome)}</span>
-                </Badge>
-                <Badge variant="secondary" className="bg-danger-50 text-danger-700 dark:bg-danger-500/10 dark:text-danger-400 gap-1.5">
-                  <ArrowDownRight className="w-3.5 h-3.5" />
-                  Gastos
-                  <span className="font-mono">{formatCurrency(financeSummary.monthExpenses)}</span>
-                </Badge>
-                <Badge variant="secondary" className="bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-400 gap-1.5">
-                  <PiggyBank className="w-3.5 h-3.5" />
-                  Ahorro
-                  <span className="font-mono">{formatCurrency(financeSummary.monthSavings)}</span>
-                </Badge>
-              </>
-            )}
-            {hasPayroll && (
-              <>
-                <Badge variant="secondary" className="bg-accent-50 text-accent-700 dark:bg-accent-500/10 dark:text-accent-400 gap-1.5">
-                  <FileText className="w-3.5 h-3.5" />
-                  {kpis!.totalPayslips} nóminas
-                </Badge>
-                {hasFinance || (
-                  <Badge variant="secondary" className="bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-500 gap-1.5">
-                    <DollarSign className="w-3.5 h-3.5" />
-                    Bruto medio
-                    <span className="font-mono">{formatCurrency(kpis!.avgGross)}</span>
-                  </Badge>
-                )}
-              </>
-            )}
-          </div>
+// ─── Tarjetas ───────────────────────────────────────────────────
+function TransactionRow({ tx }: { tx: Transaction }) {
+  const isExpense = tx.type === "expense";
+  const isIncome = tx.type === "income";
+  const Icon = isExpense ? ArrowDownRight : isIncome ? ArrowUpRight : ArrowLeftRight;
+  return (
+    <li className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/40">
+      <div
+        className={cn(
+          "flex size-8 shrink-0 items-center justify-center rounded-lg",
+          isExpense ? "bg-red-500/10 text-red-600 dark:text-red-400" : isIncome ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-muted text-muted-foreground",
+        )}
+      >
+        <Icon className="size-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-foreground">{tx.payee ?? tx.accountName}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {shortDate(tx.date)}
+          {tx.categoryName ? ` · ${tx.categoryName}` : tx.type === "transfer" ? ` · Traspaso a ${tx.targetAccountName}` : ""}
+        </p>
+      </div>
+      <p className={cn("text-sm font-medium tabular-nums", isExpense ? "text-foreground" : isIncome ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
+        {isExpense ? "−" : isIncome ? "+" : ""}
+        {formatCurrency(tx.amount)}
+      </p>
+    </li>
+  );
+}
+
+function LatestPayslipCard({ payslipId, previousNet }: { payslipId: number; previousNet?: number }) {
+  const { data: payslip, isLoading } = useQuery({
+    queryKey: ["payslip", payslipId],
+    queryFn: () => getPayslip(payslipId),
+  });
+
+  if (isLoading || !payslip) return <ListCardSkeleton rows={3} />;
+
+  const gross = payslip.grossSalary ?? 0;
+  const net = payslip.netSalary ?? 0;
+  const deductions = payslip.concepts.filter((c) => c.category === "deduccion");
+  const irpf = deductions.filter((c) => c.name.toLowerCase().includes("irpf")).reduce((s, c) => s + c.amount, 0);
+  const other = Math.max(gross - net - irpf, 0);
+  const segments = [
+    { label: "Neto", value: net, className: "bg-primary-500 dark:bg-primary" },
+    { label: "IRPF", value: irpf, className: "bg-amber-400" },
+    { label: "Seg. Social y otros", value: other, className: "bg-brand-navy/70 dark:bg-slate-500" },
+  ];
+  const period = payslip.periodMonth && payslip.periodYear ? `${MONTHS_FULL[payslip.periodMonth - 1]} ${payslip.periodYear}` : "Sin periodo";
+  const delta = pctDelta(net, previousNet, "vs. mes anterior");
+
+  return (
+    <SectionCard title="Tu última nómina" description={payslip.company ?? undefined} action={<CardLink href="/app/payslips">Ver todas</CardLink>}>
+      <p className="text-xs font-medium capitalize text-muted-foreground">{period}</p>
+      <div className="mt-1 flex items-baseline gap-2">
+        <p className="text-3xl font-semibold tracking-tight text-foreground tabular-nums">{formatCurrency(net)}</p>
+        <span className="text-sm text-muted-foreground">neto</span>
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        de <span className="tabular-nums">{formatCurrency(gross)}</span> brutos
+        {gross > 0 && <> · te llega el <span className="font-medium text-foreground tabular-nums">{formatPct((net / gross) * 100)}</span></>}
+      </p>
+      {delta && (
+        <div className="mt-3">
+          <DeltaBadge delta={delta} />
         </div>
-      </Card>
+      )}
+      <div className="mt-5 flex h-2.5 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label="Reparto del bruto">
+        {segments.map((s) => (
+          <div key={s.label} className={cn("h-full first:rounded-l-full last:rounded-r-full", s.className)} style={{ width: `${gross ? (s.value / gross) * 100 : 0}%` }} />
+        ))}
+      </div>
+      <ul className="mt-4 space-y-2">
+        {segments.map((s) => (
+          <li key={s.label} className="flex items-center gap-2 text-sm">
+            <span className={cn("size-2 rounded-full", s.className)} />
+            <span className="text-muted-foreground">{s.label}</span>
+            <span className="ml-auto font-medium tabular-nums text-foreground">{formatCurrency(s.value)}</span>
+          </li>
+        ))}
+      </ul>
+    </SectionCard>
+  );
+}
 
-      {/* Section navigation cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Finanzas card */}
-        <a
-          href="/app/finance"
-          className="card p-0 overflow-hidden group cursor-pointer hover:shadow-card-hover transition-all duration-200"
-        >
-          <div className="h-1.5 bg-gradient-to-r from-primary-500 to-primary-400" />
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-primary-50 dark:bg-primary-500/10 ring-1 ring-primary-100 dark:ring-primary-500/20 flex items-center justify-center">
-                  <Wallet className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-foreground">Finanzas</h3>
-                  <p className="text-xs text-muted-foreground">Cuentas, gastos e ingresos</p>
-                </div>
-              </div>
-              <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary-500 group-hover:translate-x-0.5 transition-all duration-200" />
-            </div>
-            {hasFinance ? (
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Ingresos</p>
-                  <p className="text-lg font-bold text-success-600 tabular-nums font-mono mt-0.5">
-                    {formatCurrency(financeSummary.monthIncome)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Gastos</p>
-                  <p className="text-lg font-bold text-danger-600 tabular-nums font-mono mt-0.5">
-                    {formatCurrency(financeSummary.monthExpenses)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Cuentas</p>
-                  <p className="text-lg font-bold text-foreground tabular-nums font-mono mt-0.5">
-                    {accounts.length}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 py-2 text-sm text-muted-foreground">
-                <Receipt className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                Importa tu CSV de YNAB o añade cuentas para empezar
-              </div>
-            )}
-          </div>
-        </a>
-
-        {/* Nóminas card */}
-        <a
-          href="/app/payroll"
-          className="card p-0 overflow-hidden group cursor-pointer hover:shadow-card-hover transition-all duration-200"
-        >
-          <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-accent-50 dark:bg-accent-500/10 ring-1 ring-accent-100 dark:ring-accent-500/20 flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-accent-600 dark:text-accent-400" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-foreground">Nóminas</h3>
-                  <p className="text-xs text-muted-foreground">Salarios, retenciones y análisis</p>
-                </div>
-              </div>
-              <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-accent-500 group-hover:translate-x-0.5 transition-all duration-200" />
-            </div>
-            {hasPayroll ? (
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Bruto medio</p>
-                  <p className="text-lg font-bold text-foreground tabular-nums font-mono mt-0.5">
-                    {formatCurrency(kpis!.avgGross)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Neto medio</p>
-                  <p className="text-lg font-bold text-success-600 tabular-nums font-mono mt-0.5">
-                    {formatCurrency(kpis!.avgNet)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">IRPF medio</p>
-                  <p className="text-lg font-bold text-danger-600 tabular-nums font-mono mt-0.5">
-                    {kpis!.avgIrpf.toFixed(1)}%
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 py-2 text-sm text-muted-foreground">
-                <Users className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                Crea un perfil y sube tus nóminas en PDF para empezar
-              </div>
-            )}
-          </div>
+function NoPayslipCard() {
+  return (
+    <SectionCard title="Tu última nómina">
+      <div className="flex flex-col items-center py-6 text-center">
+        <div className="flex size-11 items-center justify-center rounded-xl border border-border bg-primary/10">
+          <FileText className="size-5 text-primary-600 dark:text-primary" />
+        </div>
+        <p className="mt-4 text-sm font-medium text-foreground">Aún no hay nóminas</p>
+        <p className="mt-1 max-w-56 text-xs text-muted-foreground">Sube un PDF y verás aquí tu neto, IRPF y retenciones.</p>
+        <a href="/app/upload" className={cn(buttonVariants({ size: "sm" }), "mt-4 gap-1.5")}>
+          <Upload className="size-4" /> Subir nómina
         </a>
       </div>
+    </SectionCard>
+  );
+}
 
-      {/* Bottom row: Recent activity + Accounts sidebar */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent transactions */}
-        <Card className="lg:col-span-2 p-0 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-            <h3 className="font-semibold text-foreground text-sm">Actividad reciente</h3>
-            <a href="/app/transactions" className="text-xs font-semibold text-primary-600 hover:text-primary-700 transition-colors cursor-pointer">
-              Ver todo
-            </a>
-          </div>
+const QUICK_ACTIONS = [
+  { href: "/app/upload", label: "Subir nómina", icon: Upload },
+  { href: "/app/transactions?nueva=1", label: "Nueva transacción", icon: Plus },
+  { href: "/app/import", label: "Importar YNAB", icon: Download },
+  { href: "/app/analytics", label: "Analítica", icon: TrendingUp },
+];
+
+// ─── Vista principal ────────────────────────────────────────────
+function HomeDashboardView() {
+  const { data: me } = useQuery({ queryKey: ["me"], queryFn: getMe, retry: false });
+  const { data: payroll, isLoading: loadingPayroll } = useQuery({ queryKey: ["dashboard"], queryFn: () => getDashboard() });
+  const { data: finance, isLoading: loadingFinance } = useQuery({ queryKey: ["finance-summary"], queryFn: getFinanceSummary });
+  const { data: trends = [] } = useQuery({ queryKey: ["finance-trends"], queryFn: () => getFinanceTrends() });
+  const { data: accounts = [] } = useQuery({ queryKey: ["accounts"], queryFn: getAccounts });
+  const { data: txData } = useQuery({
+    queryKey: ["transactions", { limit: 10, page: 1 }],
+    queryFn: () => getTransactions({ limit: 10, page: 1 }),
+  });
+  const { data: latestPayslips } = useQuery({
+    queryKey: ["payslips", { latest: true }],
+    queryFn: () => getPayslips({ status: "parsed", type: "ordinal", sortBy: "period", sortDir: "desc", limit: 1 }),
+  });
+
+  const firstName = me?.name?.split(" ")[0];
+  const latest = latestPayslips?.data[0];
+
+  const derived = useMemo(() => {
+    const activeTrends = trends.filter((t) => t.income > 0 || t.expenses > 0);
+    const lastTwo = activeTrends.slice(-2);
+    const prevMonth = lastTwo.length === 2 ? lastTwo[0] : undefined;
+
+    let netSeries: number[] = [];
+    let previousNet: number | undefined;
+    if (payroll && latest) {
+      const profileName = payroll.profiles.find((p) => p.id === latest.profileId)?.name;
+      const series = (profileName && payroll.evolution[profileName]) || [];
+      netSeries = series.map((e) => e.net ?? 0).filter((v) => v > 0).slice(-12);
+      const idx = series.findIndex((e) => e.month === `${latest.periodYear}-${String(latest.periodMonth).padStart(2, "0")}`);
+      previousNet = idx > 0 ? series[idx - 1].net ?? undefined : undefined;
+    }
+
+    const irpfRates = payroll?.irpfEvolution.map((e) => e.rate).filter((r) => r > 0) ?? [];
+    const irpfRate = irpfRates.length ? irpfRates.slice(-12).reduce((s, r) => s + r, 0) / Math.min(irpfRates.length, 12) : 0;
+
+    const cashflow = trends.slice(-12).map((t) => ({ ...t, label: formatMonthLabel(t.month) }));
+    const balanceSeries = (() => {
+      let acc = (finance?.totalBalance ?? 0) - trends.reduce((s, t) => s + t.savings, 0);
+      return trends.map((t) => (acc += t.savings));
+    })();
+
+    return { prevMonth, netSeries, previousNet, irpfRate, cashflow, balanceSeries };
+  }, [trends, payroll, latest, finance]);
+
+  if (loadingPayroll || loadingFinance) return <HomeSkeleton />;
+
+  const kpis = payroll?.kpis;
+  const hasPayroll = !!kpis && kpis.totalPayslips > 0;
+  const hasFinance = !!finance && (finance.totalBalance !== 0 || finance.monthExpenses !== 0 || accounts.length > 0);
+  if (!hasPayroll && !hasFinance) return <Onboarding firstName={firstName} />;
+
+  const recentTx = (txData?.data ?? []).filter((t) => !t.scheduledFor).slice(0, 8);
+  const monthName = MONTHS_FULL[new Date().getMonth()];
+
+  return (
+    <div>
+      <PageHeader
+        eyebrow={todayLabel()}
+        title={`${greeting()}${firstName ? "," : "."}`}
+        accent={firstName ? `${firstName}.` : undefined}
+        description={
+          hasFinance && hasPayroll
+            ? `Así van tus nóminas y tus finanzas en ${monthName}.`
+            : hasPayroll
+              ? "Así van tus nóminas."
+              : `Así van tus finanzas en ${monthName}.`
+        }
+      />
+
+      <StatGrid>
+        {hasFinance && finance && (
+          <>
+            <StatCard
+              label="Balance total"
+              value={formatCurrency(finance.totalBalance)}
+              icon={Wallet}
+              hint={`${accounts.length} ${accounts.length === 1 ? "cuenta" : "cuentas"}`}
+              sparkline={derived.balanceSeries.length > 2 ? derived.balanceSeries : undefined}
+              emphasis
+            />
+            <StatCard
+              label={`Ingresos de ${monthName}`}
+              value={formatCurrency(finance.monthIncome)}
+              icon={ArrowUpRight}
+              delta={pctDelta(finance.monthIncome, derived.prevMonth?.income, "vs. mes anterior")}
+            />
+            <StatCard
+              label={`Gastos de ${monthName}`}
+              value={formatCurrency(finance.monthExpenses)}
+              icon={ArrowDownRight}
+              delta={pctDelta(finance.monthExpenses, derived.prevMonth?.expenses, "vs. mes anterior", true)}
+            />
+          </>
+        )}
+        {hasPayroll && kpis && latest && (
+          <StatCard
+            label="Último neto"
+            value={formatCurrency(latest.netSalary)}
+            icon={CircleDollarSign}
+            delta={pctDelta(latest.netSalary ?? 0, derived.previousNet, "vs. anterior")}
+            sparkline={derived.netSeries}
+            sparklineColor={chartColors.primary}
+          />
+        )}
+        {!hasFinance && hasPayroll && kpis && (
+          <>
+            <StatCard label="Neto medio" value={formatCurrency(kpis.avgNet)} icon={PiggyBank} hint={`${kpis.totalPayslips} nóminas`} />
+            <StatCard
+              label="Te llega del bruto"
+              value={kpis.avgGross > 0 ? formatPct((kpis.avgNet / kpis.avgGross) * 100) : "—"}
+              icon={TrendingUp}
+              hint={`Bruto medio ${formatCurrency(kpis.avgGross)}`}
+            />
+            <StatCard label="IRPF efectivo" value={formatPct(derived.irpfRate)} icon={Receipt} hint={`${formatCurrency(kpis.avgIrpf)} de media al mes`} />
+          </>
+        )}
+      </StatGrid>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        {hasFinance ? (
+          <ChartCard
+            className="lg:col-span-2"
+            title="Flujo de caja"
+            description="Ingresos y gastos de los últimos 12 meses"
+            action={<CardLink href="/app/finance/analytics">Analítica</CardLink>}
+            height={260}
+            legend={
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-muted-foreground">
+                <LegendDot color={chartColors.primary} label="Ingresos" />
+                <LegendDot color={chartColors.secondary} label="Gastos" />
+                <LegendDot color={chartColors.tax} label="Ahorro" line />
+              </div>
+            }
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={derived.cashflow} margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barGap={3}>
+                <CartesianGrid {...chartGrid} />
+                <XAxis dataKey="label" {...chartAxis} interval="preserveStartEnd" minTickGap={16} />
+                <YAxis {...chartAxis} tickFormatter={formatCompact} width={52} />
+                <Tooltip content={<ChartTooltip />} cursor={chartBarCursor} />
+                <Bar dataKey="income" name="Ingresos" fill={chartColors.primary} radius={[4, 4, 0, 0]} maxBarSize={18} />
+                <Bar dataKey="expenses" name="Gastos" fill={chartColors.secondary} fillOpacity={0.75} radius={[4, 4, 0, 0]} maxBarSize={18} />
+                <Line dataKey="savings" name="Ahorro" type="monotone" stroke={chartColors.tax} strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        ) : (
+          <ChartCard className="lg:col-span-2" title="Evolución del neto" description="Tu salario neto mes a mes" action={<CardLink href="/app/payroll">Dashboard</CardLink>} height={260}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={derived.netSeries.map((v, i) => ({ i, net: v }))} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+                <CartesianGrid {...chartGrid} />
+                <YAxis {...chartAxis} tickFormatter={formatCompact} width={52} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="net" name="Neto" fill={chartColors.primary} radius={[4, 4, 0, 0]} maxBarSize={22} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        )}
+
+        {latest ? <LatestPayslipCard payslipId={latest.id} previousNet={derived.previousNet} /> : <NoPayslipCard />}
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <SectionCard
+          className="lg:col-span-2"
+          title="Actividad reciente"
+          description={hasFinance ? "Tus últimos movimientos" : undefined}
+          action={hasFinance ? <CardLink href="/app/transactions">Ver todo</CardLink> : undefined}
+          flush
+        >
           {recentTx.length > 0 ? (
-            <div className="divide-y divide-border">
-              {recentTx.map((tx) => {
-                const isExpense = tx.type === "expense";
-                const isIncome = tx.type === "income";
-                return (
-                  <div key={tx.id} className="flex items-center gap-3 px-5 py-3 hover:bg-muted/50 transition-colors">
-                    <div className={cn(
-                      "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0",
-                      isExpense ? "bg-danger-50 dark:bg-danger-500/10" : isIncome ? "bg-success-50 dark:bg-success-500/10" : "bg-primary-50 dark:bg-primary-500/10"
-                    )}>
-                      {isExpense
-                        ? <ArrowDownRight className="w-4 h-4 text-danger-500" />
-                        : isIncome
-                          ? <ArrowUpRight className="w-4 h-4 text-success-500" />
-                          : <Receipt className="w-4 h-4 text-primary-500" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {tx.payee ?? tx.accountName}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(tx.date)}{tx.categoryName ? ` · ${tx.categoryName}` : ""}
-                      </p>
-                    </div>
-                    <p className={cn("text-sm font-bold tabular-nums font-mono", isExpense ? "text-danger-600" : isIncome ? "text-success-600" : "text-muted-foreground")}>
-                      {isExpense ? "−" : isIncome ? "+" : ""}{formatCurrency(tx.amount)}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
+            <ul className="divide-y divide-border">
+              {recentTx.map((tx) => <TransactionRow key={tx.id} tx={tx} />)}
+            </ul>
           ) : (
-            <div className="px-5 py-10 text-center">
-              <Receipt className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">Sin transacciones todavía</p>
-            </div>
-          )}
-        </Card>
-
-        {/* Accounts sidebar */}
-        <Card className="p-0 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-            <h3 className="font-semibold text-foreground text-sm">Mis cuentas</h3>
-            <a href="/app/accounts" className="text-xs font-semibold text-primary-600 hover:text-primary-700 transition-colors cursor-pointer">
-              Gestionar
-            </a>
-          </div>
-          {accounts.length > 0 ? (
-            <div className="divide-y divide-border">
-              {accounts.slice(0, 5).map((a) => {
-                const Icon = ACCOUNT_ICONS[a.type] ?? Wallet;
-                return (
-                  <div key={a.id} className="flex items-center gap-3 px-5 py-3">
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white"
-                      style={{ backgroundColor: a.color }}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{a.name}</p>
-                    </div>
-                    <p className={cn("text-sm font-bold tabular-nums font-mono", a.balance >= 0 ? "text-foreground" : "text-danger-600")}>
-                      {formatCurrency(a.balance)}
-                    </p>
-                  </div>
-                );
-              })}
-              {accounts.length > 5 && (
-                <div className="px-5 py-2.5 text-center">
-                  <a href="/app/accounts" className="text-xs font-semibold text-primary-600 hover:text-primary-700 cursor-pointer">
-                    +{accounts.length - 5} más
-                  </a>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="px-5 py-10 text-center">
-              <Landmark className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">Sin cuentas todavía</p>
-              <a href="/app/accounts" className="text-xs font-semibold text-primary-600 mt-1 inline-block cursor-pointer">
-                Crear cuenta
+            <div className="flex flex-col items-center px-5 py-12 text-center">
+              <Receipt className="size-6 text-muted-foreground/60" />
+              <p className="mt-3 text-sm font-medium text-foreground">Sin movimientos todavía</p>
+              <p className="mt-1 text-xs text-muted-foreground">Importa tu CSV de YNAB o añade una transacción.</p>
+              <a href="/app/import" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-4 gap-1.5")}>
+                <Download className="size-4" /> Importar datos
               </a>
             </div>
           )}
-        </Card>
-      </div>
+        </SectionCard>
 
-      {/* Quick actions */}
-      <div className="flex flex-wrap gap-2">
-        <a href="/app/import" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}>
-          <Download className="w-4 h-4" /> Importar YNAB
-        </a>
-        <a href="/app/upload" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}>
-          <Upload className="w-4 h-4" /> Subir nóminas
-        </a>
-        <a href="/app/transactions" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}>
-          <Receipt className="w-4 h-4" /> Transacciones
-        </a>
-        <a href="/app/analytics" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "gap-1.5")}>
-          <TrendingUp className="w-4 h-4" /> Analítica
-        </a>
+        <div className="flex flex-col gap-6">
+          <SectionCard title="Cuentas" action={<CardLink href="/app/accounts">Gestionar</CardLink>} flush>
+            {accounts.length > 0 ? (
+              <ul className="divide-y divide-border">
+                {accounts.filter((a) => !a.archived).slice(0, 5).map((a) => {
+                  const Icon = ACCOUNT_ICONS[a.type] ?? Wallet;
+                  return (
+                    <li key={a.id} className="flex items-center gap-3 px-5 py-3">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg text-white" style={{ backgroundColor: a.color }}>
+                        <Icon className="size-4" />
+                      </div>
+                      <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{a.name}</p>
+                      <p className={cn("text-sm font-medium tabular-nums", a.balance < 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>
+                        {formatCurrency(a.balance)}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="px-5 py-8 text-center">
+                <p className="text-sm text-muted-foreground">Sin cuentas todavía</p>
+                <a href="/app/accounts" className="mt-1 inline-block text-xs font-medium text-primary-700 dark:text-primary">Crear cuenta</a>
+              </div>
+            )}
+          </SectionCard>
+
+          <SectionCard title="Accesos rápidos">
+            <div className="grid grid-cols-2 gap-2">
+              {QUICK_ACTIONS.map((a) => (
+                <a
+                  key={a.href}
+                  href={a.href}
+                  className="group flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-3 text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-primary/5"
+                >
+                  <a.icon className="size-4 text-muted-foreground transition-colors group-hover:text-primary-600 dark:group-hover:text-primary" />
+                  {a.label}
+                </a>
+              ))}
+            </div>
+          </SectionCard>
+        </div>
       </div>
     </div>
+  );
+}
+
+function LegendDot({ color, label, line }: { color: string; label: string; line?: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={cn(line ? "h-0.5 w-3 rounded-full" : "size-2 rounded-full")} style={{ backgroundColor: color }} />
+      {label}
+    </span>
   );
 }
 
