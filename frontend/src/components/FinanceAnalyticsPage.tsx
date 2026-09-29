@@ -294,7 +294,7 @@ function SegmentedControl({
           onClick={() => onChange(option.value)}
           className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
             value === option.value
-              ? "bg-white text-foreground shadow-sm"
+              ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
@@ -1838,10 +1838,10 @@ function FinanceAnalyticsView() {
       <div className="space-y-8 animate-fade-in">
         <div className="card overflow-hidden p-0">
           <div className="h-1.5 bg-gradient-to-r from-sky-500 via-cyan-400 to-emerald-400" />
-          <div className="bg-gradient-to-br from-sky-50 via-white to-amber-50 px-6 py-6 sm:px-8 sm:py-7">
+          <div className="bg-gradient-to-br from-primary-50 via-background to-accent-50 dark:from-primary-500/10 dark:via-background dark:to-accent-500/10 px-6 py-6 sm:px-8 sm:py-7">
             <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
               <div className="max-w-3xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-sky-700 shadow-sm ring-1 ring-sky-100">
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-background/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-primary-700 dark:text-primary-400 shadow-sm ring-1 ring-primary-100 dark:ring-primary-500/20">
                   <BarChart3 className="h-3.5 w-3.5" /> Analítica financiera
                 </div>
                 <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Lectura completa, ampliable y mucho más configurable</h1>
@@ -1850,20 +1850,20 @@ function FinanceAnalyticsView() {
                 </p>
                 <div className="mt-5 flex flex-wrap gap-2">
                   {scopePills.map((pill) => (
-                    <span key={pill} className="badge bg-white text-foreground shadow-sm ring-1 ring-border">
+                    <span key={pill} className="badge bg-background text-foreground shadow-sm ring-1 ring-border">
                       {pill}
                     </span>
                   ))}
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2 rounded-2xl bg-white/85 p-4 shadow-sm ring-1 ring-border">
+              <div className="flex flex-col gap-2 rounded-2xl bg-background/85 p-4 shadow-sm ring-1 ring-border">
                 <div className="flex items-center justify-between gap-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">Estado</p>
                   {isFetching ? (
-                    <span className="badge bg-amber-50 text-amber-700">Actualizando</span>
+                    <span className="badge bg-accent-50 text-accent-700 dark:bg-accent-500/10 dark:text-accent-400">Actualizando</span>
                   ) : (
-                    <span className="badge bg-emerald-50 text-emerald-700">Sincronizado</span>
+                    <span className="badge bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-500">Sincronizado</span>
                   )}
                 </div>
                 <div className="flex items-baseline gap-2">
@@ -1877,7 +1877,7 @@ function FinanceAnalyticsView() {
               </div>
             </div>
 
-            <div className="mt-6 rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm">
+            <div className="mt-6 rounded-2xl border border-border bg-background/80 p-4 shadow-sm">
               <div className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center gap-2">
                   {[
@@ -1893,7 +1893,7 @@ function FinanceAnalyticsView() {
                       onClick={() => applyPreset(preset.value as Exclude<PeriodPreset, "custom">)}
                       className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
                         periodPreset === preset.value
-                          ? "bg-foreground text-white"
+                          ? "bg-foreground text-background"
                           : "bg-muted text-muted-foreground hover:bg-muted hover:text-foreground"
                       }`}
                     >
@@ -2114,7 +2114,7 @@ function FinanceAnalyticsView() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
               <div className="card p-5">
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400">
                     <Target className="h-5 w-5" />
                   </div>
                   <div>
@@ -2132,7 +2132,7 @@ function FinanceAnalyticsView() {
 
               <div className="card p-5">
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-500">
                     <Activity className="h-5 w-5" />
                   </div>
                   <div>
@@ -2148,7 +2148,7 @@ function FinanceAnalyticsView() {
 
               <div className="card p-5">
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-50 text-accent-600 dark:bg-accent-500/10 dark:text-accent-400">
                     <Layers3 className="h-5 w-5" />
                   </div>
                   <div>
@@ -2162,7 +2162,7 @@ function FinanceAnalyticsView() {
 
               <div className="card p-5">
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-foreground">
                     <Landmark className="h-5 w-5" />
                   </div>
                   <div>
