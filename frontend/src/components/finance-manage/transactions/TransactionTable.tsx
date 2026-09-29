@@ -5,7 +5,7 @@ import {
 import type { Account, Transaction } from "../../../lib/api";
 import { formatCurrency } from "../../../lib/format";
 import { RowActions, type RowAction } from "../RowActions";
-import { darkBoost } from "../color";
+import { darkBoost } from "../../../lib/color";
 import { TYPE_META, formatDateShort, formatDayHeading } from "./shared";
 import { cn } from "cn";
 

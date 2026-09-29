@@ -44,7 +44,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { darkBoost } from "./finance-manage/color";
+import { darkBoost } from "../lib/color";
 import {
   CategorySelect, NONE, getNextMonthlyOccurrence, getTodayIsoDate, type TxType,
 } from "./finance-manage/transactions/shared";

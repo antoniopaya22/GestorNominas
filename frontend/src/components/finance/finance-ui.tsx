@@ -6,6 +6,7 @@ import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "cn";
+import { adaptiveColor } from "../../lib/color";
 
 // ─── Colores ────────────────────────────────────────────────────
 // Mismo criterio que Inicio: ingresos en verde de marca, gastos en navy y el
@@ -22,13 +23,7 @@ export function paletteColor(index: number): string {
   return chartPalette[index % chartPalette.length];
 }
 
-/** Los colores de cuenta los elige el usuario: uno muy oscuro desaparece en modo oscuro. */
-export function adaptiveColor(hex: string | undefined, fallback: string): string {
-  if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return fallback;
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
-  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return luminance < 0.28 ? chartColors.secondary : hex;
-}
+export { adaptiveColor };
 
 /** Mezcla un color (incluidas variables CSS) con transparente. */
 export function tint(color: string, percent: number): string {

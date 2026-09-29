@@ -19,7 +19,7 @@ import {
 } from "./app";
 import { ColorSwatches, SWATCH_COLORS } from "./finance-manage/ColorSwatches";
 import { RowActions } from "./finance-manage/RowActions";
-import { darkBoost } from "./finance-manage/color";
+import { darkBoost } from "../lib/color";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -371,7 +371,7 @@ function AccountsView() {
     <div>
       <PageHeader
         title="Tus cuentas,"
-        accent="de un vistazo."
+        accent="en orden."
         description="Saldos de tus cuentas bancarias, tarjetas, efectivo e inversiones."
         actions={accounts.length > 0 ? newButton : undefined}
       />

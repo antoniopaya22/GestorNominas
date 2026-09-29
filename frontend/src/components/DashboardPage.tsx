@@ -14,6 +14,7 @@ import { formatCurrency, formatCompact, formatMonthLabel, formatPct } from "../l
 import { ChartTooltip } from "./ui/ChartTooltip";
 import { ProfileSelector } from "./ui/ProfileSelector";
 import { EmptyState } from "./ui/EmptyState";
+import { adaptiveColor } from "../lib/color";
 import {
   PageHeader, StatCard, StatGrid, SectionCard, ChartCard, Segmented,
   PageHeaderSkeleton, StatCardSkeleton, ChartCardSkeleton,
@@ -108,15 +109,6 @@ function buildAvailableMonths(evolution: DashboardData["evolution"] | undefined)
   return Array.from(months).sort((left, right) => (toMonthIndex(left) ?? 0) - (toMonthIndex(right) ?? 0));
 }
 
-// Los colores de perfil los elige el usuario: uno muy oscuro (p.ej. el navy
-// de marca) desaparece en modo oscuro, así que se cambia por el token de
-// serie secundaria, que se adapta al tema.
-function adaptiveSeriesColor(hex: string | undefined, fallback: string): string {
-  if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return fallback;
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
-  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return luminance < 0.2 ? "var(--chart-2)" : hex;
-}
 
 // irpfEvolution/monthlySavings traen una fila por nómina: con varios perfiles
 // hay que agregarlas por mes o las series alternan entre personas.
@@ -363,7 +355,7 @@ function DashboardView() {
 
   const { evolutionData, profileNames, profileColors, devengos, deducciones, devengosTotal, netSeries, grossSeries, irpfRates, avgIrpfRate, retentionRate, irpfSeries, retentionSeries } = derived;
   const multiProfile = profileNames.length > 1;
-  const profileColor = (name: string, fallback: string) => (multiProfile ? adaptiveSeriesColor(profileColors[name], fallback) : fallback);
+  const profileColor = (name: string, fallback: string) => (multiProfile ? adaptiveColor(profileColors[name], fallback) : fallback);
   const brutoColor = (name: string) => profileColor(name, chartColors.secondary);
   const netoColor = (name: string) => profileColor(name, chartColors.primary);
   const irpfData = irpfSeries;

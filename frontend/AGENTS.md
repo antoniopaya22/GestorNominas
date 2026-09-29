@@ -142,6 +142,10 @@ Importar desde `./app` (barrel). Toda página de `/app` debe construirse con est
 
 Patrón visual: bruto en navy (línea discontinua), neto en verde (área/sólido); datos multi-perfil agregados por mes antes de pintar series temporales.
 
+- **Recharts no ve hijos dentro de `<Fragment>`**: ejes, series o `<Cell>` condicionales van como arrays con `key`, nunca envueltos en `<>...</>` (si no, el gráfico sale vacío sin error).
+- **Colores elegidos por el usuario** (perfiles, cuentas, grupos): pasarlos siempre por `lib/color.ts` — `adaptiveColor(hex)` para series/`style` (los muy oscuros pasan a `--chart-2`) o `darkBoost(hex)` como clase; si no, el navy desaparece en modo oscuro.
+- Componentes locales por dominio: `components/finance/` (tooltips por serie, rankings, presets de periodo), `components/finance-manage/` (tabla y diálogos de transacciones, swatches, acciones de fila), `components/payroll/` (badges de estado, `ProfileDot`, `PayslipDetail`).
+
 ## Reglas Críticas
 
 - **No usar default exports** excepto en componentes de página (el export default envuelve con Providers)

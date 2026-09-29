@@ -7,7 +7,7 @@ import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { cn } from "cn";
-import { darkBoost } from "../color";
+import { darkBoost } from "../../../lib/color";
 
 export type TxType = "expense" | "income" | "transfer";
 

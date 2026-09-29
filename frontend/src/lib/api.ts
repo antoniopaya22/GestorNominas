@@ -116,6 +116,7 @@ export interface Payslip {
   parsingStatus: string;
   payslipType: "ordinal" | "extra";
   createdAt: string;
+  rawText?: string | null;
   concepts?: PayslipConcept[];
 }
 
