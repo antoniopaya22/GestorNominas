@@ -75,6 +75,12 @@ export async function extractTextFromPdf(filePath: string): Promise<string> {
   return extractTextFromPdfBuffer(data);
 }
 
+// Una nómina real nunca pasa de un puñado de páginas — un límite generoso
+// evita que un PDF malicioso (miles de páginas, o páginas con contenido
+// pensado para ser lento de renderizar) consuma el tiempo de la función por
+// un solo fichero de un lote de hasta 20 (POST /payslips/upload).
+const MAX_PAGES = 20;
+
 export async function extractTextFromPdfBuffer(data: Uint8Array): Promise<string> {
   // pdfjs-dist rechaza un Buffer de Node en tiempo de ejecución aunque sea
   // técnicamente un Uint8Array ("Please provide binary data as Uint8Array,
@@ -82,8 +88,9 @@ export async function extractTextFromPdfBuffer(data: Uint8Array): Promise<string
   const safeData = Buffer.isBuffer(data) ? new Uint8Array(data) : data;
   const doc = await pdfjs.getDocument({ data: safeData, useSystemFonts: true } as never).promise;
   const allLines: string[] = [];
+  const pageCount = Math.min(doc.numPages, MAX_PAGES);
 
-  for (let i = 1; i <= doc.numPages; i++) {
+  for (let i = 1; i <= pageCount; i++) {
     const page = await doc.getPage(i);
     const content = await page.getTextContent();
     const items: PositionedItem[] = content.items.map((item) => {

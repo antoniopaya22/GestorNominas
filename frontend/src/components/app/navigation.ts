@@ -1,6 +1,6 @@
 import {
   Home, Wallet, ChartColumn, Landmark, Tags, Receipt, ArrowDownToLine,
-  FileText, Upload, Users, Settings, PieChart, Plus, type LucideIcon,
+  FileText, Upload, Users, Settings, PieChart, Plus, Bell, type LucideIcon,
 } from "lucide-react";
 
 // Única fuente de verdad de la navegación de /app/*: sidebar, breadcrumbs,
@@ -67,6 +67,7 @@ export const WORKSPACES: WorkspaceMeta[] = [
       { href: "/app/payslips", label: "Mis nóminas", icon: FileText, keywords: "listado pdf" },
       { href: "/app/analytics", label: "Analítica", icon: PieChart, keywords: "nóminas tendencias predicción" },
       { href: "/app/profiles", label: "Perfiles", icon: Users, keywords: "personas" },
+      { href: "/app/alerts", label: "Alertas", icon: Bell, keywords: "notificaciones avisos reglas" },
     ],
   },
 ];

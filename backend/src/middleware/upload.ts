@@ -17,10 +17,16 @@ const fileFilter = (
   }
 };
 
+// Vercel Functions rechaza cualquier petición de más de 4.5MB de cuerpo
+// (límite fijo de la plataforma, no configurable) — el frontend ya sube un
+// PDF por petición (UploadPage.tsx), así que el límite real es el de un
+// solo fichero. 4MB deja margen para la codificación multipart/form-data.
+const MAX_UPLOAD_SIZE = 4 * 1024 * 1024;
+
 const multerUpload = multer({
   storage: multer.memoryStorage(),
   fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: MAX_UPLOAD_SIZE },
 });
 
 // busboy (el parser multipart que usa multer) decodifica el campo filename
@@ -72,8 +78,11 @@ const csvFilter = (
   }
 };
 
+// Mismo límite de 4.5MB de Vercel Functions que arriba — un CSV/TSV de YNAB
+// de varios años de movimientos raramente pasa de 1-2MB, así que 4MB es
+// generoso sin arriesgarse a un 413 en producción.
 export const uploadCsv = multer({
   storage: multer.memoryStorage(),
   fileFilter: csvFilter,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  limits: { fileSize: MAX_UPLOAD_SIZE },
 });

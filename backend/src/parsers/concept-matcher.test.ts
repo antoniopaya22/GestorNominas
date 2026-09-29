@@ -156,6 +156,24 @@ describe("matchConcepts type1 (extractor posicional real)", () => {
     });
     expect(parsed.concepts.find((c) => c.name === "Mejora Voluntaria")?.amount).toBe(750.71);
   });
+
+  it("no infla un importe cuando el símbolo € está pegado sin espacio (regresión)", () => {
+    // Texto limpio de pdfjs (sin OCR): el € pegado al importe no debe
+    // colarse como si fuera un dígito más — "€934,67" no es "8934,67" ni
+    // "934,67" con un € de más se lee como 934,678.
+    const rawText = [
+      "CONCEPTO  DEVENGOS  DEDUCCIONES",
+      "1  *Salario Base  €934,67",
+      "2  *Plus Convenio  103,90€",
+      "LIQUIDO A PERCIBIR",
+      "1.038,57",
+    ].join("\n");
+
+    const parsed = matchConcepts(rawText);
+
+    expect(parsed.concepts.find((c) => c.name === "Salario Base")?.amount).toBe(934.67);
+    expect(parsed.concepts.find((c) => c.name === "Plus Convenio")?.amount).toBe(103.9);
+  });
 });
 
 describe("matchConcepts type1 APG OCR", () => {
@@ -307,7 +325,7 @@ describe("matchConcepts type1 APG OCR", () => {
       "30,00 41,498 1| *+Salario Base 1.244,83",
       "30,00 6,527 2 ! *Plus convenio 195,81",
       "30,00 0,008 16 | *Frima Cenvenio 0,23",
-      "35 | *FARTE PROF.PAGAS 207,4€",
+      "35 | *FARTE PROF.PAGAS 207,48",
       "7€es Deto.Conceptes en Especie c,23",
       "995 COTIZACION CONT.COMU 4,70 77,46",
       "996 COTIZACION FORMACION 0,10 1,65",

@@ -27,5 +27,11 @@
   ],
   "regions": [
     "dub1"
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/evaluate-alerts",
+      "schedule": "0 6 * * *"
+    }
   ]
 }

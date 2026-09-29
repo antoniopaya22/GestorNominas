@@ -1,14 +1,15 @@
 import { Router } from "express";
 import { db } from "../db/index.js";
 import { payslips, payslipConcepts, profiles } from "../db/schema.js";
-import { eq, and, asc, desc, ilike, or } from "drizzle-orm";
+import { eq, and, asc, desc, ilike, or, ne } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { upload, validatePdfMagicBytes, fixFilenameEncoding } from "../middleware/upload.js";
 import { parsePayslip } from "../parsers/parser-engine.js";
-import { matchConcepts } from "../parsers/concept-matcher.js";
+import { matchConcepts, detectPayslipType } from "../parsers/concept-matcher.js";
 import { z } from "zod";
 import { validateIdParam } from "../middleware/params.js";
 import { logger } from "../logger.js";
+import { evaluateRulesForUser } from "../services/alerts.service.js";
 
 export const payslipsRouter = Router();
 payslipsRouter.param("id", validateIdParam);
@@ -68,13 +69,57 @@ payslipsRouter.post(
 
         await processPayslip(payslip.id, file.buffer);
 
-        const [updated] = await db.select().from(payslips).where(eq(payslips.id, payslip.id));
+        let [updated] = await db.select().from(payslips).where(eq(payslips.id, payslip.id));
+
+        // Auto-detección de paga extra: solo al subir, y solo para
+        // "ascender" de ordinal a extra si el propio texto de la nómina lo
+        // indica — nunca al revés. Así no pisa una corrección manual
+        // posterior (PATCH /:id/type) en un reprocess/reparse futuro, que
+        // no vuelve a pasar por aquí.
+        if (manualType === "ordinal" && updated?.rawText && detectPayslipType(updated.rawText) === "extra") {
+          [updated] = await db
+            .update(payslips)
+            .set({ payslipType: "extra" })
+            .where(eq(payslips.id, payslip.id))
+            .returning();
+        }
+
         const concepts = await db
           .select()
           .from(payslipConcepts)
           .where(eq(payslipConcepts.payslipId, payslip.id));
 
-        results.push({ ...updated, concepts });
+        // Aviso de posible duplicado (mismo perfil + periodo + tipo) — no
+        // bloquea la subida (podría ser una nómina corregida a propósito),
+        // solo se lo indicamos al frontend para que lo muestre.
+        let duplicateOfId: number | null = null;
+        if (updated?.periodYear && updated.periodMonth && updated.parsingStatus !== "error") {
+          const [dup] = await db
+            .select({ id: payslips.id })
+            .from(payslips)
+            .where(
+              and(
+                eq(payslips.profileId, profileId),
+                eq(payslips.periodYear, updated.periodYear),
+                eq(payslips.periodMonth, updated.periodMonth),
+                eq(payslips.payslipType, updated.payslipType),
+                ne(payslips.id, updated.id),
+              ),
+            )
+            .orderBy(payslips.id)
+            .limit(1);
+          duplicateOfId = dup?.id ?? null;
+        }
+
+        results.push({ ...updated, concepts, duplicateOfId });
+      }
+
+      // Best-effort: si falla, la subida ya ha ido bien y no debe reportarse
+      // como error al usuario — el cron diario evaluará estas reglas de todos modos.
+      try {
+        await evaluateRulesForUser(userId);
+      } catch (err) {
+        logger.error({ err, userId }, "Error evaluando alertas tras la subida");
       }
 
       res.status(201).json(results);

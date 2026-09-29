@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ChevronsUpDown, LogOut, Monitor, Moon, Search, Settings, Sun, Check } from "lucide-react";
+import { Bell, Check, ChevronsUpDown, LogOut, Monitor, Moon, Search, Settings, Sun } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -35,11 +35,15 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "cn";
 import { supabase } from "@/lib/supabase";
-import { clearAuth, getMe } from "@/lib/api";
+import {
+  clearAuth, getAlertHistory, getMe, markAlertRead, markAllAlertsRead, type AlertHistoryItem,
+} from "@/lib/api";
+import { formatRelativeDate } from "@/lib/format";
 import { useTheme, type ThemePreference } from "@/hooks/use-theme";
 import { CommandMenu } from "@/components/app/CommandMenu";
 import {
@@ -286,6 +290,103 @@ function NavUser() {
   );
 }
 
+// ─── Campana de notificaciones ─────────────────────────────────
+// Isla propia sin QueryClientProvider (ver NavUser más arriba): mismo patrón
+// de fetch simple con useState/useEffect, no React Query.
+const BELL_SEVERITY_CLASS: Record<AlertHistoryItem["severity"], string> = {
+  info: "text-muted-foreground bg-muted",
+  warning: "text-amber-700 bg-amber-500/10 dark:text-amber-400",
+  critical: "text-red-700 bg-red-500/10 dark:text-red-400",
+};
+
+function NotificationBell() {
+  const [alerts, setAlerts] = React.useState<AlertHistoryItem[]>([]);
+  const [open, setOpen] = React.useState(false);
+
+  const refresh = React.useCallback(() => {
+    getAlertHistory({ unread: true })
+      .then(setAlerts)
+      .catch(() => {
+        // Sin sesión ni API: la campana se muestra vacía.
+      });
+  }, []);
+
+  React.useEffect(() => { refresh(); }, [refresh]);
+
+  const count = alerts.length;
+
+  const markOne = async (id: number) => {
+    try {
+      await markAlertRead(id);
+      refresh();
+    } catch {
+      // Acción ambiental: sin toast si falla, se reintentará al reabrir.
+    }
+  };
+
+  const markAll = async () => {
+    try {
+      await markAllAlertsRead();
+      refresh();
+    } catch {
+      // Igual que arriba.
+    }
+  };
+
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) refresh(); }}>
+      <PopoverTrigger
+        render={<Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground" aria-label="Alertas" />}
+      >
+        <Bell className="size-4" />
+        {count > 0 && (
+          <span
+            className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground ring-2 ring-background"
+            aria-hidden="true"
+          >
+            {count > 9 ? "9+" : count}
+          </span>
+        )}
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-0">
+        <div className="flex items-center justify-between gap-2 border-b border-border px-3.5 py-2.5">
+          <p className="text-sm font-semibold text-foreground">Alertas</p>
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={count === 0} onClick={markAll}>
+            Marcar todas
+          </Button>
+        </div>
+        {count === 0 ? (
+          <div className="px-4 py-8 text-center">
+            <p className="text-sm text-muted-foreground">Sin alertas nuevas</p>
+          </div>
+        ) : (
+          <ul className="max-h-80 divide-y divide-border overflow-y-auto">
+            {alerts.slice(0, 8).map((a) => (
+              <li key={a.id} className="flex items-start gap-2.5 px-3.5 py-2.5">
+                <span className={cn("mt-0.5 inline-flex h-5 shrink-0 items-center rounded-md px-1.5 text-[10px] font-medium", BELL_SEVERITY_CLASS[a.severity] ?? BELL_SEVERITY_CLASS.info)}>
+                  {a.severity === "critical" ? "Importante" : a.severity === "warning" ? "Atención" : "Aviso"}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-foreground">{a.message}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{formatRelativeDate(a.createdAt)}</p>
+                </div>
+                <Button variant="ghost" size="icon-xs" aria-label="Marcar leída" onClick={() => markOne(a.id)}>
+                  <Check className="size-3.5" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="border-t border-border px-3.5 py-2.5">
+          <a href="/app/alerts" className="text-xs font-medium text-primary-600 hover:underline dark:text-primary">
+            Ver todas las alertas
+          </a>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // ─── Cabecera ───────────────────────────────────────────────────
 function AppHeader({ currentPath, onOpenSearch }: { currentPath: string; onOpenSearch: () => void }) {
   const crumbs = getBreadcrumbTrail(currentPath);
@@ -332,6 +433,7 @@ function AppHeader({ currentPath, onOpenSearch }: { currentPath: string; onOpenS
           <span className="hidden flex-1 text-left md:inline">Buscar…</span>
           <kbd className="hidden rounded border border-border bg-muted px-1.5 py-px text-[10px] font-medium md:inline">⌘K</kbd>
         </button>
+        <NotificationBell />
         {showAction && (
           <a href={action.href} className={cn(buttonVariants({ size: "sm" }), "h-8 gap-1.5 px-3")}>
             <ActionIcon className="size-4" />

@@ -34,6 +34,14 @@ const footerColumns = [
       { href: "/login", label: "Empezar gratis" },
     ],
   },
+  {
+    title: "Legal",
+    links: [
+      { href: "/privacidad", label: "Privacidad" },
+      { href: "/aviso-legal", label: "Aviso legal" },
+      { href: "/cookies", label: "Cookies" },
+    ],
+  },
 ];
 ---
 
@@ -100,7 +108,7 @@ const footerColumns = [
 
     <footer class="relative border-t border-border/70">
       <div class="max-w-6xl mx-auto px-5 md:px-8 pt-16 pb-10">
-        <div class="grid gap-10 md:grid-cols-[1.5fr_1fr_1fr]">
+        <div class="grid gap-10 sm:grid-cols-2 md:grid-cols-[1.3fr_1fr_1fr_1fr]">
           <div>
             <a href="/" aria-label="SueldIA, inicio">
               <BrandMark size="sm" />

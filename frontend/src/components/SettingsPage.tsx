@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Download, LogOut, Monitor, Moon, ShieldCheck, Sun, Loader2 } from "lucide-react";
+import { AlertTriangle, Check, Download, LogOut, Monitor, Moon, ShieldCheck, Sun, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Providers } from "./Providers";
 import { useAuth } from "./AuthProvider";
-import { exportData, getMe, getProfiles, updateUserProfile } from "../lib/api";
+import { clearAuth, deleteMyAccount, exportAllData, exportData, getMe, getProfiles, updateUserProfile } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { PageHeader, SectionCard } from "./app";
 import { ProfileDot } from "./payroll/shared";
@@ -13,6 +13,16 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useTheme, type ThemePreference } from "@/hooks/use-theme";
 import { cn } from "cn";
 
@@ -203,6 +213,7 @@ function ProfileSection() {
 function DataSection() {
   const { data: profiles = [], isLoading } = useQuery({ queryKey: ["profiles"], queryFn: getProfiles });
   const [busy, setBusy] = useState<string | null>(null);
+  const [exportingAll, setExportingAll] = useState(false);
 
   const handleExport = async (profileId: number, format: "csv" | "json") => {
     setBusy(`${profileId}-${format}`);
@@ -215,8 +226,19 @@ function DataSection() {
     }
   };
 
+  const handleExportAll = async () => {
+    setExportingAll(true);
+    try {
+      await exportAllData();
+    } catch {
+      toast.error("No se pudieron exportar tus datos. Inténtalo de nuevo.");
+    } finally {
+      setExportingAll(false);
+    }
+  };
+
   return (
-    <SectionCard title="Tus datos" description="Descarga el histórico de nóminas de cada perfil.">
+    <SectionCard title="Tus datos" description="Descarga el histórico de nóminas de cada perfil, o toda la información de tu cuenta.">
       {isLoading ? (
         <div className="space-y-3"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
       ) : profiles.length === 0 ? (
@@ -245,12 +267,84 @@ function DataSection() {
           ))}
         </ul>
       )}
+      <div className="mt-5 border-t border-border pt-5">
+        <SettingRow
+          title="Exportar todos mis datos"
+          description="Toda la información de tu cuenta en un único archivo JSON: perfiles, nóminas, conceptos, notas, cuentas, categorías, movimientos y alertas. Es tu derecho de portabilidad."
+        >
+          <div className="flex sm:justify-end">
+            <Button variant="outline" onClick={handleExportAll} disabled={exportingAll} className="gap-1.5">
+              {exportingAll ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+              Exportar todos mis datos
+            </Button>
+          </div>
+        </SettingRow>
+      </div>
       <div className="mt-5 flex items-start gap-3 rounded-lg border border-border bg-muted/40 p-3.5">
         <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary-600 dark:text-primary" aria-hidden="true" />
         <p className="text-xs leading-relaxed text-muted-foreground">
           Los PDF se procesan en memoria y se descartan: solo guardamos los datos extraídos. Cada cuenta ve únicamente sus propios perfiles y nóminas.
         </p>
       </div>
+    </SectionCard>
+  );
+}
+
+function DangerZoneSection() {
+  const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await deleteMyAccount();
+      await clearAuth();
+      window.location.href = "/";
+    } catch {
+      toast.error("No se pudo eliminar la cuenta. Inténtalo de nuevo.");
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <SectionCard title="Zona de peligro" description="Acciones permanentes sobre tu cuenta.">
+      <SettingRow
+        title="Eliminar mi cuenta"
+        description="Borra tu cuenta y todos tus datos —nóminas, movimientos y ajustes— de forma permanente."
+      >
+        <div className="flex sm:justify-end">
+          <Button
+            variant="outline"
+            onClick={() => setOpen(true)}
+            className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="size-4" />
+            Eliminar mi cuenta
+          </Button>
+        </div>
+      </SettingRow>
+
+      <AlertDialog open={open} onOpenChange={(next) => { if (!deleting) setOpen(next); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="mb-1 flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-destructive/10">
+              <AlertTriangle className="w-5 h-5 text-destructive" />
+            </div>
+            <AlertDialogTitle>¿Eliminar tu cuenta definitivamente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminarán para siempre todas tus nóminas, movimientos, cuentas, categorías, alertas y ajustes. Esta
+              acción no se puede deshacer y no hay forma de recuperar tus datos después.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" disabled={deleting} onClick={handleDelete} className="gap-1.5">
+              {deleting && <Loader2 className="size-4 animate-spin" />}
+              Eliminar definitivamente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SectionCard>
   );
 }
@@ -283,6 +377,8 @@ function SettingsView() {
             </div>
           </SettingRow>
         </SectionCard>
+
+        <DangerZoneSection />
       </div>
     </div>
   );

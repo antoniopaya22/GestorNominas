@@ -4,13 +4,21 @@ import { alertRules, alertHistory } from "../db/schema.js";
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";
 import { validateIdParam } from "../middleware/params.js";
+import { alertConfigSchemas, evaluateRulesForUser, type AlertRuleType } from "../services/alerts.service.js";
 
 export const alertsRouter = Router();
 alertsRouter.param("id", validateIdParam);
 
-const ruleSchema = z.object({
+const ruleTypeSchema = z.enum(["salary_drop", "missing_payslip", "concept_change", "custom_threshold"]);
+
+/** Valida `config` contra el esquema propio de `type` (ver alerts.service.ts). */
+function parseConfigForType(type: AlertRuleType, config: unknown) {
+  return alertConfigSchemas[type].safeParse(config);
+}
+
+const baseRuleSchema = z.object({
   name: z.string().min(1).max(100),
-  type: z.enum(["salary_drop", "missing_payslip", "concept_change", "custom_threshold"]),
+  type: ruleTypeSchema,
   config: z.record(z.unknown()).default({}),
   enabled: z.boolean().default(true),
 });
@@ -32,15 +40,29 @@ alertsRouter.get("/rules", async (req, res, next) => {
 alertsRouter.post("/rules", async (req, res, next) => {
   try {
     const { userId } = req.user!;
-    const parsed = ruleSchema.safeParse(req.body);
+    const parsed = baseRuleSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten().fieldErrors });
+    }
+
+    const configResult = parseConfigForType(parsed.data.type, parsed.data.config);
+    if (!configResult.success) {
+      return res.status(400).json({
+        error: "Configuración inválida para este tipo de regla",
+        details: configResult.error.flatten().fieldErrors,
+      });
     }
 
     const [rule] = await db
       .insert(alertRules)
       .values({ ...parsed.data, config: JSON.stringify(parsed.data.config), userId })
       .returning();
+
+    // Evaluación inmediata: si la condición ya se cumple con los datos que
+    // hay hoy, el usuario ve la alerta nada más crear la regla, sin esperar
+    // al cron diario.
+    evaluateRulesForUser(userId).catch(() => {});
+
     res.status(201).json({ ...rule, config: JSON.parse(rule.config) });
   } catch (err) {
     next(err);
@@ -52,9 +74,27 @@ alertsRouter.put("/rules/:id", async (req, res, next) => {
   try {
     const { userId } = req.user!;
     const id = Number(req.params.id);
-    const parsed = ruleSchema.partial().safeParse(req.body);
+
+    const [existing] = await db
+      .select()
+      .from(alertRules)
+      .where(and(eq(alertRules.id, id), eq(alertRules.userId, userId)));
+    if (!existing) return res.status(404).json({ error: "Regla no encontrada" });
+
+    const parsed = baseRuleSchema.partial().safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten().fieldErrors });
+    }
+
+    const effectiveType = (parsed.data.type ?? existing.type) as AlertRuleType;
+    if (parsed.data.config !== undefined) {
+      const configResult = parseConfigForType(effectiveType, parsed.data.config);
+      if (!configResult.success) {
+        return res.status(400).json({
+          error: "Configuración inválida para este tipo de regla",
+          details: configResult.error.flatten().fieldErrors,
+        });
+      }
     }
 
     const data: Record<string, unknown> = { ...parsed.data };
@@ -64,6 +104,9 @@ alertsRouter.put("/rules/:id", async (req, res, next) => {
       .where(and(eq(alertRules.id, id), eq(alertRules.userId, userId)))
       .returning();
     if (!updated) return res.status(404).json({ error: "Regla no encontrada" });
+
+    evaluateRulesForUser(userId).catch(() => {});
+
     res.json({ ...updated, config: JSON.parse(updated.config) });
   } catch (err) {
     next(err);

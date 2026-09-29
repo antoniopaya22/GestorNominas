@@ -17,7 +17,9 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "cn";
 
-const MAX_SIZE = 10 * 1024 * 1024;
+// Debe coincidir con el límite del backend (middleware/upload.ts) — Vercel
+// Functions rechaza cualquier petición de más de 4.5MB de cuerpo.
+const MAX_SIZE = 4 * 1024 * 1024;
 
 type ItemState = "queued" | "uploading" | "done" | "failed";
 
@@ -184,6 +186,11 @@ function UploadManager() {
         try {
           const [result] = await uploadPayslips(selectedProfile, [item.file], payslipType);
           patch(item.id, { state: "done", result });
+          if (result?.duplicateOfId) {
+            toast.warning(
+              `${item.file.name}: ya tienes otra nómina de ${formatPeriod(result.periodMonth, result.periodYear)} para este perfil — revisa si es un duplicado.`,
+            );
+          }
         } catch (err) {
           patch(item.id, { state: "failed", error: err instanceof Error ? err.message : "No se pudo procesar" });
         }
@@ -206,7 +213,7 @@ function UploadManager() {
     }
     for (const r of rejected) {
       const tooBig = r.errors.some((e) => e.code === "file-too-large");
-      toast.error(tooBig ? `${r.file.name} supera los 10 MB` : `${r.file.name} no es un PDF`);
+      toast.error(tooBig ? `${r.file.name} supera los 4 MB` : `${r.file.name} no es un PDF`);
     }
   }, []);
 
@@ -312,7 +319,7 @@ function UploadManager() {
               </p>
               <p className="relative mt-1 text-sm text-muted-foreground">
                 {activeProfile ? <>Se guardarán en <span className="font-medium text-foreground">{activeProfile.name}</span> · </> : null}
-                varios a la vez · máx. 10 MB por archivo
+                varios a la vez · máx. 4 MB por archivo
               </p>
               <Button type="button" variant="outline" onClick={open} disabled={busy} className="relative mt-5 gap-1.5">
                 <Upload className="size-4" /> Elegir archivos

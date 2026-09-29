@@ -1,0 +1,57 @@
+---
+import MarketingLayout from "../layouts/MarketingLayout.astro";
+---
+
+<MarketingLayout title="Política de cookies" description="Qué guarda SueldIA en tu navegador: preferencia de tema, estado del menú y sesión de Supabase — nada de analítica ni publicidad.">
+  <section class="relative isolate">
+    <div class="absolute inset-x-0 top-0 h-[420px] mk-dots -z-10" aria-hidden="true"></div>
+    <div class="absolute inset-x-0 top-0 h-[460px] mk-halo -z-10" aria-hidden="true"></div>
+
+    <div class="max-w-3xl mx-auto px-5 md:px-8 pt-32 md:pt-40 pb-6">
+      <p class="reveal mk-eyebrow">Legal</p>
+      <h1 class="reveal mt-5 text-4xl sm:text-5xl md:text-6xl font-semibold tracking-[-0.04em] leading-[1.05]" data-delay="1">
+        Política de <span class="font-display italic font-normal text-[1.05em] text-primary-700 dark:text-primary-300">cookies.</span>
+      </h1>
+      <p class="reveal mt-5 text-[15px] text-muted-foreground" data-delay="2">Última actualización: 29 de septiembre de 2026.</p>
+    </div>
+  </section>
+
+  <div class="max-w-3xl mx-auto px-5 md:px-8 pb-28 md:pb-36">
+    <div class="reveal space-y-12">
+      <section>
+        <h2 class="text-xl font-semibold tracking-tight">Qué guardamos en tu navegador</h2>
+        <p class="mt-3 text-[15px] text-muted-foreground leading-relaxed">
+          SueldIA usa solo el almacenamiento estrictamente necesario para que la aplicación funcione. Esto es todo lo que
+          guardamos hoy:
+        </p>
+        <ul class="mt-3 space-y-2.5 text-[15px] text-muted-foreground leading-relaxed list-disc pl-5">
+          <li>
+            <strong class="text-foreground font-medium">Preferencia de tema</strong> (<code class="text-[13px]">theme</code>, en localStorage): recuerda si prefieres la app en modo claro u oscuro.
+          </li>
+          <li>
+            <strong class="text-foreground font-medium">Estado del menú lateral</strong> (<code class="text-[13px]">sidebar_state</code>, cookie): recuerda si tienes el menú lateral de la app plegado o expandido.
+          </li>
+          <li>
+            <strong class="text-foreground font-medium">Sesión de Supabase</strong>: gestiona tu inicio de sesión para mantenerte identificado entre visitas. Es imprescindible para acceder a tu cuenta — no es opcional.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold tracking-tight">Lo que no usamos</h2>
+        <p class="mt-3 text-[15px] text-muted-foreground leading-relaxed">
+          Hoy por hoy no usamos cookies ni scripts de analítica, publicidad ni seguimiento de ningún tipo. No hay píxeles
+          de terceros, ni se comparte tu navegación con nadie.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold tracking-tight">Cambios futuros</h2>
+        <p class="mt-3 text-[15px] text-muted-foreground leading-relaxed">
+          Si esto cambiara en el futuro, actualizaremos esta página con antelación para que sepas exactamente qué se añade
+          y por qué.
+        </p>
+      </section>
+    </div>
+  </div>
+</MarketingLayout>

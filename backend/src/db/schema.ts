@@ -1,4 +1,4 @@
-import { pgTable, text, integer, serial, boolean, doublePrecision, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, serial, boolean, doublePrecision, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 // Nota: las columnas de dinero usan doublePrecision (float8) en vez de numeric.
 // numeric devuelve string en el driver de Postgres (para no perder precisión
@@ -110,18 +110,30 @@ export const alertRules = pgTable("alert_rules", {
 });
 
 // ─── Alert History ──────────────────────────────────────────────
-export const alertHistory = pgTable("alert_history", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  ruleId: integer("rule_id").references(() => alertRules.id, { onDelete: "set null" }),
-  type: text("type").notNull(),
-  severity: text("severity", { enum: ["info", "warning", "critical"] }).notNull(),
-  message: text("message").notNull(),
-  read: boolean("read").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const alertHistory = pgTable(
+  "alert_history",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    ruleId: integer("rule_id").references(() => alertRules.id, { onDelete: "set null" }),
+    payslipId: integer("payslip_id").references(() => payslips.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    severity: text("severity", { enum: ["info", "warning", "critical"] }).notNull(),
+    message: text("message").notNull(),
+    read: boolean("read").notNull().default(false),
+    // Identifica la condición concreta que disparó la alerta (p. ej. el mes
+    // evaluado, o `payslipId` como texto) para que el motor de evaluación no
+    // vuelva a insertar la misma alerta cada vez que se re-evalúan las
+    // reglas (cron diario + tras cada nómina nueva).
+    dedupeKey: text("dedupe_key"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    ruleDedupeIdx: uniqueIndex("alert_history_rule_dedupe_idx").on(table.ruleId, table.dedupeKey),
+  }),
+);
 
 // ─── Financial Accounts ─────────────────────────────────────────
 export const accounts = pgTable("accounts", {

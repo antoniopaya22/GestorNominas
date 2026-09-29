@@ -23,6 +23,7 @@ import { transactionsRouter } from "./routes/transactions.js";
 import { recurringTransactionsRouter } from "./routes/recurring-transactions.js";
 import { importRouter } from "./routes/import.js";
 import { financeRouter } from "./routes/finance.js";
+import { cronRouter } from "./routes/cron.js";
 import { db, client } from "./db/index.js";
 
 const app = express();
@@ -80,6 +81,9 @@ app.get("/api/health", async (_req, res) => {
 });
 
 app.use("/api/auth", authLimiter, authRouter);
+// Sin authMiddleware: la invoca Vercel Cron (sin JWT de usuario), protegida
+// por su propio CRON_SECRET — ver routes/cron.ts.
+app.use("/api/cron", cronRouter);
 
 // ─── Protected routes ───────────────────────────────────────────
 app.use("/api/profiles", authMiddleware, profilesRouter);

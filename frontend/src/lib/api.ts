@@ -68,6 +68,32 @@ export const updateUserProfile = (data: { name: string }) =>
     body: JSON.stringify(data),
   });
 
+// Elimina la cuenta de usuario y todos sus datos (derecho de supresión
+// RGPD) — irreversible. No cierra la sesión por sí sola: quien llame a esto
+// debe hacer clearAuth() y redirigir después. (No confundir con
+// deleteAccount, que borra una cuenta bancaria del módulo de finanzas.)
+export const deleteMyAccount = () =>
+  request<{ ok: boolean }>("/auth/me", { method: "DELETE" });
+
+// Exporta todos los datos de la cuenta como un único JSON (derecho de
+// portabilidad RGPD) y dispara la descarga en el navegador.
+export const exportAllData = async () => {
+  const token = await getAuthToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE}/export/all`, { headers });
+  if (!res.ok) throw new Error("No se pudo exportar los datos");
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `sueldia-datos.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 // ─── Profiles ───────────────────────────────────────────────────
 export interface Profile {
   id: number;
@@ -118,6 +144,9 @@ export interface Payslip {
   createdAt: string;
   rawText?: string | null;
   concepts?: PayslipConcept[];
+  /** Solo presente en la respuesta de /payslips/upload: id de otra nómina ya
+   *  existente con el mismo perfil, periodo y tipo, o null si no hay ninguna. */
+  duplicateOfId?: number | null;
 }
 
 export type PayslipSortField = "period" | "fileName" | "grossSalary" | "netSalary" | "parsingStatus";
@@ -362,18 +391,50 @@ export const getPayslipTags = (payslipId: number) =>
   request<Tag[]>(`/tags/payslip/${payslipId}`);
 
 export const assignTag = (payslipId: number, tagId: number) =>
-  request<{ ok: boolean }>(`/tags/payslip/${payslipId}/${tagId}`, { method: "POST" });
+  request<{ ok: boolean }>(`/tags/assign`, {
+    method: "POST",
+    body: JSON.stringify({ payslipId, tagId }),
+  });
 
 export const removeTag = (payslipId: number, tagId: number) =>
-  request<{ ok: boolean }>(`/tags/payslip/${payslipId}/${tagId}`, { method: "DELETE" });
+  request<{ ok: boolean }>(`/tags/assign/${payslipId}/${tagId}`, { method: "DELETE" });
 
 // ─── Alerts ─────────────────────────────────────────────────────
+export type AlertRuleType = "salary_drop" | "missing_payslip" | "concept_change" | "custom_threshold";
+
+// Formas de `config` por tipo de regla — deben reflejar
+// backend/src/services/alerts.service.ts (alertConfigSchemas).
+export interface SalaryDropConfig {
+  profileId?: number;
+  thresholdPercent?: number;
+}
+export interface MissingPayslipConfig {
+  profileId?: number;
+  graceDays?: number;
+}
+export interface ConceptChangeConfig {
+  profileId?: number;
+  conceptName: string;
+  thresholdPercent?: number;
+}
+export interface CustomThresholdConfig {
+  profileId?: number;
+  metric: "net" | "gross";
+  comparator: "below" | "above";
+  value: number;
+}
+export type AlertRuleConfig =
+  | SalaryDropConfig
+  | MissingPayslipConfig
+  | ConceptChangeConfig
+  | CustomThresholdConfig;
+
 export interface AlertRule {
   id: number;
   name: string;
-  type: string;
-  config: string;
-  enabled: number;
+  type: AlertRuleType;
+  config: AlertRuleConfig;
+  enabled: boolean;
   createdAt: string;
 }
 
@@ -381,24 +442,38 @@ export interface AlertHistoryItem {
   id: number;
   ruleId: number | null;
   type: string;
-  severity: string;
+  severity: "info" | "warning" | "critical";
   message: string;
-  read: number;
+  read: boolean;
   createdAt: string;
 }
 
 export const getAlertRules = () => request<AlertRule[]>("/alerts/rules");
 
-export const createAlertRule = (data: { name: string; type: string; config: Record<string, unknown> }) =>
+export const createAlertRule = (data: { name: string; type: AlertRuleType; config: AlertRuleConfig; enabled?: boolean }) =>
   request<AlertRule>("/alerts/rules", {
     method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const updateAlertRule = (
+  id: number,
+  data: Partial<{ name: string; type: AlertRuleType; config: AlertRuleConfig; enabled: boolean }>,
+) =>
+  request<AlertRule>(`/alerts/rules/${id}`, {
+    method: "PUT",
     body: JSON.stringify(data),
   });
 
 export const deleteAlertRule = (id: number) =>
   request<{ ok: boolean }>(`/alerts/rules/${id}`, { method: "DELETE" });
 
-export const getAlertHistory = () => request<AlertHistoryItem[]>("/alerts/history");
+export const getAlertHistory = (filters: { unread?: boolean } = {}) => {
+  const params = new URLSearchParams();
+  if (filters.unread) params.set("unread", "true");
+  const qs = params.toString();
+  return request<AlertHistoryItem[]>(`/alerts/history${qs ? `?${qs}` : ""}`);
+};
 
 export const markAlertRead = (id: number) =>
   request<{ ok: boolean }>(`/alerts/history/${id}/read`, { method: "PUT" });

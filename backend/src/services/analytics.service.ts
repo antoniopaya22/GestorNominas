@@ -251,12 +251,17 @@ export function buildAlerts(
     }
   }
 
+  // "Retención" aquí sigue la convención de esta app (net/gross, lo que
+  // realmente llega al bolsillo — ver DashboardPage.tsx "Te llega el X%"),
+  // NO el sentido fiscal habitual (importe retenido). Por eso el aviso se
+  // dispara con una retención BAJA (< 65%, se descuenta más de lo normal),
+  // no alta — el mensaje debe reflejar eso, no lo contrario.
   const retentionRate = grossMean > 0 ? (avg(netValues) / grossMean) * 100 : 0;
   if (retentionRate < 65 && retentionRate > 0) {
     alerts.push({
-      type: "high_retention",
+      type: "low_retention",
       severity: "warning",
-      message: `Tu tasa de retención es del ${retentionRate.toFixed(1)}%, superior a la media`,
+      message: `Tu tasa de retención es del ${retentionRate.toFixed(1)}%, por debajo de lo habitual — se te descuenta más de lo normal`,
     });
   }
 

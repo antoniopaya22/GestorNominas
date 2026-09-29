@@ -4,6 +4,8 @@ import { users } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
+import { env } from "../config.js";
+import { logger } from "../logger.js";
 
 export const authRouter = Router();
 
@@ -39,7 +41,7 @@ authRouter.put("/me", authMiddleware, async (req, res, next) => {
 
     const parsed = updateProfileSchema.safeParse(req.body);
     if (!parsed.success)
-      return res.status(400).json({ error: parsed.error.flatten() });
+      return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten().fieldErrors });
 
     const [updated] = await db
       .update(users)
@@ -49,6 +51,56 @@ authRouter.put("/me", authMiddleware, async (req, res, next) => {
 
     if (!updated) return res.status(404).json({ error: "Usuario no encontrado" });
     res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Eliminar cuenta (derecho de supresión RGPD): borra el usuario y, en
+// cascada (onDelete: "cascade" en cada tabla que cuelga de users.id, ver
+// schema.ts), perfiles, nóminas, conceptos, notas, etiquetas, cuentas,
+// categorías, transacciones, recurrentes y reglas/historial de alertas.
+authRouter.delete("/me", authMiddleware, async (req, res, next) => {
+  try {
+    if (!req.user) return res.status(401).json({ error: "No autenticado" });
+    const { userId } = req.user;
+
+    const [row] = await db
+      .select({ supabaseUserId: users.supabaseUserId })
+      .from(users)
+      .where(eq(users.id, userId));
+    if (!row) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    // Se borra primero la identidad en Supabase Auth (si hay service role
+    // key) para que no pueda volver a entrar con el mismo login de Google
+    // justo después de borrar sus datos.
+    if (env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const resp = await fetch(
+          `${env.SUPABASE_URL}/auth/v1/admin/users/${row.supabaseUserId}`,
+          {
+            method: "DELETE",
+            headers: {
+              apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+              Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+          },
+        );
+        if (!resp.ok) {
+          logger.error({ userId, status: resp.status }, "No se pudo borrar la identidad en Supabase Auth");
+        }
+      } catch (err) {
+        logger.error({ userId, err }, "Error llamando a la Admin API de Supabase Auth");
+      }
+    } else {
+      logger.warn(
+        { userId },
+        "SUPABASE_SERVICE_ROLE_KEY no configurado: se borran los datos pero la identidad de Supabase Auth sigue activa",
+      );
+    }
+
+    await db.delete(users).where(eq(users.id, userId));
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

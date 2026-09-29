@@ -15,6 +15,13 @@
       "when": 1790693073959,
       "tag": "0001_alert_history_user",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790693904243,
+      "tag": "0002_alert_history_dedupe",
+      "breakpoints": true
     }
   ]
 }

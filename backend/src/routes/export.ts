@@ -4,15 +4,93 @@ import { db } from "../db/index.js";
 import {
   payslips,
   payslipConcepts,
+  payslipNotes,
+  payslipTags,
   profiles,
   transactions,
   accounts,
   categories,
   categoryGroups,
+  tags,
+  recurringTransactions,
+  alertRules,
+  alertHistory,
+  users,
 } from "../db/schema.js";
-import { eq, and, sql, gte, lte, like, desc, asc } from "drizzle-orm";
+import { eq, and, sql, gte, lte, like, desc, asc, inArray } from "drizzle-orm";
 
 export const exportRouter = Router();
+
+// Exportación completa de todos los datos del usuario (derecho de
+// portabilidad RGPD) — un único JSON con todo lo que hay en cada tabla que
+// cuelga de su cuenta. A diferencia del export de arriba (solo nóminas,
+// aplanado para CSV), este no filtra ni resume nada.
+exportRouter.get("/all", async (req, res, next) => {
+  try {
+    const { userId } = req.user!;
+
+    const [user] = await db
+      .select({ id: users.id, email: users.email, name: users.name, createdAt: users.createdAt })
+      .from(users)
+      .where(eq(users.id, userId));
+    if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    const userProfiles = await db.select().from(profiles).where(eq(profiles.userId, userId));
+    const profileIds = userProfiles.map((p) => p.id);
+
+    const userPayslips = profileIds.length
+      ? await db.select().from(payslips).where(inArray(payslips.profileId, profileIds))
+      : [];
+    const payslipIds = userPayslips.map((p) => p.id);
+
+    const [concepts, notes, payslipTagLinks, userTags, userAccounts, groups, cats, txs, recurring, rules, history] =
+      await Promise.all([
+        payslipIds.length
+          ? db.select().from(payslipConcepts).where(inArray(payslipConcepts.payslipId, payslipIds))
+          : Promise.resolve([]),
+        payslipIds.length
+          ? db.select().from(payslipNotes).where(inArray(payslipNotes.payslipId, payslipIds))
+          : Promise.resolve([]),
+        payslipIds.length
+          ? db.select().from(payslipTags).where(inArray(payslipTags.payslipId, payslipIds))
+          : Promise.resolve([]),
+        db.select().from(tags).where(eq(tags.userId, userId)),
+        db.select().from(accounts).where(eq(accounts.userId, userId)),
+        db.select().from(categoryGroups).where(eq(categoryGroups.userId, userId)),
+        db
+          .select({ category: categories })
+          .from(categories)
+          .innerJoin(categoryGroups, eq(categories.groupId, categoryGroups.id))
+          .where(eq(categoryGroups.userId, userId))
+          .then((rows) => rows.map((r) => r.category)),
+        db.select().from(transactions).where(eq(transactions.userId, userId)),
+        db.select().from(recurringTransactions).where(eq(recurringTransactions.userId, userId)),
+        db.select().from(alertRules).where(eq(alertRules.userId, userId)),
+        db.select().from(alertHistory).where(eq(alertHistory.userId, userId)),
+      ]);
+
+    res.setHeader("Content-Disposition", `attachment; filename="sueldia-datos-${userId}.json"`);
+    res.json({
+      exportedAt: new Date().toISOString(),
+      user,
+      profiles: userProfiles,
+      payslips: userPayslips,
+      payslipConcepts: concepts,
+      payslipNotes: notes,
+      payslipTags: payslipTagLinks,
+      tags: userTags,
+      accounts: userAccounts,
+      categoryGroups: groups,
+      categories: cats,
+      transactions: txs,
+      recurringTransactions: recurring,
+      alertRules: rules.map((r) => ({ ...r, config: JSON.parse(r.config) })),
+      alertHistory: history,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 const exportQuerySchema = z.object({
   profileId: z.coerce.number().int().positive().optional(),

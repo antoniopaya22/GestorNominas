@@ -1,0 +1,114 @@
+---
+import MarketingLayout from "../layouts/MarketingLayout.astro";
+---
+
+<MarketingLayout title="Política de privacidad" description="Qué datos recopila SueldIA, para qué los usa, dónde se procesan y cómo ejercer tus derechos RGPD.">
+  <section class="relative isolate">
+    <div class="absolute inset-x-0 top-0 h-[420px] mk-dots -z-10" aria-hidden="true"></div>
+    <div class="absolute inset-x-0 top-0 h-[460px] mk-halo -z-10" aria-hidden="true"></div>
+
+    <div class="max-w-3xl mx-auto px-5 md:px-8 pt-32 md:pt-40 pb-6">
+      <p class="reveal mk-eyebrow">Legal</p>
+      <h1 class="reveal mt-5 text-4xl sm:text-5xl md:text-6xl font-semibold tracking-[-0.04em] leading-[1.05]" data-delay="1">
+        Política de <span class="font-display italic font-normal text-[1.05em] text-primary-700 dark:text-primary-300">privacidad.</span>
+      </h1>
+      <p class="reveal mt-5 text-[15px] text-muted-foreground" data-delay="2">Última actualización: 29 de septiembre de 2026.</p>
+    </div>
+  </section>
+
+  <div class="max-w-3xl mx-auto px-5 md:px-8 pb-28 md:pb-36">
+    <div class="reveal space-y-12">
+      <section>
+        <h2 class="text-xl font-semibold tracking-tight">Responsable del tratamiento</h2>
+        <p class="mt-3 text-[15px] text-muted-foreground leading-relaxed">
+          SueldIA es un proyecto personal e independiente de <strong class="text-foreground font-medium">Antonio Payá</strong>, persona física. No hay
+          detrás una empresa registrada, ni sociedad, ni CIF: es un proyecto gestionado por una sola persona. Para cualquier
+          consulta sobre privacidad o protección de datos, puedes escribir a
+          <a href="mailto:antoniopaya@outlook.com" class="text-foreground underline underline-offset-4 decoration-border hover:decoration-foreground">antoniopaya@outlook.com</a>.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold tracking-tight">Qué datos recopilamos y para qué</h2>
+        <ul class="mt-3 space-y-2.5 text-[15px] text-muted-foreground leading-relaxed list-disc pl-5">
+          <li>Email y nombre, obtenidos de tu cuenta de Google al iniciar sesión (vía Supabase Auth) — para identificarte y darte acceso a tu cuenta.</li>
+          <li>Datos de tus nóminas: el texto extraído del PDF y los conceptos ya estructurados (periodo, empresa, salario bruto/neto, devengos y deducciones). El PDF original nunca se guarda — se procesa en memoria al subirlo y se descarta.</li>
+          <li>Datos de finanzas personales que decidas introducir tú mismo: cuentas, movimientos, categorías y gastos recurrentes.</li>
+          <li>Notas y etiquetas que añadas a tus nóminas.</li>
+          <li>Reglas de alerta que configures y el historial de alertas generadas.</li>
+        </ul>
+        <p class="mt-3 text-[15px] text-muted-foreground leading-relaxed">
+          Todo esto se usa únicamente para ofrecerte el servicio: analizar tus nóminas, mostrarte tu dashboard financiero y
+          generar tus alertas. No se usa con ningún otro fin.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold tracking-tight">Base legal</h2>
+        <p class="mt-3 text-[15px] text-muted-foreground leading-relaxed">
+          El tratamiento se basa en la ejecución de un contrato (necesitamos estos datos para prestarte la funcionalidad que
+          pides) y, en el caso del inicio de sesión con Google, en tu consentimiento explícito al autorizar el acceso.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold tracking-tight">Dónde se procesan tus datos</h2>
+        <p class="mt-3 text-[15px] text-muted-foreground leading-relaxed">
+          La aplicación está alojada por <strong class="text-foreground font-medium">Vercel</strong> y la base de datos por
+          <strong class="text-foreground font-medium">Supabase</strong>, sujetos a sus propias políticas de tratamiento de
+          datos. No compartimos tus datos con ningún otro proveedor.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold tracking-tight">Cuánto tiempo se conservan</h2>
+        <p class="mt-3 text-[15px] text-muted-foreground leading-relaxed">
+          Tus datos se conservan mientras tu cuenta esté activa. Si eliminas tu cuenta desde Ajustes, se borran de forma
+          permanente todos los registros asociados — perfiles, nóminas, conceptos, notas, etiquetas, cuentas, transacciones,
+          categorías y alertas.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold tracking-tight">Tus derechos</h2>
+        <p class="mt-3 text-[15px] text-muted-foreground leading-relaxed">
+          Tienes derecho de acceso, rectificación, supresión, portabilidad, oposición y limitación sobre tus datos. Puedes
+          ejercerlos en cualquier momento:
+        </p>
+        <ul class="mt-3 space-y-2.5 text-[15px] text-muted-foreground leading-relaxed list-disc pl-5">
+          <li>Exportando todos los datos de tu cuenta como un archivo JSON desde Ajustes → «Exportar todos mis datos» (derecho de portabilidad).</li>
+          <li>Eliminando tu cuenta y todos tus datos desde Ajustes → «Zona de peligro» (derecho de supresión).</li>
+          <li>
+            Escribiendo a
+            <a href="mailto:antoniopaya@outlook.com" class="text-foreground underline underline-offset-4 decoration-border hover:decoration-foreground">antoniopaya@outlook.com</a>
+            para cualquier otra solicitud (acceso, rectificación, oposición o limitación).
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold tracking-tight">Compartición con terceros</h2>
+        <p class="mt-3 text-[15px] text-muted-foreground leading-relaxed">
+          No vendemos ni compartimos tus datos con terceros con fines publicitarios. Los únicos terceros que intervienen son
+          los proveedores de infraestructura ya mencionados (Vercel y Supabase), necesarios para que el servicio funcione.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold tracking-tight">Seguridad</h2>
+        <p class="mt-3 text-[15px] text-muted-foreground leading-relaxed">
+          El acceso a la aplicación requiere autenticación mediante token, y todas las comunicaciones se realizan por HTTPS.
+          Las contraseñas de tu cuenta las gestionan Google y Supabase — SueldIA nunca las ve ni las almacena.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-semibold tracking-tight">Cambios en esta política</h2>
+        <p class="mt-3 text-[15px] text-muted-foreground leading-relaxed">
+          Si esta política cambia de forma relevante, se actualizará esta misma página junto con la fecha de última
+          actualización.
+        </p>
+      </section>
+    </div>
+  </div>
+</MarketingLayout>

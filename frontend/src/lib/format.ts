@@ -36,3 +36,20 @@ export function formatMonthLabel(m: string): string {
 export function formatPercent(n: number, digits = 1): string {
   return `${n.toFixed(digits)}%`;
 }
+
+/** Fecha relativa corta ("Hace 5 min", "Ayer", "12 sep") para historiales de actividad. */
+export function formatRelativeDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const diffMs = Date.now() - date.getTime();
+  const diffMin = Math.round(diffMs / 60_000);
+  if (diffMin < 1) return "Ahora mismo";
+  if (diffMin < 60) return `Hace ${diffMin} min`;
+  const diffH = Math.round(diffMin / 60);
+  if (diffH < 24) return `Hace ${diffH} h`;
+  const diffD = Math.round(diffH / 24);
+  if (diffD === 1) return "Ayer";
+  if (diffD < 7) return `Hace ${diffD} días`;
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: sameYear ? undefined : "numeric" });
+}

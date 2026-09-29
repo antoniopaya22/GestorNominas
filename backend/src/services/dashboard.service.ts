@@ -88,7 +88,9 @@ export function buildKpis(filtered: Payslip[], allConcepts: Concept[]) {
   const totalGrossYear = filtered.reduce((s, p) => s + (p.grossSalary ?? 0), 0);
   const totalNetYear = filtered.reduce((s, p) => s + (p.netSalary ?? 0), 0);
 
-  const irpfConcepts = allConcepts.filter((c) => c.name.toLowerCase().includes("irpf"));
+  const irpfConcepts = allConcepts.filter(
+    (c) => c.category === "deduccion" && c.name.toLowerCase().includes("irpf"),
+  );
   const avgIrpf =
     irpfConcepts.length > 0
       ? irpfConcepts.reduce((s, c) => s + c.amount, 0) / irpfConcepts.length
@@ -182,7 +184,7 @@ export function buildAnnualSummaries(filtered: Payslip[], allConcepts: Concept[]
 
       const yearPayslipIds = new Set(ps.map((p) => p.id));
       const yearIrpf = allConcepts
-        .filter((c) => yearPayslipIds.has(c.payslipId) && c.name.toLowerCase().includes("irpf"))
+        .filter((c) => yearPayslipIds.has(c.payslipId) && c.category === "deduccion" && c.name.toLowerCase().includes("irpf"))
         .reduce((s, c) => s + c.amount, 0);
 
       return {
@@ -208,7 +210,9 @@ export function buildAnnualSummaries(filtered: Payslip[], allConcepts: Concept[]
 
 export function buildIrpfEvolution(filtered: Payslip[], allConcepts: Concept[]) {
   const regular = filtered.filter((p) => p.payslipType !== "extra");
-  const irpfConcepts = allConcepts.filter((c) => c.name.toLowerCase().includes("irpf"));
+  const irpfConcepts = allConcepts.filter(
+    (c) => c.category === "deduccion" && c.name.toLowerCase().includes("irpf"),
+  );
   const irpfByPayslip = new Map<number, number>();
   for (const c of irpfConcepts) {
     irpfByPayslip.set(c.payslipId, (irpfByPayslip.get(c.payslipId) ?? 0) + c.amount);

@@ -17,9 +17,21 @@ export interface ParsedPayslip {
 
 // ─── Number parsing ─────────────────────────────────────────────
 
-/** Parse Spanish number format: "1.234,56" → 1234.56 */
+/**
+ * Parse Spanish number format: "1.234,56" → 1234.56
+ *
+ * Sustituye letras que el OCR de la versión antigua (retirada, ver AGENTS.md
+ * raíz) solía confundir con dígitos — algunos tests siguen usando esas
+ * nóminas degradadas como fixture de regresión. NO incluye "€": a
+ * diferencia de esas letras, el símbolo de euro SÍ aparece pegado a
+ * importes reales en texto limpio de pdfjs (p. ej. "1.234,56€" sin
+ * espacio) — tratarlo como un dígito más multiplicaba el importe por 10
+ * (p. ej. "€1.234,56" se leía como 81234,56). Ver findAllAmounts: € ya no
+ * forma parte de la clase de caracteres que compone un importe, así que
+ * nunca llega a colarse en el grupo capturado.
+ */
 function normalizeOcrNumericText(str: string): string {
-  return str.replace(/[OQDCcoIlSBEbse\|€]/g, (char) => {
+  return str.replace(/[OQDCcoIlSBEbse\|]/g, (char) => {
     switch (char) {
       case "O":
       case "Q":
@@ -40,8 +52,6 @@ function normalizeOcrNumericText(str: string): string {
       case "b":
       case "e":
         return "8";
-      case "€":
-        return "8";
       default:
         return char;
     }
@@ -59,7 +69,7 @@ function parseSpanishNumber(str: string): number | null {
 
 /** Find ALL Spanish-format amounts in a string */
 function findAllAmounts(text: string): number[] {
-  const re = /([0-9OQDCIEBSloqdciebs€]{1,3}(?:\.[0-9OQDCIEBSloqdciebs€]{3})*,[0-9OQDCIEBSloqdciebs€]{2})/g;
+  const re = /([0-9OQDCIEBSloqdciebs]{1,3}(?:\.[0-9OQDCIEBSloqdciebs]{3})*,[0-9OQDCIEBSloqdciebs]{2})/g;
   const results: number[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
@@ -176,6 +186,7 @@ const TYPE1_DEDUCTION_NAMES = new Set([
   "Desempleo",
   "Formación Profesional",
   "IRPF",
+  "IRPF en IT",
   "MEI",
   "Atraso IRPF",
   "Anticipo",

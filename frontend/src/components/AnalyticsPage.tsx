@@ -40,7 +40,7 @@ const SEVERITY_META: Record<Severity, { icon: typeof Bell; label: string; classN
 };
 
 // Los valores de estas anomalías son porcentajes, no importes.
-const PERCENT_ANOMALIES = new Set(["irpf_change", "high_retention"]);
+const PERCENT_ANOMALIES = new Set(["irpf_change", "low_retention"]);
 
 function toMonthIndex(month: string): number | null {
   const [y, m] = month.split("-").map(Number);
