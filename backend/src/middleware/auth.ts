@@ -46,6 +46,10 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     const token = header.slice(7);
     const { payload } = await jwtVerify<SupabasePayload>(token, JWKS, {
       issuer: `${env.SUPABASE_URL}/auth/v1`,
+      // Los JWT de Supabase Auth siempre llevan aud: "authenticated" — lo
+      // comprobamos explícitamente para no aceptar tokens emitidos para
+      // otro fin (p. ej. un token de servicio) que compartan emisor.
+      audience: "authenticated",
     });
 
     if (!payload.sub || !payload.email) {

@@ -3,8 +3,10 @@ import { db } from "../db/index.js";
 import { profiles } from "../db/schema.js";
 import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
+import { validateIdParam } from "../middleware/params.js";
 
 export const profilesRouter = Router();
+profilesRouter.param("id", validateIdParam);
 
 const profileSchema = z.object({
   name: z.string().min(1).max(100),

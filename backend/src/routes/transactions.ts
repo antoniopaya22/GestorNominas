@@ -6,14 +6,16 @@ import {
   categories,
   categoryGroups,
 } from "../db/schema.js";
-import { eq, and, sql, desc, asc, gte, lte, ilike } from "drizzle-orm";
+import { eq, and, sql, desc, asc, gte, lte, ilike, inArray } from "drizzle-orm";
 import { z } from "zod";
+import { validateIdParam } from "../middleware/params.js";
 import {
   getRecurringSyncThroughDate,
   syncRecurringTransactions,
 } from "../services/recurring-transactions.service.js";
 
 export const transactionsRouter = Router();
+transactionsRouter.param("id", validateIdParam);
 
 const transactionSchema = z.object({
   accountId: z.number().int().positive("Cuenta requerida"),
@@ -615,12 +617,28 @@ transactionsRouter.post("/bulk", async (req, res, next) => {
       .where(eq(categoryGroups.userId, userId));
     const validCategoryIds = new Set(userCategories.map((c) => c.id));
 
+    const referencedTransferIds = [...new Set(parsed.data.map((tx) => tx.transferId).filter((id): id is number => id != null))];
+    const validTransferIds =
+      referencedTransferIds.length === 0
+        ? new Set<number>()
+        : new Set(
+            (
+              await db
+                .select({ id: transactions.id })
+                .from(transactions)
+                .where(and(eq(transactions.userId, userId), inArray(transactions.id, referencedTransferIds)))
+            ).map((t) => t.id),
+          );
+
     for (const tx of parsed.data) {
       if (!validAccountIds.has(tx.accountId)) {
         return res.status(400).json({ error: `Cuenta ${tx.accountId} no pertenece al usuario` });
       }
       if (tx.categoryId && !validCategoryIds.has(tx.categoryId)) {
         return res.status(400).json({ error: `Categoría ${tx.categoryId} no pertenece al usuario` });
+      }
+      if (tx.transferId != null && !validTransferIds.has(tx.transferId)) {
+        return res.status(400).json({ error: `Transacción de transferencia ${tx.transferId} no pertenece al usuario` });
       }
     }
 

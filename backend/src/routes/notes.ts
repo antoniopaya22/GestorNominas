@@ -1,20 +1,28 @@
 import { Router } from "express";
 import { db } from "../db/index.js";
-import { payslipNotes } from "../db/schema.js";
-import { eq, desc } from "drizzle-orm";
+import { payslipNotes, payslips, profiles } from "../db/schema.js";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { z } from "zod";
+import { validateIdParam } from "../middleware/params.js";
+import { userOwnsPayslip } from "../utils/ownership.js";
 
 export const notesRouter = Router();
+notesRouter.param("id", validateIdParam);
+notesRouter.param("payslipId", validateIdParam);
 
 const noteSchema = z.object({
-  payslipId: z.number(),
+  payslipId: z.number().int().positive(),
   content: z.string().min(1).max(2000),
 });
 
 // Get notes for a payslip
 notesRouter.get("/:payslipId", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const payslipId = Number(req.params.payslipId);
+    if (!(await userOwnsPayslip(userId, payslipId))) {
+      return res.status(404).json({ error: "Nómina no encontrada" });
+    }
     const notes = await db
       .select()
       .from(payslipNotes)
@@ -29,8 +37,14 @@ notesRouter.get("/:payslipId", async (req, res, next) => {
 // Add note
 notesRouter.post("/", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const parsed = noteSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten().fieldErrors });
+    }
+    if (!(await userOwnsPayslip(userId, parsed.data.payslipId))) {
+      return res.status(404).json({ error: "Nómina no encontrada" });
+    }
 
     const [note] = await db.insert(payslipNotes).values(parsed.data).returning();
     res.status(201).json(note);
@@ -42,8 +56,17 @@ notesRouter.post("/", async (req, res, next) => {
 // Delete note
 notesRouter.delete("/:id", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const id = Number(req.params.id);
-    const [deleted] = await db.delete(payslipNotes).where(eq(payslipNotes.id, id)).returning();
+    const ownedPayslipIds = db
+      .select({ id: payslips.id })
+      .from(payslips)
+      .innerJoin(profiles, eq(payslips.profileId, profiles.id))
+      .where(eq(profiles.userId, userId));
+    const [deleted] = await db
+      .delete(payslipNotes)
+      .where(and(eq(payslipNotes.id, id), inArray(payslipNotes.payslipId, ownedPayslipIds)))
+      .returning();
     if (!deleted) return res.status(404).json({ error: "Nota no encontrada" });
     res.json({ ok: true });
   } catch (err) {

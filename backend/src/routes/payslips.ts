@@ -7,9 +7,11 @@ import { upload, validatePdfMagicBytes, fixFilenameEncoding } from "../middlewar
 import { parsePayslip } from "../parsers/parser-engine.js";
 import { matchConcepts } from "../parsers/concept-matcher.js";
 import { z } from "zod";
+import { validateIdParam } from "../middleware/params.js";
 import { logger } from "../logger.js";
 
 export const payslipsRouter = Router();
+payslipsRouter.param("id", validateIdParam);
 
 /** Returns the IDs of profiles owned by the authenticated user */
 async function getUserProfileIds(userId: number): Promise<number[]> {

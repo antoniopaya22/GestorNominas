@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
+import { validateIdParam } from "../middleware/params.js";
 import { db } from "../db/index.js";
 import {
   accounts,
@@ -18,6 +19,7 @@ import {
 } from "../services/recurring-transactions.service.js";
 
 export const recurringTransactionsRouter = Router();
+recurringTransactionsRouter.param("id", validateIdParam);
 
 const recurringTransactionSchema = z
   .object({

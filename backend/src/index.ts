@@ -34,7 +34,20 @@ app.use(
     contentSecurityPolicy: false,
   })
 );
-app.use(cors({ origin: env.NODE_ENV === "production" ? true : env.CORS_ORIGIN }));
+// El frontend siempre llama a /api en el mismo origen (rewrite de Vercel), así
+// que CORS solo protege frente a otros orígenes — se restringe a una lista
+// explícita (CORS_ORIGIN admite varios separados por comas) en vez de aceptar
+// cualquier origen en producción.
+const allowedOrigins = env.CORS_ORIGIN.split(",").map((o) => o.trim()).filter(Boolean);
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Sin cabecera Origin (curl, health checks, llamadas servidor-servidor): permitir.
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      callback(new Error("No permitido por CORS"));
+    },
+  })
+);
 app.use(express.json());
 app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => (req as express.Request).url === "/api/health" } }));
 

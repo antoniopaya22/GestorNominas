@@ -3,9 +3,11 @@ import { db } from "../db/index.js";
 import { accounts } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
+import { validateIdParam } from "../middleware/params.js";
 import { getAccountsWithBalance } from "../services/finance.service.js";
 
 export const accountsRouter = Router();
+accountsRouter.param("id", validateIdParam);
 
 const accountSchema = z.object({
   name: z.string().min(1, "El nombre es obligatorio").max(100),

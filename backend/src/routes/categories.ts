@@ -3,8 +3,10 @@ import { db } from "../db/index.js";
 import { categoryGroups, categories } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
+import { validateIdParam } from "../middleware/params.js";
 
 export const categoriesRouter = Router();
+categoriesRouter.param("id", validateIdParam);
 
 const groupSchema = z.object({
   name: z.string().min(1, "El nombre es obligatorio").max(100),
@@ -29,7 +31,13 @@ categoriesRouter.get("/", async (req, res, next) => {
       .where(eq(categoryGroups.userId, userId))
       .orderBy(categoryGroups.sortOrder, categoryGroups.name);
 
-    const cats = await db.select().from(categories).orderBy(categories.sortOrder, categories.name);
+    const catRows = await db
+      .select({ category: categories })
+      .from(categories)
+      .innerJoin(categoryGroups, eq(categories.groupId, categoryGroups.id))
+      .where(eq(categoryGroups.userId, userId))
+      .orderBy(categories.sortOrder, categories.name);
+    const cats = catRows.map((r) => r.category);
 
     const groupMap = groups.map((g) => ({
       ...g,

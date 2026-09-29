@@ -3,8 +3,13 @@ import { db } from "../db/index.js";
 import { tags, payslipTags } from "../db/schema.js";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
+import { validateIdParam } from "../middleware/params.js";
+import { userOwnsPayslip } from "../utils/ownership.js";
 
 export const tagsRouter = Router();
+tagsRouter.param("id", validateIdParam);
+tagsRouter.param("payslipId", validateIdParam);
+tagsRouter.param("tagId", validateIdParam);
 
 const tagSchema = z.object({
   name: z.string().min(1).max(50),
@@ -27,7 +32,9 @@ tagsRouter.post("/", async (req, res, next) => {
   try {
     const { userId } = req.user!;
     const parsed = tagSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten().fieldErrors });
+    }
 
     const [tag] = await db.insert(tags).values({ ...parsed.data, userId }).returning();
     res.status(201).json(tag);
@@ -52,9 +59,20 @@ tagsRouter.delete("/:id", async (req, res, next) => {
 // Assign tag to payslip
 tagsRouter.post("/assign", async (req, res, next) => {
   try {
-    const schema = z.object({ payslipId: z.number(), tagId: z.number() });
+    const { userId } = req.user!;
+    const schema = z.object({ payslipId: z.number().int().positive(), tagId: z.number().int().positive() });
     const parsed = schema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten().fieldErrors });
+    }
+    if (!(await userOwnsPayslip(userId, parsed.data.payslipId))) {
+      return res.status(404).json({ error: "Nómina no encontrada" });
+    }
+    const [tag] = await db
+      .select({ id: tags.id })
+      .from(tags)
+      .where(and(eq(tags.id, parsed.data.tagId), eq(tags.userId, userId)));
+    if (!tag) return res.status(404).json({ error: "Etiqueta no encontrada" });
 
     const [entry] = await db.insert(payslipTags).values(parsed.data).returning();
     res.status(201).json(entry);
@@ -66,8 +84,12 @@ tagsRouter.post("/assign", async (req, res, next) => {
 // Remove tag from payslip
 tagsRouter.delete("/assign/:payslipId/:tagId", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const payslipId = Number(req.params.payslipId);
     const tagId = Number(req.params.tagId);
+    if (!(await userOwnsPayslip(userId, payslipId))) {
+      return res.status(404).json({ error: "Nómina no encontrada" });
+    }
     await db
       .delete(payslipTags)
       .where(and(eq(payslipTags.payslipId, payslipId), eq(payslipTags.tagId, tagId)));
@@ -80,7 +102,11 @@ tagsRouter.delete("/assign/:payslipId/:tagId", async (req, res, next) => {
 // Get tags for a payslip
 tagsRouter.get("/payslip/:payslipId", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const payslipId = Number(req.params.payslipId);
+    if (!(await userOwnsPayslip(userId, payslipId))) {
+      return res.status(404).json({ error: "Nómina no encontrada" });
+    }
     const entries = await db
       .select({ tag: tags })
       .from(payslipTags)

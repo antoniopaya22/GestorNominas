@@ -23,6 +23,11 @@ export function errorHandler(
     return res.status(err.statusCode).json({ error: err.message });
   }
 
+  if (err.message === "No permitido por CORS") {
+    logger.warn("Origen rechazado por CORS");
+    return res.status(403).json({ error: "Origen no permitido" });
+  }
+
   // Multer errors
   if (err.name === "MulterError") {
     logger.warn({ message: err.message }, "Upload error");

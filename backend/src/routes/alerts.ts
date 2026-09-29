@@ -3,8 +3,10 @@ import { db } from "../db/index.js";
 import { alertRules, alertHistory } from "../db/schema.js";
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";
+import { validateIdParam } from "../middleware/params.js";
 
 export const alertsRouter = Router();
+alertsRouter.param("id", validateIdParam);
 
 const ruleSchema = z.object({
   name: z.string().min(1).max(100),
@@ -31,7 +33,9 @@ alertsRouter.post("/rules", async (req, res, next) => {
   try {
     const { userId } = req.user!;
     const parsed = ruleSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten().fieldErrors });
+    }
 
     const [rule] = await db
       .insert(alertRules)
@@ -49,7 +53,9 @@ alertsRouter.put("/rules/:id", async (req, res, next) => {
     const { userId } = req.user!;
     const id = Number(req.params.id);
     const parsed = ruleSchema.partial().safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten().fieldErrors });
+    }
 
     const data: Record<string, unknown> = { ...parsed.data };
     if (data.config) data.config = JSON.stringify(data.config);
@@ -82,8 +88,11 @@ alertsRouter.delete("/rules/:id", async (req, res, next) => {
 // List alert history
 alertsRouter.get("/history", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const unreadOnly = req.query.unread === "true";
-    const conditions = unreadOnly ? eq(alertHistory.read, false) : undefined;
+    const conditions = unreadOnly
+      ? and(eq(alertHistory.userId, userId), eq(alertHistory.read, false))
+      : eq(alertHistory.userId, userId);
 
     const history = await db
       .select()
@@ -100,8 +109,14 @@ alertsRouter.get("/history", async (req, res, next) => {
 // Mark alert as read
 alertsRouter.put("/history/:id/read", async (req, res, next) => {
   try {
+    const { userId } = req.user!;
     const id = Number(req.params.id);
-    await db.update(alertHistory).set({ read: true }).where(eq(alertHistory.id, id));
+    const [updated] = await db
+      .update(alertHistory)
+      .set({ read: true })
+      .where(and(eq(alertHistory.id, id), eq(alertHistory.userId, userId)))
+      .returning({ id: alertHistory.id });
+    if (!updated) return res.status(404).json({ error: "Alerta no encontrada" });
     res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -109,9 +124,13 @@ alertsRouter.put("/history/:id/read", async (req, res, next) => {
 });
 
 // Mark all alerts as read
-alertsRouter.put("/history/read-all", async (_req, res, next) => {
+alertsRouter.put("/history/read-all", async (req, res, next) => {
   try {
-    await db.update(alertHistory).set({ read: true }).where(eq(alertHistory.read, false));
+    const { userId } = req.user!;
+    await db
+      .update(alertHistory)
+      .set({ read: true })
+      .where(and(eq(alertHistory.userId, userId), eq(alertHistory.read, false)));
     res.json({ ok: true });
   } catch (err) {
     next(err);

@@ -112,6 +112,9 @@ export const alertRules = pgTable("alert_rules", {
 // ─── Alert History ──────────────────────────────────────────────
 export const alertHistory = pgTable("alert_history", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   ruleId: integer("rule_id").references(() => alertRules.id, { onDelete: "set null" }),
   type: text("type").notNull(),
   severity: text("severity", { enum: ["info", "warning", "critical"] }).notNull(),
