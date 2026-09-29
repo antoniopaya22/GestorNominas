@@ -22,6 +22,17 @@ const multerUpload = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
+// busboy (el parser multipart que usa multer) decodifica el campo filename
+// como latin1 por defecto, aunque el navegador mande UTF-8 — los nombres con
+// tildes/ñ llegan con mojibake ("NÃ³mina") si no se revierte aquí.
+export function fixFilenameEncoding(req: Request, _res: Response, next: NextFunction) {
+  const files = req.files as Express.Multer.File[] | undefined;
+  for (const file of files ?? []) {
+    file.originalname = Buffer.from(file.originalname, "latin1").toString("utf8");
+  }
+  next();
+}
+
 // Post-upload validation: check actual file magic bytes
 export function validatePdfMagicBytes(req: Request, _res: Response, next: NextFunction) {
   const files = req.files as Express.Multer.File[] | undefined;

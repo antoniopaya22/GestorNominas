@@ -3,7 +3,7 @@ import { db } from "../db/index.js";
 import { payslips, payslipConcepts, profiles } from "../db/schema.js";
 import { eq, and, asc, desc, ilike, or } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { upload, validatePdfMagicBytes } from "../middleware/upload.js";
+import { upload, validatePdfMagicBytes, fixFilenameEncoding } from "../middleware/upload.js";
 import { parsePayslip } from "../parsers/parser-engine.js";
 import { matchConcepts } from "../parsers/concept-matcher.js";
 import { z } from "zod";
@@ -26,6 +26,7 @@ async function getUserProfileIds(userId: number): Promise<number[]> {
 payslipsRouter.post(
   "/upload",
   upload.array("files", 20),
+  fixFilenameEncoding,
   validatePdfMagicBytes,
   async (req, res, next) => {
     try {

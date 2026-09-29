@@ -24,6 +24,12 @@ declare global {
 // (Settings → API → JWT Keys).
 const JWKS = createRemoteJWKSet(new URL(`${env.SUPABASE_URL}/auth/v1/.well-known/jwks.json`));
 
+// Evita el SELECT/INSERT a `users` en cada petición autenticada — el par
+// (id, email) de un supabase_user_id no cambia entre peticiones, así que
+// basta con refrescarlo cada pocos minutos por si acaso.
+const USER_CACHE_TTL_MS = 5 * 60_000;
+const userCache = new Map<string, { user: AuthPayload; expires: number }>();
+
 interface SupabasePayload {
   sub: string;
   email?: string;
@@ -46,6 +52,12 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
       return res.status(401).json({ error: "Token inválido" });
     }
 
+    const cached = userCache.get(payload.sub);
+    if (cached && cached.expires > Date.now()) {
+      req.user = cached.user;
+      return next();
+    }
+
     const [existing] = await db
       .select()
       .from(users)
@@ -65,6 +77,7 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
       )[0];
 
     req.user = { userId: user.id, email: user.email };
+    userCache.set(payload.sub, { user: req.user, expires: Date.now() + USER_CACHE_TTL_MS });
     next();
   } catch {
     res.status(401).json({ error: "Token inválido o expirado" });

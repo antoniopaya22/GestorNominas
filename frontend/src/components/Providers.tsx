@@ -10,6 +10,13 @@ const queryClient = new QueryClient({
   },
 });
 
+// Listas de catálogo que casi nunca cambian y ya se invalidan explícitamente
+// tras cada mutación (crear/editar/borrar) — no hace falta refetchearlas por
+// cada navegación dentro del staleTime global de 30s.
+for (const key of ["profiles", "categories", "accounts"]) {
+  queryClient.setQueryDefaults([key], { staleTime: 5 * 60_000 });
+}
+
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <ErrorBoundary>
