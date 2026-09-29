@@ -1,494 +1,340 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ComposedChart,
-  Legend,
-  Line,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
+  Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  ArrowDownRight,
-  ArrowRight,
-  ArrowUpRight,
-  BarChart3,
-  Landmark,
-  PiggyBank,
-  RefreshCcw,
-  Wallet,
+  AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, CalendarRange, Download, PiggyBank, RefreshCcw, Wallet,
 } from "lucide-react";
-import {
-  getAccounts,
-  getFinanceAnalytics,
-  type FinanceAnalyticsFilters,
-} from "../lib/api";
-import { formatCompact, formatCurrency, formatMonthLabel, formatPercent } from "../lib/format";
+import { getAccounts, getFinanceAnalytics, type FinanceAnalyticsFilters } from "../lib/api";
+import { formatCompact, formatCurrency, formatMonthLabel, formatPct } from "../lib/format";
 import { Providers } from "./Providers";
 import { EmptyState } from "./ui/EmptyState";
-import { KpiCard } from "./ui/KpiCard";
-import { SectionHeader } from "./ui/SectionHeader";
 import { ChartTooltip } from "./ui/ChartTooltip";
-import { Card } from "@/components/ui/card";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Label } from "@/components/ui/label";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+  PageHeader, StatCard, StatGrid, SectionCard, ChartCard, CardLink, Segmented,
+  PageHeaderSkeleton, StatCardSkeleton, ChartCardSkeleton, ListCardSkeleton,
+  chartAxis, chartGrid, chartBarCursor, chartColors, type StatDelta,
+} from "./app";
+import {
+  AccountSelect, ChartLegend, RankedList, adaptiveColor, flowColors, paletteColor, presetRange, PRESET_LABELS,
+  shortenLabel, type RangePreset,
+} from "./finance/finance-ui";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "cn";
 
-const INCOME_COLOR = "#059669";
-const EXPENSE_COLOR = "#dc2626";
-const NET_COLOR = "#2563eb";
-const ACCENT_COLORS = [
-  "#2563eb",
-  "#0891b2",
-  "#7c3aed",
-  "#f59e0b",
-  "#10b981",
-  "#e11d48",
-  "#0f766e",
-  "#9333ea",
+type Preset = Extract<RangePreset, "3m" | "6m" | "12m" | "all">;
+
+const PRESET_OPTIONS: Array<{ value: Preset; label: string }> = [
+  { value: "3m", label: "3M" },
+  { value: "6m", label: "6M" },
+  { value: "12m", label: "12M" },
+  { value: "all", label: "Todo" },
 ];
 
-type PeriodPreset = "3m" | "6m" | "12m" | "all";
-
-function formatDateInput(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+/** Variación del último mes frente al anterior (solo meses con actividad). */
+function lastMonthDelta(series: number[], invert = false): StatDelta | undefined {
+  if (series.length < 2) return undefined;
+  const [prev, last] = series.slice(-2);
+  if (!prev) return undefined;
+  const change = ((last - prev) / Math.abs(prev)) * 100;
+  if (!Number.isFinite(change)) return undefined;
+  const trend = Math.abs(change) < 0.05 ? "flat" : change > 0 ? "up" : "down";
+  const tone = trend === "flat" ? "neutral" : (trend === "up") !== invert ? "positive" : "negative";
+  return { value: `${change > 0 ? "+" : ""}${formatPct(change)}`, trend, tone, label: "último mes" };
 }
 
-function getPresetRange(preset: Exclude<PeriodPreset, "all">): { from: string; to: string } {
-  const today = new Date();
-  const end = formatDateInput(today);
-  const start = new Date(today.getFullYear(), today.getMonth(), 1);
-
-  if (preset === "3m") start.setMonth(start.getMonth() - 2);
-  if (preset === "6m") start.setMonth(start.getMonth() - 5);
-  if (preset === "12m") start.setMonth(start.getMonth() - 11);
-
-  return { from: formatDateInput(start), to: end };
-}
-
-function PieTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: Array<{ name?: string; value?: number; color?: string }>;
-}) {
-  if (!active || !payload?.length) return null;
-
-  const entry = payload[0];
-
+function FinanceSkeleton() {
   return (
-    <ChartTooltip
-      active={active}
-      label={String(entry.name ?? "")}
-      payload={[
-        {
-          name: "Total",
-          value: Number(entry.value ?? 0),
-          color: String(entry.color ?? NET_COLOR),
-        },
-      ]}
-    />
+    <div>
+      <PageHeaderSkeleton />
+      <StatGrid>
+        {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
+      </StatGrid>
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <ChartCardSkeleton className="lg:col-span-2" height={280} />
+        <ListCardSkeleton rows={5} />
+      </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <ListCardSkeleton rows={5} />
+        <ListCardSkeleton rows={5} />
+      </div>
+    </div>
   );
 }
 
 function FinanceDashboardView() {
-  const defaultRange = useMemo(() => getPresetRange("6m"), []);
-  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("6m");
-  const [from, setFrom] = useState(defaultRange.from);
-  const [to, setTo] = useState(defaultRange.to);
+  const [preset, setPreset] = useState<Preset>("6m");
   const [accountId, setAccountId] = useState<number | undefined>();
 
-  const filters = useMemo<FinanceAnalyticsFilters>(() => ({
-    from: periodPreset === "all" ? undefined : from,
-    to: periodPreset === "all" ? undefined : to,
-    accountId,
-  }), [accountId, from, periodPreset, to]);
+  const filters = useMemo<FinanceAnalyticsFilters>(() => {
+    const range = presetRange(preset);
+    return { from: range.from || undefined, to: range.to || undefined, accountId };
+  }, [preset, accountId]);
 
-  const { data: accounts = [] } = useQuery({
-    queryKey: ["accounts"],
-    queryFn: getAccounts,
-  });
-
-  const {
-    data: analytics,
-    isLoading,
-    isFetching,
-    error,
-    refetch,
-  } = useQuery({
+  const { data: accounts = [], isLoading: loadingAccounts } = useQuery({ queryKey: ["accounts"], queryFn: getAccounts });
+  const { data: analytics, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["finance-dashboard", filters],
     queryFn: () => getFinanceAnalytics(filters),
   });
 
-  const selectedAccount = useMemo(
-    () => accounts.find((account) => account.id === accountId),
-    [accounts, accountId],
-  );
+  const derived = useMemo(() => {
+    const monthly = (analytics?.monthly ?? []).map((m) => ({ ...m, label: formatMonthLabel(m.month) }));
+    const active = monthly.filter((m) => m.income > 0 || m.expenses > 0);
 
-  const monthlyData = useMemo(
-    () => (analytics?.monthly ?? []).map((item) => ({ ...item, label: formatMonthLabel(item.month) })),
-    [analytics],
-  );
+    // Saldo al final de cada mes, reconstruido hacia atrás desde el saldo actual.
+    let running = (analytics?.summary.totalBalance ?? 0) - monthly.reduce((s, m) => s + m.net, 0);
+    const balanceSeries = monthly.map((m) => (running += m.net));
 
-  const categoryData = useMemo(
-    () => (analytics?.categories ?? [])
-      .filter((item) => item.type === "expense")
-      .slice(0, 6)
-      .map((item, index) => ({
-        ...item,
-        label: item.categoryName,
-        value: item.total,
-        color: ACCENT_COLORS[index % ACCENT_COLORS.length],
-      })),
-    [analytics],
-  );
+    const expenseCategories = (analytics?.categories ?? []).filter((c) => c.type === "expense");
+    const expenseTotal = expenseCategories.reduce((s, c) => s + c.total, 0);
+    const topCategories = expenseCategories.slice(0, 6);
+    const otherTotal = expenseCategories.slice(6).reduce((s, c) => s + c.total, 0);
+    const categorySlices = [
+      ...topCategories.map((c, i) => ({ key: c.bucketKey, label: c.categoryName, group: c.groupName, value: c.total, color: paletteColor(i) })),
+      ...(otherTotal > 0 ? [{ key: "__other", label: "Otras", group: "", value: otherTotal, color: "var(--muted-foreground)" }] : []),
+    ];
 
-  const payeeData = useMemo(
-    () => (analytics?.payees ?? [])
-      .filter((item) => item.type === "expense")
-      .slice(0, 8)
-      .map((item, index) => ({
-        ...item,
-        shortLabel: item.payee.length > 18 ? `${item.payee.slice(0, 17)}…` : item.payee,
-        color: ACCENT_COLORS[index % ACCENT_COLORS.length],
-      })),
-    [analytics],
-  );
+    const payees = (analytics?.payees ?? []).filter((p) => p.type === "expense").slice(0, 7);
 
-  const accountSnapshot = useMemo(
-    () => (analytics?.accounts ?? []).slice(0, 5),
-    [analytics],
-  );
+    return {
+      monthly,
+      balanceSeries,
+      incomeSeries: active.map((m) => m.income),
+      expenseSeries: active.map((m) => m.expenses),
+      categorySlices,
+      expenseTotal,
+      payees,
+    };
+  }, [analytics]);
 
-  const applyPreset = (preset: PeriodPreset) => {
-    setPeriodPreset(preset);
-
-    if (preset === "all") {
-      return;
-    }
-
-    const range = getPresetRange(preset);
-    setFrom(range.from);
-    setTo(range.to);
-  };
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <Card className="p-0 overflow-hidden">
-          <div className="h-1.5 bg-gradient-to-r from-primary-500 to-primary-400" />
-          <div className="px-6 py-6 sm:px-8 sm:py-7">
-            <Skeleton className="h-4 w-36 mb-1" />
-            <Skeleton className="h-10 w-72 mb-4" />
-            <Skeleton className="h-4 w-full max-w-2xl" />
-          </div>
-        </Card>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <Card key={index} className="p-5">
-              <Skeleton className="h-10 w-10 rounded-xl mb-3" />
-              <Skeleton className="h-8 w-40 mb-2" />
-              <Skeleton className="h-4 w-28" />
-            </Card>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <Card className="p-6"><Skeleton className="h-[320px] w-full" /></Card>
-          <Card className="p-6"><Skeleton className="h-[320px] w-full" /></Card>
-        </div>
-      </div>
-    );
-  }
+  if (isLoading || loadingAccounts) return <FinanceSkeleton />;
 
   if (error) {
     return (
-      <Card className="p-8 text-center">
-        <p className="text-lg font-semibold text-foreground">No se pudo cargar el dashboard financiero</p>
-        <p className="mt-2 text-sm text-muted-foreground">Vuelve a intentarlo o revisa la conexión con la API.</p>
-        <Button type="button" onClick={() => refetch()} className="mt-5 gap-2">
-          <RefreshCcw className="w-4 h-4" /> Reintentar
+      <EmptyState icon={AlertTriangle} title="No se pudo cargar el resumen financiero" description="Vuelve a intentarlo en unos segundos.">
+        <Button onClick={() => refetch()} className="gap-1.5">
+          <RefreshCcw className="size-4" /> Reintentar
         </Button>
-      </Card>
+      </EmptyState>
     );
   }
 
   if (accounts.length === 0) {
     return (
-      <EmptyState
-        icon={Wallet}
-        title="Sin datos financieros"
-        description="Crea cuentas o importa movimientos para activar el resumen financiero."
-        actionLabel="Importar datos"
-        actionHref="/import"
-      />
+      <>
+        <PageHeader title="Tus finanzas," accent="de un vistazo." description="Saldo, flujo mensual y focos de gasto de todas tus cuentas." />
+        <EmptyState
+          icon={Wallet}
+          title="Aún no hay datos financieros"
+          description="Importa tu CSV de YNAB o crea una cuenta para ver tu saldo, ingresos y gastos."
+          actionLabel="Importar datos"
+          actionHref="/app/import"
+          actionIcon={Download}
+        >
+          <a href="/app/accounts" className={buttonVariants({ variant: "outline" })}>Crear cuenta</a>
+        </EmptyState>
+      </>
     );
   }
 
-  if (!analytics) {
-    return null;
-  }
+  if (!analytics) return null;
 
-  const hasTransactions = analytics.summary.transactionCount > 0;
-  const activeScope = selectedAccount ? selectedAccount.name : "Todas las cuentas";
+  const { summary } = analytics;
+  const selectedAccount = accounts.find((a) => a.id === accountId);
+  const hasTransactions = summary.transactionCount > 0;
+  const lastBalances = derived.balanceSeries;
+
+  const header = (
+    <PageHeader
+      eyebrow={
+        <span className="inline-flex items-center gap-1.5">
+          <CalendarRange className="size-3.5" />
+          {isFetching ? "Actualizando…" : `${PRESET_LABELS[preset]} · ${selectedAccount?.name ?? "Todas las cuentas"}`}
+        </span>
+      }
+      title="Tus finanzas,"
+      accent="de un vistazo."
+      description="Saldo, flujo mensual y focos de gasto. Para explorar a fondo, abre la analítica."
+      actions={
+        <>
+          <Segmented aria-label="Periodo" value={preset} onChange={setPreset} options={PRESET_OPTIONS} />
+          <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
+          <a href="/app/finance/analytics" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5 bg-card")}>
+            Analítica <ArrowRight className="size-3.5" />
+          </a>
+        </>
+      }
+    />
+  );
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <Card className="p-0 overflow-hidden">
-        <div className="h-1.5 bg-gradient-to-r from-primary-500 via-primary-400 to-accent-400" />
-        <div className="px-6 py-6 sm:px-8 sm:py-7">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Dashboard financiero</p>
-              <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Resumen rápido de saldo, flujo y focos de gasto</h1>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
-                Esta vista recupera el resumen que tenías antes: menos configuración, más lectura rápida. La analítica detallada sigue disponible aparte.
-              </p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                <Badge variant="secondary" className="bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-400">{activeScope}</Badge>
-                <Badge variant="secondary">
-                  {periodPreset === "all" ? "Todo el histórico" : `${from} - ${to}`}
-                </Badge>
-              </div>
-            </div>
+    <div>
+      {header}
 
-            <div className="flex flex-col gap-3 rounded-2xl bg-muted p-4 ring-1 ring-border">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estado</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {isFetching ? "Actualizando resumen..." : `${analytics.summary.transactionCount} movimientos procesados`}
-                </p>
-              </div>
-              <a href="/app/finance/analytics" className={cn(buttonVariants(), "gap-1.5")}>
-                Ver analítica avanzada <ArrowRight className="w-4 h-4" />
-              </a>
-            </div>
-          </div>
-
-          <Card className="mt-6 p-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { value: "3m", label: "3M" },
-                  { value: "6m", label: "6M" },
-                  { value: "12m", label: "12M" },
-                  { value: "all", label: "Todo" },
-                ].map((preset) => (
-                  <Button
-                    key={preset.value}
-                    type="button"
-                    variant={periodPreset === preset.value ? "default" : "ghost"}
-                    onClick={() => applyPreset(preset.value as PeriodPreset)}
-                  >
-                    {preset.label}
-                  </Button>
-                ))}
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <div className="space-y-1.5">
-                  <Label htmlFor="finance-dashboard-account">Cuenta</Label>
-                  <Select
-                    value={accountId ? String(accountId) : "all"}
-                    onValueChange={(value) => setAccountId(value === "all" ? undefined : Number(value))}
-                  >
-                    <SelectTrigger id="finance-dashboard-account" className="min-w-[240px]">
-                      <SelectValue>
-                        {(v: string) => (v === "all" ? "Todas las cuentas" : accounts.find((a) => String(a.id) === v)?.name ?? v)}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas las cuentas</SelectItem>
-                      {accounts.map((account) => (
-                        <SelectItem key={account.id} value={String(account.id)}>{account.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </Card>
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          icon={Wallet}
+      <StatGrid>
+        <StatCard
           label="Saldo actual"
-          value={formatCurrency(analytics.summary.totalBalance)}
-          subValue={selectedAccount ? selectedAccount.name : "Todas las cuentas"}
-          color="primary"
+          value={formatCurrency(summary.totalBalance)}
+          icon={Wallet}
+          hint={selectedAccount ? selectedAccount.name : `${accounts.filter((a) => !a.archived).length} cuentas`}
+          sparkline={lastBalances.length > 2 ? lastBalances : undefined}
+          emphasis
         />
-        <KpiCard
-          icon={ArrowUpRight}
+        <StatCard
           label="Ingresos del periodo"
-          value={formatCurrency(analytics.summary.incomeTotal)}
-          subValue={`Media ${formatCurrency(analytics.summary.monthlyAverageIncome)}`}
-          color="success"
+          value={formatCurrency(summary.incomeTotal)}
+          icon={ArrowUpRight}
+          delta={lastMonthDelta(derived.incomeSeries)}
+          hint={`Media ${formatCurrency(summary.monthlyAverageIncome)}/mes`}
+          sparkline={derived.incomeSeries.length > 2 ? derived.incomeSeries : undefined}
+          sparklineColor={flowColors.income}
         />
-        <KpiCard
-          icon={ArrowDownRight}
+        <StatCard
           label="Gastos del periodo"
-          value={formatCurrency(analytics.summary.expenseTotal)}
-          subValue={analytics.summary.topExpenseMonth ? `Pico en ${formatMonthLabel(analytics.summary.topExpenseMonth.month)}` : "Sin pico detectado"}
-          color="danger"
+          value={formatCurrency(summary.expenseTotal)}
+          icon={ArrowDownRight}
+          delta={lastMonthDelta(derived.expenseSeries, true)}
+          hint={summary.topExpenseMonth ? `Pico en ${formatMonthLabel(summary.topExpenseMonth.month)}` : `Media ${formatCurrency(summary.monthlyAverageExpenses)}/mes`}
+          sparkline={derived.expenseSeries.length > 2 ? derived.expenseSeries : undefined}
+          sparklineColor={flowColors.expense}
         />
-        <KpiCard
-          icon={PiggyBank}
+        <StatCard
           label="Tasa de ahorro"
-          value={analytics.summary.incomeTotal > 0 ? formatPercent(analytics.summary.savingsRate) : "—"}
-          subValue={`Flujo neto ${formatCurrency(analytics.summary.netTotal)}`}
-          color="accent"
-          trend={analytics.summary.netTotal > 0 ? "up" : analytics.summary.netTotal < 0 ? "down" : "neutral"}
-          trendValue={formatCurrency(Math.abs(analytics.summary.netTotal))}
+          value={summary.incomeTotal > 0 ? formatPct(summary.savingsRate) : "—"}
+          icon={PiggyBank}
+          delta={
+            summary.netTotal !== 0
+              ? { value: formatCurrency(summary.netTotal), trend: summary.netTotal > 0 ? "up" : "down", label: "de flujo neto" }
+              : undefined
+          }
+          hint={summary.netTotal === 0 ? "Sin flujo neto en el periodo" : undefined}
         />
-      </div>
+      </StatGrid>
 
       {!hasTransactions ? (
-        <Card className="p-8 text-center">
-          <p className="text-lg font-semibold text-foreground">No hay movimientos conciliados para este resumen</p>
-          <p className="mt-2 text-sm text-muted-foreground">Prueba con otro periodo o cambia la cuenta seleccionada.</p>
-        </Card>
+        <EmptyState
+          className="mt-6"
+          icon={CalendarRange}
+          title="Sin movimientos en este periodo"
+          description="Prueba con un periodo más amplio o con otra cuenta."
+        >
+          <Button variant="outline" onClick={() => { setPreset("all"); setAccountId(undefined); }}>Ver todo el histórico</Button>
+        </EmptyState>
       ) : (
         <>
-          <Card className="p-0 overflow-hidden">
-            <div className="h-1.5 bg-gradient-to-r from-primary-500 to-primary-400" />
-            <div className="p-6">
-              <SectionHeader
-                icon={BarChart3}
-                title="Evolución mensual"
-                subtitle="Ingresos, gastos y flujo neto en una vista compacta"
-              />
-              <ResponsiveContainer width="100%" height={340}>
-                <ComposedChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={formatCompact} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Legend />
-                  <Bar dataKey="income" name="Ingresos" fill={INCOME_COLOR} radius={[8, 8, 0, 0]} />
-                  <Bar dataKey="expenses" name="Gastos" fill={EXPENSE_COLOR} radius={[8, 8, 0, 0]} />
-                  <Line type="monotone" dataKey="net" name="Flujo neto" stroke={NET_COLOR} strokeWidth={3} dot={false} />
+          <div className="mt-6 grid gap-6 lg:grid-cols-3">
+            <ChartCard
+              className="lg:col-span-2"
+              title="Flujo mensual"
+              description="Ingresos, gastos y ahorro de cada mes"
+              action={<CardLink href="/app/finance/analytics">Ver más</CardLink>}
+              height={316}
+              legend={
+                <ChartLegend
+                  items={[
+                    { color: flowColors.income, label: "Ingresos" },
+                    { color: flowColors.expense, label: "Gastos" },
+                    { color: flowColors.net, label: "Ahorro", line: true },
+                  ]}
+                />
+              }
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={derived.monthly} margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barGap={3}>
+                  <CartesianGrid {...chartGrid} />
+                  <XAxis dataKey="label" {...chartAxis} interval="preserveStartEnd" minTickGap={16} />
+                  <YAxis {...chartAxis} tickFormatter={formatCompact} width={52} />
+                  <Tooltip content={<ChartTooltip />} cursor={chartBarCursor} />
+                  <Bar dataKey="income" name="Ingresos" fill={flowColors.income} radius={[4, 4, 0, 0]} maxBarSize={22} />
+                  <Bar dataKey="expenses" name="Gastos" fill={flowColors.expense} fillOpacity={0.75} radius={[4, 4, 0, 0]} maxBarSize={22} />
+                  <Line dataKey="net" name="Ahorro" type="monotone" stroke={flowColors.net} strokeWidth={2} dot={false} />
                 </ComposedChart>
               </ResponsiveContainer>
-            </div>
-          </Card>
+            </ChartCard>
 
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <Card className="p-0 overflow-hidden">
-              <div className="h-1.5 bg-gradient-to-r from-accent-500 to-accent-400" />
-              <div className="p-6">
-                <SectionHeader
-                  icon={PiggyBank}
-                  title="Gasto por categoría"
-                  subtitle="Top de categorías que más pesan en el periodo"
-                />
-                {categoryData.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border bg-muted px-6 py-16 text-center text-sm text-muted-foreground">
-                    No hay gasto categorizado para este periodo.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-center">
-                    <ResponsiveContainer width="100%" height={300}>
+            <SectionCard title="Gasto por categoría" description="Qué pesa más en el periodo">
+              {derived.categorySlices.length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">No hay gasto categorizado en este periodo.</p>
+              ) : (
+                <>
+                  <div className="relative mx-auto h-40 w-40">
+                    <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={categoryData} dataKey="value" nameKey="label" innerRadius={68} outerRadius={108} paddingAngle={3}>
-                          {categoryData.map((item) => (
-                            <Cell key={item.bucketKey} fill={item.color} />
-                          ))}
+                        <Pie data={derived.categorySlices} dataKey="value" nameKey="label" innerRadius={52} outerRadius={76} paddingAngle={2} strokeWidth={0}>
+                          {derived.categorySlices.map((s) => <Cell key={s.key} fill={s.color} />)}
                         </Pie>
-                        <Tooltip content={<PieTooltip />} />
+                        <Tooltip content={<ChartTooltip />} />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="space-y-3">
-                      {categoryData.map((item) => (
-                        <div key={item.bucketKey} className="flex items-start gap-3">
-                          <span className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-foreground">{item.label}</p>
-                            <p className="text-xs text-muted-foreground">{item.groupName}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-mono text-sm font-semibold text-foreground">{formatCurrency(item.value)}</p>
-                            <p className="text-xs text-muted-foreground">{formatPercent(item.percentage)}</p>
-                          </div>
-                        </div>
-                      ))}
+                    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-[11px] text-muted-foreground">Gasto</span>
+                      <span className="text-sm font-semibold tabular-nums text-foreground">{formatCompact(derived.expenseTotal)}</span>
                     </div>
                   </div>
-                )}
-              </div>
-            </Card>
-
-            <Card className="p-0 overflow-hidden">
-              <div className="h-1.5 bg-gradient-to-r from-danger-500 to-danger-400" />
-              <div className="p-6">
-                <SectionHeader
-                  icon={ArrowDownRight}
-                  title="Beneficiarios principales"
-                  subtitle="Quién concentra más salida de dinero"
-                />
-                {payeeData.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-border bg-muted px-6 py-16 text-center text-sm text-muted-foreground">
-                    No hay beneficiarios con gasto en el periodo.
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={320}>
-                    <BarChart data={payeeData} layout="vertical" margin={{ left: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                      <XAxis type="number" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={formatCompact} />
-                      <YAxis type="category" dataKey="shortLabel" width={120} tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
-                      <Tooltip content={<ChartTooltip />} />
-                      <Bar dataKey="total" name="Gasto" radius={[0, 8, 8, 0]}>
-                        {payeeData.map((item) => (
-                          <Cell key={item.bucketKey} fill={item.color} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </Card>
+                  <ul className="mt-5 space-y-2">
+                    {derived.categorySlices.map((s) => (
+                      <li key={s.key} className="flex items-center gap-2 text-sm">
+                        <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+                        <span className="min-w-0 flex-1 truncate text-foreground" title={s.group ? `${s.label} · ${s.group}` : s.label}>{s.label}</span>
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {derived.expenseTotal > 0 ? formatPct((s.value / derived.expenseTotal) * 100) : "—"}
+                        </span>
+                        <span className="w-20 text-right font-medium tabular-nums text-foreground">{formatCurrency(s.value)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </SectionCard>
           </div>
 
-          <Card className="p-0 overflow-hidden">
-            <div className="h-1.5 bg-gradient-to-r from-muted-foreground/50 to-muted-foreground/20" />
-            <div className="p-6">
-              <SectionHeader
-                icon={Landmark}
-                title="Estado de cuentas"
-                subtitle="Saldo y flujo neto de las cuentas con mayor peso"
-              />
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-5">
-                {accountSnapshot.map((account) => (
-                  <div key={account.accountId} className="rounded-2xl border border-border bg-muted p-4">
-                    <p className="truncate text-sm font-semibold text-foreground">{account.accountName}</p>
-                    <p className={cn("mt-2 font-mono text-lg font-bold", account.balance >= 0 ? "text-foreground" : "text-danger-600")}>
-                      {formatCurrency(account.balance)}
-                    </p>
-                    <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                      <p>Ingresos: <span className="font-semibold text-success-600">{formatCurrency(account.income)}</span></p>
-                      <p>Gastos: <span className="font-semibold text-danger-600">{formatCurrency(account.expenses)}</span></p>
-                      <p>Neto: <span className="font-semibold text-primary-600">{formatCurrency(account.net)}</span></p>
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            <SectionCard title="Dónde se va el dinero" description="Beneficiarios con más gasto" action={<CardLink href="/app/transactions">Movimientos</CardLink>}>
+              {derived.payees.length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">No hay beneficiarios con gasto en este periodo.</p>
+              ) : (
+                <RankedList
+                  format={formatCurrency}
+                  items={derived.payees.map((p, i) => ({
+                    key: p.bucketKey,
+                    label: shortenLabel(p.payee, 28),
+                    value: p.total,
+                    color: i === 0 ? flowColors.expense : chartColors.quaternary,
+                    meta: `${p.count} mov.`,
+                  }))}
+                />
+              )}
+            </SectionCard>
+
+            <SectionCard title="Cuentas" description="Saldo y flujo del periodo" action={<CardLink href="/app/accounts">Gestionar</CardLink>} flush>
+              <ul className="divide-y divide-border">
+                {analytics.accounts.slice(0, 6).map((a) => (
+                  <li key={a.accountId} className="flex items-center gap-3 px-5 py-3">
+                    <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: adaptiveColor(a.color, chartColors.secondary) }} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground">{a.accountName}</p>
+                      <p className="truncate text-xs text-muted-foreground tabular-nums">
+                        <span className={a.income > 0 ? "text-emerald-700 dark:text-emerald-400" : undefined}>{a.income > 0 ? "+" : ""}{formatCurrency(a.income)}</span>
+                        {" · "}
+                        <span>{a.expenses > 0 ? "−" : ""}{formatCurrency(a.expenses)}</span>
+                        {" · "}
+                        {a.transactionCount} mov.
+                      </p>
                     </div>
-                  </div>
+                    <div className="text-right">
+                      <p className={cn("text-sm font-semibold tabular-nums", a.balance < 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>
+                        {formatCurrency(a.balance)}
+                      </p>
+                      <p className={cn("text-xs tabular-nums", a.net > 0 ? "text-emerald-700 dark:text-emerald-400" : a.net < 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+                        {a.net > 0 ? "+" : ""}{formatCurrency(a.net)} neto
+                      </p>
+                    </div>
+                  </li>
                 ))}
-              </div>
-            </div>
-          </Card>
+              </ul>
+            </SectionCard>
+          </div>
         </>
       )}
     </div>
