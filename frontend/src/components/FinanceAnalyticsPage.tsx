@@ -1,520 +1,158 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ComposedChart,
-  Legend,
-  Line,
-  Pie,
-  PieChart,
-  PolarAngleAxis,
-  PolarGrid,
-  PolarRadiusAxis,
-  Radar,
-  RadarChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart,
+  PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  Activity,
-  ArrowDownRight,
-  ArrowUpRight,
-  BarChart3,
-  CalendarRange,
-  Filter,
-  Landmark,
-  Layers3,
-  Maximize2,
-  PiggyBank,
-  RefreshCcw,
-  Scale,
-  Table2,
-  Target,
-  Wallet,
-  X,
+  AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarRange, Download, RefreshCcw, Scale, Wallet, X,
 } from "lucide-react";
 import {
-  getAccounts,
-  getCategories,
-  getFinanceAnalytics,
-  type FinanceAnalyticsAccountItem,
-  type FinanceAnalyticsCategoryItem,
-  type FinanceAnalyticsFilters,
-  type FinanceAnalyticsGroupItem,
-  type FinanceAnalyticsMonthBucket,
-  type FinanceAnalyticsPayeeItem,
-  type FinanceAnalyticsWeekdayItem,
+  getAccounts, getCategories, getFinanceAnalytics,
+  type FinanceAnalyticsCategoryItem, type FinanceAnalyticsFilters, type FinanceAnalyticsGroupItem,
 } from "../lib/api";
 import { Providers } from "./Providers";
-import { formatCompact, formatCurrency, formatMonthLabel, formatPercent } from "../lib/format";
+import { formatCurrency, formatMonthLabel, formatPct } from "../lib/format";
 import { EmptyState } from "./ui/EmptyState";
-import { ChartTooltip } from "./ui/ChartTooltip";
-import { KpiCard } from "./ui/KpiCard";
+import {
+  PageHeader, StatCard, StatGrid, SectionCard, Segmented, PageHeaderSkeleton, StatCardSkeleton, ChartCardSkeleton,
+  chartAxis, chartGrid, chartCursor, chartBarCursor, chartActiveDot, chartColors, type SegmentedOption,
+} from "./app";
+import {
+  AccountSelect, ChartEmpty, ChartLegend, FilterSelect, LimitSelect, PieTooltip, RankedList, SeriesTooltip,
+  adaptiveColor, flowColors, paletteColor, presetRange, rangeLabel, shortenLabel,
+  tickFormatter as fmtTick, valueFormatter as fmtValue, type RangePreset, type ValueMode,
+} from "./finance/finance-ui";
+import { AnalyticsPanel, AnalyticsSection, ExpandedPanelDialog, MatrixHeatmap, type PanelConfig } from "./finance/AnalyticsPanel";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "cn";
 
-const INCOME_COLOR = "#059669";
-const EXPENSE_COLOR = "#dc2626";
-const NET_COLOR = "#2563eb";
-const CUMULATIVE_COLOR = "#0f766e";
-const WEEKDAY_COLOR = "#c2410c";
-const DEFAULT_PERIOD_PRESET = "12m";
-const SERIES_COLORS = [
-  "#0f766e",
-  "#c2410c",
-  "#2563eb",
-  "#be123c",
-  "#0891b2",
-  "#a16207",
-  "#15803d",
-  "#7c3aed",
-  "#475569",
-  "#db2777",
-  "#0284c7",
-  "#ca8a04",
+// ─── Tipos de controles ─────────────────────────────────────────
+type PeriodPreset = RangePreset | "custom";
+type PanelKey = "trend" | "cumulative" | "distribution" | "payees" | "weekday" | "stack" | "accounts" | "efficiency" | "compare" | "matrix";
+type TrendMetric = "all" | "income" | "expenses" | "net" | "count" | "savingsRate";
+type ChartView = "bars" | "area" | "line";
+type FlowType = "expense" | "income";
+type Scope = "category" | "group";
+type RankValue = "total" | "count" | "average";
+type WeekdayMetric = "expense" | "income" | "net" | "count";
+type AccountMetric = "balance" | "income" | "expenses" | "net" | "count";
+type CumulativeMetric = "net" | "income" | "expenses" | "count";
+type EfficiencyMetric = "savingsRate" | "avgMovement" | "netPerMovement" | "count";
+
+const DEFAULT_PRESET: RangePreset = "12m";
+
+const PRESET_OPTIONS: SegmentedOption<PeriodPreset>[] = [
+  { value: "3m", label: "3M" },
+  { value: "6m", label: "6M" },
+  { value: "12m", label: "12M" },
+  { value: "ytd", label: "Año" },
+  { value: "all", label: "Todo" },
+];
+const FLOW_OPTIONS: SegmentedOption<FlowType>[] = [
+  { value: "expense", label: "Gasto" },
+  { value: "income", label: "Ingreso" },
+];
+const SCOPE_OPTIONS: SegmentedOption<Scope>[] = [
+  { value: "category", label: "Categoría" },
+  { value: "group", label: "Grupo" },
+];
+const RANK_VALUE_OPTIONS: SegmentedOption<RankValue>[] = [
+  { value: "total", label: "Importe" },
+  { value: "count", label: "Frecuencia" },
+  { value: "average", label: "Media" },
 ];
 
-type PeriodPreset = "3m" | "6m" | "12m" | "ytd" | "all" | "custom";
-type PanelKey =
-  | "trend"
-  | "cumulative"
-  | "distribution"
-  | "payees"
-  | "weekday"
-  | "stack"
-  | "accounts"
-  | "efficiency"
-  | "compare"
-  | "matrix";
-type TrendMetric = "all" | "income" | "expenses" | "net" | "count" | "savingsRate";
-type TrendView = "bars" | "area" | "line";
-type DistributionMetric = "expense" | "income";
-type DistributionScope = "category" | "group";
-type DistributionView = "donut" | "bars";
-type DistributionValue = "total" | "count" | "average";
-type PayeeValue = "total" | "count" | "average";
-type StackGrouping = "category" | "group";
-type StackView = "bars" | "area";
-type WeekdayMetric = "expense" | "income" | "net" | "count";
-type WeekdayView = "radar" | "bars";
-type AccountMetric = "balance" | "income" | "expenses" | "net" | "count";
-type AccountView = "bars" | "donut";
-type CumulativeMetric = "net" | "income" | "expenses" | "count";
-type CumulativeView = "area" | "line";
-type EfficiencyMetric = "savingsRate" | "avgMovement" | "netPerMovement" | "count";
-type CompareScope = "group" | "category";
-type CompareValue = "total" | "count" | "average";
-type MatrixScope = "category" | "group";
+const RANK_VALUE_LABEL: Record<RankValue, string> = { total: "Importe", count: "Movimientos", average: "Importe medio" };
 
-interface PanelDefinition {
-  title: string;
-  subtitle: string;
-  accent: string;
-  controls?: ReactNode;
-  renderContent: (expanded: boolean) => ReactNode;
-}
-
-interface DistributionDatum {
-  key: string;
-  label: string;
-  shortLabel: string;
-  parentLabel: string | null;
-  total: number;
-  count: number;
-  percentage: number;
-  value: number;
-  share: number;
-  color: string;
-}
-
-interface PayeeDatum {
-  key: string;
-  label: string;
-  shortLabel: string;
-  total: number;
-  count: number;
-  percentage: number;
-  value: number;
-  color: string;
+function rankValue(total: number, count: number, mode: RankValue): number {
+  if (mode === "count") return count;
+  if (mode === "average") return total / Math.max(count, 1);
+  return total;
 }
 
 interface CompareDatum {
   key: string;
   label: string;
   shortLabel: string;
-  parentLabel: string | null;
   incomeTotal: number;
   expenseTotal: number;
   incomeCount: number;
   expenseCount: number;
-  avgIncome: number;
-  avgExpense: number;
   incomeValue: number;
   expenseValue: number;
-  net: number;
 }
 
-interface MatrixRow {
-  key: string;
-  label: string;
-  total: number;
-  values: Array<{
-    month: string;
-    label: string;
-    value: number;
-  }>;
-}
-
-function formatDateInput(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function formatDateLabel(date: string): string {
-  return new Date(`${date}T00:00:00`).toLocaleDateString("es-ES", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function shortenLabel(value: string, maxLength = 18): string {
-  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
-}
-
-function formatCompactCount(value: number): string {
-  if (Math.abs(value) >= 1000) {
-    return `${(value / 1000).toFixed(1)}k`;
-  }
-
-  return String(Math.round(value));
-}
-
-function hexToRgba(hex: string, alpha: number): string {
-  const sanitized = hex.replace("#", "");
-  const normalized = sanitized.length === 3
-    ? sanitized.split("").map((character) => character + character).join("")
-    : sanitized;
-  const red = Number.parseInt(normalized.slice(0, 2), 16);
-  const green = Number.parseInt(normalized.slice(2, 4), 16);
-  const blue = Number.parseInt(normalized.slice(4, 6), 16);
-
-  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
-}
-
-function getPresetRange(preset: Exclude<PeriodPreset, "custom">): { from?: string; to?: string } {
-  const today = new Date();
-  const end = formatDateInput(today);
-
-  if (preset === "all") {
-    return {};
-  }
-
-  if (preset === "ytd") {
-    return { from: `${today.getFullYear()}-01-01`, to: end };
-  }
-
-  const start = new Date(today.getFullYear(), today.getMonth(), 1);
-  if (preset === "3m") start.setMonth(start.getMonth() - 2);
-  if (preset === "6m") start.setMonth(start.getMonth() - 5);
-  if (preset === "12m") start.setMonth(start.getMonth() - 11);
-
-  return { from: formatDateInput(start), to: end };
-}
-
-function formatPeriodSummary(from: string, to: string): string {
-  if (from && to) return `${formatDateLabel(from)} - ${formatDateLabel(to)}`;
-  if (from) return `Desde ${formatDateLabel(from)}`;
-  if (to) return `Hasta ${formatDateLabel(to)}`;
-  return "Todo el histórico";
-}
-
-function getValueFormatter(mode: "currency" | "count" | "percent") {
-  if (mode === "count") {
-    return (value: number) => `${Math.round(value)} mov.`;
-  }
-
-  if (mode === "percent") {
-    return (value: number) => formatPercent(value);
-  }
-
-  return (value: number) => formatCurrency(value);
-}
-
-function getTickFormatter(mode: "currency" | "count" | "percent") {
-  if (mode === "count") {
-    return (value: number) => formatCompactCount(value);
-  }
-
-  if (mode === "percent") {
-    return (value: number) => `${Math.round(value)}%`;
-  }
-
-  return (value: number) => formatCompact(value);
-}
-
-function MetricPieTooltip({ active, payload }: { active?: boolean; payload?: Array<{ name?: string; value?: number; color?: string }> }) {
-  if (!active || !payload?.length) return null;
-  const entry = payload[0];
+// ─── Skeleton ───────────────────────────────────────────────────
+function AnalyticsSkeleton() {
   return (
-    <ChartTooltip
-      active={active}
-      label={String(entry.name ?? "")}
-      payload={[
-        {
-          name: "Total",
-          value: Number(entry.value ?? 0),
-          color: String(entry.color ?? NET_COLOR),
-        },
-      ]}
-    />
-  );
-}
-
-function SegmentedControl({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
-}) {
-  return (
-    <div className="inline-flex flex-wrap rounded-xl bg-muted p-1">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => onChange(option.value)}
-          className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-            value === option.value
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function AnalyticsPanel({
-  title,
-  subtitle,
-  accent,
-  controls,
-  onExpand,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  accent: string;
-  controls?: ReactNode;
-  onExpand?: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <div className="card p-0 overflow-hidden">
-      <div className={`h-1.5 bg-gradient-to-r ${accent}`} />
-      <div className="p-5">
-        <div className="mb-5 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-foreground">{title}</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {controls}
-            {onExpand ? (
-              <button
-                type="button"
-                onClick={onExpand}
-                className="btn-secondary px-3 py-2 text-sm"
-                aria-label={`Abrir grande ${title}`}
-              >
-                <Maximize2 className="h-4 w-4" /> Abrir grande
-              </button>
-            ) : null}
-          </div>
-        </div>
-        {children}
+    <div>
+      <PageHeaderSkeleton />
+      <StatGrid>
+        {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
+      </StatGrid>
+      <ChartCardSkeleton className="mt-10" height={300} />
+      <div className="mt-6 grid gap-6 xl:grid-cols-2">
+        <ChartCardSkeleton height={260} />
+        <ChartCardSkeleton height={260} />
       </div>
     </div>
   );
 }
 
-function ExpandedChartDialog({
-  title,
-  subtitle,
-  controls,
-  onClose,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  controls?: ReactNode;
-  onClose: () => void;
-  children: ReactNode;
-}) {
+function Insight({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-    >
-      <div
-        className="card max-h-[92vh] w-full max-w-[1400px] overflow-hidden"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">{title}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-          </div>
-          <button type="button" onClick={onClose} className="btn-ghost px-3 py-2 text-sm" aria-label="Cerrar gráfico ampliado">
-            <X className="h-4 w-4" /> Cerrar
-          </button>
-        </div>
-        {controls ? (
-          <div className="border-b border-border px-6 py-4">
-            <div className="flex flex-wrap items-center gap-2">{controls}</div>
-          </div>
-        ) : null}
-        <div className="max-h-[72vh] overflow-auto px-6 py-5">{children}</div>
-      </div>
+    <div className="rounded-lg border border-border bg-muted/30 p-4">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="mt-1.5 truncate text-lg font-semibold tracking-tight text-foreground" title={value}>{value}</p>
+      <p className="mt-0.5 truncate text-xs text-muted-foreground">{hint}</p>
     </div>
   );
 }
 
-function ChartPlaceholder({ message, height = 280 }: { message: string; height?: number }) {
-  return (
-    <div
-      className="flex items-center justify-center rounded-2xl border border-dashed border-border bg-muted px-6 text-center text-sm text-muted-foreground"
-      style={{ height }}
-    >
-      {message}
-    </div>
-  );
-}
-
-function MatrixHeatmap({
-  months,
-  rows,
-  color,
-  expanded,
-}: {
-  months: Array<{ month: string; label: string }>;
-  rows: MatrixRow[];
-  color: string;
-  expanded: boolean;
-}) {
-  if (!rows.length) {
-    return <ChartPlaceholder message="No hay datos suficientes para construir la matriz temporal." height={expanded ? 520 : 320} />;
-  }
-
-  const maxValue = Math.max(...rows.flatMap((row) => row.values.map((value) => value.value)), 0);
-  const cellMinWidth = expanded ? 92 : 72;
-
-  return (
-    <div className="overflow-auto">
-      <div
-        className="grid gap-2"
-        style={{
-          gridTemplateColumns: `minmax(180px, 220px) repeat(${months.length}, minmax(${cellMinWidth}px, 1fr))`,
-          minWidth: `${220 + months.length * cellMinWidth}px`,
-        }}
-      >
-        <div className="px-2 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Serie</div>
-        {months.map((month) => (
-          <div key={month.month} className="px-1 py-2 text-center text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            {month.label}
-          </div>
-        ))}
-
-        {rows.map((row) => (
-          <Fragment key={row.key}>
-            <div key={`${row.key}-label`} className="rounded-2xl border border-border bg-muted px-3 py-3">
-              <p className="truncate text-sm font-semibold text-foreground">{row.label}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{formatCurrency(row.total)}</p>
-            </div>
-            {row.values.map((value) => {
-              const intensity = maxValue > 0 ? value.value / maxValue : 0;
-              return (
-                <div
-                  key={`${row.key}-${value.month}`}
-                  title={`${row.label} · ${value.label}: ${formatCurrency(value.value)}`}
-                  className="flex min-h-[74px] flex-col items-center justify-center rounded-2xl border px-2 py-2 text-center"
-                  style={{
-                    backgroundColor: hexToRgba(color, 0.08 + intensity * 0.82),
-                    borderColor: hexToRgba(color, 0.16 + intensity * 0.24),
-                  }}
-                >
-                  <span className="text-[11px] font-semibold text-muted-foreground">{value.value > 0 ? formatCompact(value.value) : "—"}</span>
-                </div>
-              );
-            })}
-          </Fragment>
-        ))}
-      </div>
-    </div>
-  );
-}
-
+// ─── Vista ──────────────────────────────────────────────────────
 function FinanceAnalyticsView() {
-  const defaultRange = useMemo(() => getPresetRange(DEFAULT_PERIOD_PRESET), []);
-  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>(DEFAULT_PERIOD_PRESET);
-  const [from, setFrom] = useState(defaultRange.from ?? "");
-  const [to, setTo] = useState(defaultRange.to ?? "");
+  const defaultRange = useMemo(() => presetRange(DEFAULT_PRESET), []);
+  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>(DEFAULT_PRESET);
+  const [from, setFrom] = useState(defaultRange.from);
+  const [to, setTo] = useState(defaultRange.to);
   const [accountId, setAccountId] = useState<number | undefined>();
   const [groupId, setGroupId] = useState<number | undefined>();
   const [categoryId, setCategoryId] = useState<number | undefined>();
   const [expandedPanel, setExpandedPanel] = useState<PanelKey | null>(null);
 
   const [trendMetric, setTrendMetric] = useState<TrendMetric>("all");
-  const [trendView, setTrendView] = useState<TrendView>("bars");
-  const [distributionMetric, setDistributionMetric] = useState<DistributionMetric>("expense");
-  const [distributionScope, setDistributionScope] = useState<DistributionScope>("category");
-  const [distributionView, setDistributionView] = useState<DistributionView>("donut");
-  const [distributionValue, setDistributionValue] = useState<DistributionValue>("total");
+  const [trendView, setTrendView] = useState<ChartView>("bars");
+  const [distributionMetric, setDistributionMetric] = useState<FlowType>("expense");
+  const [distributionScope, setDistributionScope] = useState<Scope>("category");
+  const [distributionView, setDistributionView] = useState<"donut" | "bars">("donut");
+  const [distributionValue, setDistributionValue] = useState<RankValue>("total");
   const [distributionLimit, setDistributionLimit] = useState(8);
-  const [payeeMetric, setPayeeMetric] = useState<DistributionMetric>("expense");
-  const [payeeValue, setPayeeValue] = useState<PayeeValue>("total");
+  const [payeeMetric, setPayeeMetric] = useState<FlowType>("expense");
+  const [payeeValue, setPayeeValue] = useState<RankValue>("total");
   const [payeeLimit, setPayeeLimit] = useState(8);
-  const [stackGrouping, setStackGrouping] = useState<StackGrouping>("category");
-  const [stackMetric, setStackMetric] = useState<DistributionMetric>("expense");
-  const [stackView, setStackView] = useState<StackView>("bars");
+  const [stackGrouping, setStackGrouping] = useState<Scope>("category");
+  const [stackMetric, setStackMetric] = useState<FlowType>("expense");
+  const [stackView, setStackView] = useState<"bars" | "area">("bars");
   const [stackLimit, setStackLimit] = useState(5);
   const [weekdayMetric, setWeekdayMetric] = useState<WeekdayMetric>("expense");
-  const [weekdayView, setWeekdayView] = useState<WeekdayView>("radar");
+  const [weekdayView, setWeekdayView] = useState<"radar" | "bars">("radar");
   const [accountMetric, setAccountMetric] = useState<AccountMetric>("balance");
-  const [accountView, setAccountView] = useState<AccountView>("bars");
+  const [accountView, setAccountView] = useState<"bars" | "donut">("bars");
   const [accountLimit, setAccountLimit] = useState(6);
   const [cumulativeMetric, setCumulativeMetric] = useState<CumulativeMetric>("net");
-  const [cumulativeView, setCumulativeView] = useState<CumulativeView>("area");
+  const [cumulativeView, setCumulativeView] = useState<"area" | "line">("area");
   const [efficiencyMetric, setEfficiencyMetric] = useState<EfficiencyMetric>("savingsRate");
-  const [compareScope, setCompareScope] = useState<CompareScope>("group");
-  const [compareValue, setCompareValue] = useState<CompareValue>("total");
+  const [compareScope, setCompareScope] = useState<Scope>("group");
+  const [compareValue, setCompareValue] = useState<RankValue>("total");
   const [compareLimit, setCompareLimit] = useState(6);
-  const [matrixScope, setMatrixScope] = useState<MatrixScope>("category");
-  const [matrixMetric, setMatrixMetric] = useState<DistributionMetric>("expense");
+  const [matrixScope, setMatrixScope] = useState<Scope>("category");
+  const [matrixMetric, setMatrixMetric] = useState<FlowType>("expense");
   const [matrixLimit, setMatrixLimit] = useState(6);
 
-  const { data: accounts = [], isLoading: loadingAccounts, error: accountsError } = useQuery({
-    queryKey: ["accounts"],
-    queryFn: getAccounts,
-  });
-  const { data: categoryGroups = [], isLoading: loadingCategories, error: categoriesError } = useQuery({
-    queryKey: ["categories"],
-    queryFn: getCategories,
-  });
+  const { data: accounts = [], isLoading: loadingAccounts, error: accountsError } = useQuery({ queryKey: ["accounts"], queryFn: getAccounts });
+  const { data: categoryGroups = [], isLoading: loadingCategories, error: categoriesError } = useQuery({ queryKey: ["categories"], queryFn: getCategories });
 
   const analyticsFilters = useMemo<FinanceAnalyticsFilters>(() => ({
     from: from || undefined,
@@ -524,13 +162,7 @@ function FinanceAnalyticsView() {
     categoryId,
   }), [from, to, accountId, groupId, categoryId]);
 
-  const {
-    data: analytics,
-    isLoading: loadingAnalytics,
-    isFetching,
-    error: analyticsError,
-    refetch,
-  } = useQuery({
+  const { data: analytics, isLoading: loadingAnalytics, isFetching, error: analyticsError, refetch } = useQuery({
     queryKey: ["finance-analytics", analyticsFilters],
     queryFn: () => getFinanceAnalytics(analyticsFilters),
   });
@@ -540,317 +172,157 @@ function FinanceAnalyticsView() {
     [categoryGroups],
   );
 
+  // La categoría elegida debe pertenecer al grupo filtrado.
   useEffect(() => {
     if (!categoryId) return;
-    const categoryStillVisible = flatCategories.some(
-      (category) => category.id === categoryId && (!groupId || category.groupId === groupId),
-    );
-    if (!categoryStillVisible) {
-      setCategoryId(undefined);
-    }
+    const stillVisible = flatCategories.some((c) => c.id === categoryId && (!groupId || c.groupId === groupId));
+    if (!stillVisible) setCategoryId(undefined);
   }, [categoryId, flatCategories, groupId]);
 
+  // El radar y la tarta no admiten valores negativos.
   useEffect(() => {
-    if (weekdayMetric === "net" && weekdayView === "radar") {
-      setWeekdayView("bars");
-    }
+    if (weekdayMetric === "net" && weekdayView === "radar") setWeekdayView("bars");
   }, [weekdayMetric, weekdayView]);
-
   useEffect(() => {
-    if (accountMetric === "net" && accountView === "donut") {
-      setAccountView("bars");
-    }
+    if (accountMetric === "net" && accountView === "donut") setAccountView("bars");
   }, [accountMetric, accountView]);
 
-  useEffect(() => {
-    if (!expandedPanel) return;
+  const selectedAccount = accounts.find((a) => a.id === accountId);
+  const selectedGroup = categoryGroups.find((g) => g.id === groupId);
+  const selectedCategory = flatCategories.find((c) => c.id === categoryId);
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setExpandedPanel(null);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [expandedPanel]);
-
-  const selectedAccount = useMemo(
-    () => accounts.find((account) => account.id === accountId),
-    [accounts, accountId],
-  );
-  const selectedGroup = useMemo(
-    () => categoryGroups.find((group) => group.id === groupId),
-    [categoryGroups, groupId],
-  );
-  const selectedCategory = useMemo(
-    () => flatCategories.find((category) => category.id === categoryId),
-    [flatCategories, categoryId],
-  );
-
-  const periodDescription = formatPeriodSummary(from, to);
-  const hasCustomDateRange = from !== (defaultRange.from ?? "") || to !== (defaultRange.to ?? "");
+  const hasCustomDateRange = from !== defaultRange.from || to !== defaultRange.to;
   const hasFiltersApplied = hasCustomDateRange || Boolean(accountId) || Boolean(groupId) || Boolean(categoryId);
 
-  const monthlyChartData = useMemo(() => {
-    return (analytics?.monthly ?? []).map((item) => {
-      const savingsRate = item.income > 0 ? (item.net / item.income) * 100 : 0;
-      const avgMovement = item.transactionCount > 0 ? (item.income + item.expenses) / item.transactionCount : 0;
-      const netPerMovement = item.transactionCount > 0 ? item.net / item.transactionCount : 0;
-
-      return {
-        ...item,
-        label: formatMonthLabel(item.month),
-        count: item.transactionCount,
-        savingsRate,
-        avgMovement,
-        netPerMovement,
-      };
-    });
-  }, [analytics]);
+  // ─── Datos derivados ──────────────────────────────────────────
+  const monthlyChartData = useMemo(() => (analytics?.monthly ?? []).map((item) => ({
+    ...item,
+    label: formatMonthLabel(item.month),
+    count: item.transactionCount,
+    savingsRate: item.income > 0 ? (item.net / item.income) * 100 : 0,
+    avgMovement: item.transactionCount > 0 ? (item.income + item.expenses) / item.transactionCount : 0,
+    netPerMovement: item.transactionCount > 0 ? item.net / item.transactionCount : 0,
+  })), [analytics]);
 
   const cumulativeChartData = useMemo(() => {
     let income = 0;
     let expenses = 0;
     let net = 0;
     let count = 0;
-
     return monthlyChartData.map((item) => {
       income += item.income;
       expenses += item.expenses;
       net += item.net;
       count += item.transactionCount;
-      return {
-        ...item,
-        cumulativeIncome: income,
-        cumulativeExpenses: expenses,
-        cumulativeNet: net,
-        cumulativeCount: count,
-      };
+      return { ...item, cumulativeIncome: income, cumulativeExpenses: expenses, cumulativeNet: net, cumulativeCount: count };
     });
   }, [monthlyChartData]);
 
   const distributionData = useMemo(() => {
-    const source = distributionScope === "category"
-      ? analytics?.categories ?? []
-      : analytics?.groups ?? [];
-
+    const source: Array<FinanceAnalyticsCategoryItem | FinanceAnalyticsGroupItem> =
+      distributionScope === "category" ? analytics?.categories ?? [] : analytics?.groups ?? [];
     const ranked = source
       .filter((item) => item.type === distributionMetric)
       .map((item) => {
-        const label = distributionScope === "category"
-          ? (item as FinanceAnalyticsCategoryItem).categoryName
-          : (item as FinanceAnalyticsGroupItem).groupName;
-        const parentLabel = distributionScope === "category"
-          ? (item as FinanceAnalyticsCategoryItem).groupName
-          : null;
-        const value = distributionValue === "count"
-          ? item.count
-          : distributionValue === "average"
-            ? item.total / Math.max(item.count, 1)
-            : item.total;
-
+        const isCategory = distributionScope === "category";
+        const label = isCategory ? (item as FinanceAnalyticsCategoryItem).categoryName : (item as FinanceAnalyticsGroupItem).groupName;
         return {
           key: item.bucketKey,
           label,
-          shortLabel: shortenLabel(label, 18),
-          parentLabel,
-          total: item.total,
+          parentLabel: isCategory ? (item as FinanceAnalyticsCategoryItem).groupName : null,
           count: item.count,
-          percentage: item.percentage,
-          value,
+          value: rankValue(item.total, item.count, distributionValue),
         };
       })
-      .sort((left, right) => right.value - left.value)
+      .sort((a, b) => b.value - a.value)
       .slice(0, distributionLimit);
-
     const totalValue = ranked.reduce((sum, item) => sum + item.value, 0);
-
-    return ranked.map((item, index) => ({
-      ...item,
-      share: totalValue > 0 ? (item.value / totalValue) * 100 : 0,
-      color: SERIES_COLORS[index % SERIES_COLORS.length],
-    })) as DistributionDatum[];
+    return ranked.map((item, index) => ({ ...item, share: totalValue > 0 ? (item.value / totalValue) * 100 : 0, color: paletteColor(index) }));
   }, [analytics, distributionLimit, distributionMetric, distributionScope, distributionValue]);
 
-  const payeeData = useMemo(() => {
-    const ranked = (analytics?.payees ?? [])
-      .filter((item) => item.type === payeeMetric)
-      .map((item) => ({
-        key: item.bucketKey,
-        label: item.payee,
-        shortLabel: shortenLabel(item.payee, 20),
-        total: item.total,
-        count: item.count,
-        percentage: item.percentage,
-        value: payeeValue === "count"
-          ? item.count
-          : payeeValue === "average"
-            ? item.total / Math.max(item.count, 1)
-            : item.total,
-      }))
-      .sort((left, right) => right.value - left.value)
-      .slice(0, payeeLimit);
-
-    return ranked.map((item, index) => ({
-      ...item,
-      color: SERIES_COLORS[index % SERIES_COLORS.length],
-    })) as PayeeDatum[];
-  }, [analytics, payeeLimit, payeeMetric, payeeValue]);
+  const payeeData = useMemo(() => (analytics?.payees ?? [])
+    .filter((item) => item.type === payeeMetric)
+    .map((item) => ({ key: item.bucketKey, label: item.payee, count: item.count, value: rankValue(item.total, item.count, payeeValue) }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, payeeLimit), [analytics, payeeLimit, payeeMetric, payeeValue]);
 
   const stackTrend = useMemo(() => {
-    const source = stackGrouping === "category"
-      ? analytics?.categories ?? []
-      : analytics?.groups ?? [];
-
-    const rankedSeries = source
+    const source: Array<FinanceAnalyticsCategoryItem | FinanceAnalyticsGroupItem> =
+      stackGrouping === "category" ? analytics?.categories ?? [] : analytics?.groups ?? [];
+    const series = source
       .filter((item) => item.type === stackMetric)
       .slice(0, stackLimit)
       .map((item, index) => ({
         key: item.bucketKey,
-        label: stackGrouping === "category"
-          ? (item as FinanceAnalyticsCategoryItem).categoryName
-          : (item as FinanceAnalyticsGroupItem).groupName,
-        color: SERIES_COLORS[index % SERIES_COLORS.length],
+        label: stackGrouping === "category" ? (item as FinanceAnalyticsCategoryItem).categoryName : (item as FinanceAnalyticsGroupItem).groupName,
+        color: paletteColor(index),
       }));
-
-    const sourceBuckets = stackGrouping === "category"
-      ? analytics?.monthlyCategories ?? []
-      : analytics?.monthlyGroups ?? [];
-    const bucketKeys = new Set(rankedSeries.map((item) => item.key));
-    const rowMap = new Map<string, Record<string, number | string>>();
-
+    const buckets = stackGrouping === "category" ? analytics?.monthlyCategories ?? [] : analytics?.monthlyGroups ?? [];
+    const keys = new Set(series.map((s) => s.key));
+    const rows = new Map<string, Record<string, number | string>>();
     for (const month of analytics?.monthly ?? []) {
       const row: Record<string, number | string> = { month: month.month, label: formatMonthLabel(month.month) };
-      for (const series of rankedSeries) {
-        row[series.key] = 0;
-      }
-      rowMap.set(month.month, row);
+      for (const s of series) row[s.key] = 0;
+      rows.set(month.month, row);
     }
-
-    for (const item of sourceBuckets) {
-      if (item.type !== stackMetric || !bucketKeys.has(item.bucketKey)) continue;
-      const row = rowMap.get(item.month);
-      if (!row) continue;
-      row[item.bucketKey] = item.total;
+    for (const item of buckets) {
+      if (item.type !== stackMetric || !keys.has(item.bucketKey)) continue;
+      const row = rows.get(item.month);
+      if (row) row[item.bucketKey] = item.total;
     }
-
-    return {
-      data: (analytics?.monthly ?? []).map((item) => rowMap.get(item.month) ?? { month: item.month, label: formatMonthLabel(item.month) }),
-      series: rankedSeries,
-    };
+    return { data: Array.from(rows.values()), series };
   }, [analytics, stackGrouping, stackLimit, stackMetric]);
 
-  const weekdayChartData = useMemo(() => {
-    return (analytics?.weekdays ?? []).map((item) => ({
-      ...item,
-      label: item.weekdayLabel,
-      value: weekdayMetric === "expense"
-        ? item.expenses
-        : weekdayMetric === "income"
-          ? item.income
-          : weekdayMetric === "count"
-            ? item.transactionCount
-            : item.net,
-    }));
-  }, [analytics, weekdayMetric]);
+  const weekdayChartData = useMemo(() => (analytics?.weekdays ?? []).map((item) => ({
+    ...item,
+    label: item.weekdayLabel,
+    value: weekdayMetric === "expense" ? item.expenses
+      : weekdayMetric === "income" ? item.income
+        : weekdayMetric === "count" ? item.transactionCount
+          : item.net,
+  })), [analytics, weekdayMetric]);
 
   const accountChartData = useMemo(() => {
-    const ordered = [...(analytics?.accounts ?? [])]
-      .sort((left, right) => {
-        const leftValue = accountMetric === "balance"
-          ? Math.abs(left.balance)
-          : accountMetric === "income"
-            ? left.income
-            : accountMetric === "expenses"
-              ? left.expenses
-              : accountMetric === "count"
-                ? left.transactionCount
-                : Math.abs(left.net);
-        const rightValue = accountMetric === "balance"
-          ? Math.abs(right.balance)
-          : accountMetric === "income"
-            ? right.income
-            : accountMetric === "expenses"
-              ? right.expenses
-              : accountMetric === "count"
-                ? right.transactionCount
-                : Math.abs(right.net);
-
-        return rightValue - leftValue;
-      })
-      .slice(0, accountLimit);
-
-    return ordered.map((item, index) => ({
-      ...item,
-      label: item.accountName,
-      shortLabel: shortenLabel(item.accountName, 18),
-      value: accountMetric === "balance"
-        ? item.balance
-        : accountMetric === "income"
-          ? item.income
-          : accountMetric === "expenses"
-            ? item.expenses
-            : accountMetric === "count"
-              ? item.transactionCount
-              : item.net,
-      color: item.color || SERIES_COLORS[index % SERIES_COLORS.length],
-    }));
+    const metricValue = (a: { balance: number; income: number; expenses: number; net: number; transactionCount: number }) =>
+      accountMetric === "balance" ? a.balance
+        : accountMetric === "income" ? a.income
+          : accountMetric === "expenses" ? a.expenses
+            : accountMetric === "count" ? a.transactionCount
+              : a.net;
+    return [...(analytics?.accounts ?? [])]
+      .sort((a, b) => Math.abs(metricValue(b)) - Math.abs(metricValue(a)))
+      .slice(0, accountLimit)
+      .map((item, index) => ({
+        ...item,
+        key: String(item.accountId),
+        label: item.accountName,
+        value: metricValue(item),
+        color: adaptiveColor(item.color, paletteColor(index)),
+      }));
   }, [accountLimit, accountMetric, analytics]);
 
-  const efficiencyChartData = useMemo(() => {
-    return monthlyChartData.map((item) => ({
-      ...item,
-      displayMetric: efficiencyMetric === "savingsRate"
-        ? item.savingsRate
-        : efficiencyMetric === "avgMovement"
-          ? item.avgMovement
-          : efficiencyMetric === "netPerMovement"
-            ? item.netPerMovement
-            : item.count,
-    }));
-  }, [efficiencyMetric, monthlyChartData]);
+  const efficiencyChartData = useMemo(() => monthlyChartData.map((item) => ({
+    ...item,
+    displayMetric: efficiencyMetric === "savingsRate" ? item.savingsRate
+      : efficiencyMetric === "avgMovement" ? item.avgMovement
+        : efficiencyMetric === "netPerMovement" ? item.netPerMovement
+          : item.count,
+  })), [efficiencyMetric, monthlyChartData]);
 
   const compareData = useMemo(() => {
-    const source = compareScope === "category"
-      ? analytics?.categories ?? []
-      : analytics?.groups ?? [];
-    const compareMap = new Map<string, CompareDatum>();
-
+    const source: Array<FinanceAnalyticsCategoryItem | FinanceAnalyticsGroupItem> =
+      compareScope === "category" ? analytics?.categories ?? [] : analytics?.groups ?? [];
+    const map = new Map<string, CompareDatum>();
     for (const item of source) {
-      const key = compareScope === "category"
-        ? `category:${(item as FinanceAnalyticsCategoryItem).categoryId ?? (item as FinanceAnalyticsCategoryItem).categoryName}`
-        : `group:${(item as FinanceAnalyticsGroupItem).groupId ?? (item as FinanceAnalyticsGroupItem).groupName}`;
-      const label = compareScope === "category"
-        ? (item as FinanceAnalyticsCategoryItem).categoryName
-        : (item as FinanceAnalyticsGroupItem).groupName;
-      const parentLabel = compareScope === "category"
-        ? (item as FinanceAnalyticsCategoryItem).groupName
-        : null;
-
-      const current = compareMap.get(key) ?? {
-        key,
-        label,
-        shortLabel: shortenLabel(label, 18),
-        parentLabel,
-        incomeTotal: 0,
-        expenseTotal: 0,
-        incomeCount: 0,
-        expenseCount: 0,
-        avgIncome: 0,
-        avgExpense: 0,
-        incomeValue: 0,
-        expenseValue: 0,
-        net: 0,
+      const isCategory = compareScope === "category";
+      const cat = item as FinanceAnalyticsCategoryItem;
+      const grp = item as FinanceAnalyticsGroupItem;
+      const key = isCategory ? `category:${cat.categoryId ?? cat.categoryName}` : `group:${grp.groupId ?? grp.groupName}`;
+      const label = isCategory ? cat.categoryName : grp.groupName;
+      const current = map.get(key) ?? {
+        key, label, shortLabel: shortenLabel(label, 18),
+        incomeTotal: 0, expenseTotal: 0, incomeCount: 0, expenseCount: 0, incomeValue: 0, expenseValue: 0,
       };
-
       if (item.type === "income") {
         current.incomeTotal += item.total;
         current.incomeCount += item.count;
@@ -858,1339 +330,859 @@ function FinanceAnalyticsView() {
         current.expenseTotal += item.total;
         current.expenseCount += item.count;
       }
-
-      compareMap.set(key, current);
+      map.set(key, current);
     }
-
-    const rows = Array.from(compareMap.values()).map((item) => {
-      const avgIncome = item.incomeCount > 0 ? item.incomeTotal / item.incomeCount : 0;
-      const avgExpense = item.expenseCount > 0 ? item.expenseTotal / item.expenseCount : 0;
-      const incomeValue = compareValue === "count"
-        ? item.incomeCount
-        : compareValue === "average"
-          ? avgIncome
-          : item.incomeTotal;
-      const expenseValue = compareValue === "count"
-        ? item.expenseCount
-        : compareValue === "average"
-          ? avgExpense
-          : item.expenseTotal;
-
-      return {
+    return Array.from(map.values())
+      .map((item) => ({
         ...item,
-        avgIncome,
-        avgExpense,
-        incomeValue,
-        expenseValue,
-        net: item.incomeTotal - item.expenseTotal,
-      };
-    });
-
-    return rows
-      .sort((left, right) => (right.incomeValue + right.expenseValue) - (left.incomeValue + left.expenseValue))
+        incomeValue: rankValue(item.incomeTotal, item.incomeCount, compareValue),
+        expenseValue: rankValue(item.expenseTotal, item.expenseCount, compareValue),
+      }))
+      .sort((a, b) => (b.incomeValue + b.expenseValue) - (a.incomeValue + a.expenseValue))
       .slice(0, compareLimit);
   }, [analytics, compareLimit, compareScope, compareValue]);
 
   const matrixData = useMemo(() => {
-    const rankingSource = matrixScope === "category"
-      ? analytics?.categories ?? []
-      : analytics?.groups ?? [];
-    const monthlySource = matrixScope === "category"
-      ? analytics?.monthlyCategories ?? []
-      : analytics?.monthlyGroups ?? [];
-
-    const series = rankingSource
+    const ranking: Array<FinanceAnalyticsCategoryItem | FinanceAnalyticsGroupItem> =
+      matrixScope === "category" ? analytics?.categories ?? [] : analytics?.groups ?? [];
+    const monthly = matrixScope === "category" ? analytics?.monthlyCategories ?? [] : analytics?.monthlyGroups ?? [];
+    const byKey = new Map<string, number>();
+    for (const item of monthly) {
+      if (item.type === matrixMetric) byKey.set(`${item.bucketKey}|${item.month}`, item.total);
+    }
+    const months = (analytics?.monthly ?? []).map((m) => ({ month: m.month, label: formatMonthLabel(m.month) }));
+    const rows = ranking
       .filter((item) => item.type === matrixMetric)
       .slice(0, matrixLimit)
-      .map((item) => ({
-        key: item.bucketKey,
-        label: matrixScope === "category"
-          ? (item as FinanceAnalyticsCategoryItem).categoryName
-          : (item as FinanceAnalyticsGroupItem).groupName,
-      }));
-
-    const months = (analytics?.monthly ?? []).map((item) => ({ month: item.month, label: formatMonthLabel(item.month) }));
-    const rows = series.map((seriesItem) => {
-      const values = months.map((month) => {
-        const match = monthlySource.find((item) => item.type === matrixMetric && item.month === month.month && item.bucketKey === seriesItem.key);
+      .map((item) => {
+        const values = months.map((m) => ({ ...m, value: byKey.get(`${item.bucketKey}|${m.month}`) ?? 0 }));
         return {
-          month: month.month,
-          label: month.label,
-          value: match?.total ?? 0,
+          key: item.bucketKey,
+          label: matrixScope === "category" ? (item as FinanceAnalyticsCategoryItem).categoryName : (item as FinanceAnalyticsGroupItem).groupName,
+          total: values.reduce((s, v) => s + v.value, 0),
+          values,
         };
       });
-
-      return {
-        key: seriesItem.key,
-        label: seriesItem.label,
-        total: values.reduce((sum, item) => sum + item.value, 0),
-        values,
-      };
-    });
-
     return { months, rows };
   }, [analytics, matrixLimit, matrixMetric, matrixScope]);
 
-  const topWeekday = useMemo(() => {
-    const ordered = [...weekdayChartData].sort((left, right) => Math.abs(right.value) - Math.abs(left.value));
-    return ordered[0];
-  }, [weekdayChartData]);
-
-  const cumulativeDataKey = useMemo(() => {
-    if (cumulativeMetric === "income") return "cumulativeIncome";
-    if (cumulativeMetric === "expenses") return "cumulativeExpenses";
-    if (cumulativeMetric === "count") return "cumulativeCount";
-    return "cumulativeNet";
-  }, [cumulativeMetric]);
+  const topWeekday = useMemo(
+    () => [...weekdayChartData].sort((a, b) => Math.abs(b.value) - Math.abs(a.value))[0],
+    [weekdayChartData],
+  );
 
   const loading = loadingAccounts || loadingCategories || loadingAnalytics;
   const error = accountsError || categoriesError || analyticsError;
 
-  const applyPreset = (preset: Exclude<PeriodPreset, "custom">) => {
-    const range = getPresetRange(preset);
+  const applyPreset = (preset: PeriodPreset) => {
+    if (preset === "custom") return;
+    const range = presetRange(preset);
     setPeriodPreset(preset);
-    setFrom(range.from ?? "");
-    setTo(range.to ?? "");
+    setFrom(range.from);
+    setTo(range.to);
   };
 
   const resetFilters = () => {
     setAccountId(undefined);
     setGroupId(undefined);
     setCategoryId(undefined);
-    applyPreset(DEFAULT_PERIOD_PRESET);
+    applyPreset(DEFAULT_PRESET);
   };
 
-  if (loading) {
-    return (
-      <div className="space-y-8 animate-fade-in">
-        <div className="card p-0 overflow-hidden">
-          <div className="h-1.5 bg-gradient-to-r from-primary-500 to-primary-400" />
-          <div className="px-6 py-6 sm:px-8 sm:py-7">
-            <div className="skeleton mb-2 h-4 w-28" />
-            <div className="skeleton mb-3 h-10 w-72" />
-            <div className="skeleton h-4 w-full max-w-2xl" />
-            <div className="mt-6 flex flex-wrap gap-2">
-              <div className="skeleton h-9 w-20 rounded-xl" />
-              <div className="skeleton h-9 w-20 rounded-xl" />
-              <div className="skeleton h-9 w-20 rounded-xl" />
-              <div className="skeleton h-9 w-20 rounded-xl" />
-            </div>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="card p-5">
-              <div className="skeleton mb-3 h-10 w-10 rounded-xl" />
-              <div className="skeleton mb-2 h-8 w-40" />
-              <div className="skeleton h-4 w-28" />
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <div className="card p-5"><div className="skeleton h-[320px] w-full" /></div>
-          <div className="card p-5"><div className="skeleton h-[320px] w-full" /></div>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <AnalyticsSkeleton />;
 
   if (error) {
     return (
-      <div className="card p-8 text-center">
-        <p className="text-lg font-semibold text-foreground">No se pudo cargar la analítica financiera</p>
-        <p className="mt-2 text-sm text-muted-foreground">Revisa la conexión con la API o vuelve a intentarlo.</p>
-        <button type="button" onClick={() => refetch()} className="btn-primary mt-5">
-          <RefreshCcw className="h-4 w-4" /> Reintentar
-        </button>
-      </div>
+      <EmptyState icon={AlertTriangle} title="No se pudo cargar la analítica financiera" description="Vuelve a intentarlo en unos segundos.">
+        <Button onClick={() => refetch()} className="gap-1.5">
+          <RefreshCcw className="size-4" /> Reintentar
+        </Button>
+      </EmptyState>
     );
   }
 
   if (accounts.length === 0) {
     return (
-      <EmptyState
-        icon={Wallet}
-        title="Sin datos financieros"
-        description="Importa tus datos desde YNAB o crea cuentas y movimientos para activar la analítica."
-        actionLabel="Importar datos"
-        actionHref="/import"
-      />
+      <>
+        <PageHeader title="Analítica" accent="financiera." description="Explora tus ingresos y gastos por periodo, cuenta y categoría." />
+        <EmptyState
+          icon={Wallet}
+          title="Aún no hay datos financieros"
+          description="Importa tu CSV de YNAB o crea cuentas y movimientos para activar la analítica."
+          actionLabel="Importar datos"
+          actionHref="/app/import"
+          actionIcon={Download}
+        />
+      </>
     );
   }
 
-  if (!analytics) {
-    return null;
-  }
+  if (!analytics) return null;
 
-  const scopePills = [
-    selectedAccount ? `Cuenta: ${selectedAccount.name}` : "Todas las cuentas",
-    selectedGroup ? `Grupo: ${selectedGroup.name}` : null,
-    selectedCategory ? `Categoría: ${selectedCategory.name}` : null,
-    periodDescription,
-  ].filter(Boolean) as string[];
+  const { summary } = analytics;
+  const hasTransactions = summary.transactionCount > 0;
 
-  const hasTransactions = analytics.summary.transactionCount > 0;
-  const positiveNet = analytics.summary.netTotal >= 0;
-  const savingsTrend = analytics.summary.savingsRate > 0 ? "up" : analytics.summary.savingsRate < 0 ? "down" : "neutral";
+  // ─── Modos de valor ───────────────────────────────────────────
+  const trendMode: ValueMode = trendMetric === "count" ? "count" : trendMetric === "savingsRate" ? "percent" : "currency";
+  const cumulativeMode: ValueMode = cumulativeMetric === "count" ? "count" : "currency";
+  const distributionMode: ValueMode = distributionValue === "count" ? "count" : "currency";
+  const payeeMode: ValueMode = payeeValue === "count" ? "count" : "currency";
+  const weekdayMode: ValueMode = weekdayMetric === "count" ? "count" : "currency";
+  const accountMode: ValueMode = accountMetric === "count" ? "count" : "currency";
+  const efficiencyMode: ValueMode = efficiencyMetric === "savingsRate" ? "percent" : efficiencyMetric === "count" ? "count" : "currency";
+  const compareMode: ValueMode = compareValue === "count" ? "count" : "currency";
 
-  const trendValueMode = trendMetric === "count"
-    ? "count"
-    : trendMetric === "savingsRate"
-      ? "percent"
-      : "currency";
-  const cumulativeValueMode = cumulativeMetric === "count" ? "count" : "currency";
-  const distributionValueMode = distributionValue === "count" ? "count" : "currency";
-  const payeeValueMode = payeeValue === "count" ? "count" : "currency";
-  const weekdayValueMode = weekdayMetric === "count" ? "count" : "currency";
-  const accountValueMode = accountMetric === "count" ? "count" : "currency";
-  const efficiencyValueMode = efficiencyMetric === "savingsRate"
-    ? "percent"
-    : efficiencyMetric === "count"
-      ? "count"
-      : "currency";
-  const compareValueMode = compareValue === "count" ? "count" : "currency";
+  const chartHeight = (expanded: boolean, base = 300) => (expanded ? 520 : base);
+
+  // ─── Gráficos ─────────────────────────────────────────────────
+  const TREND_SERIES: Record<Exclude<TrendMetric, "all">, { key: string; label: string; color: string }> = {
+    income: { key: "income", label: "Ingresos", color: flowColors.income },
+    expenses: { key: "expenses", label: "Gastos", color: flowColors.expense },
+    net: { key: "net", label: "Flujo neto", color: flowColors.net },
+    count: { key: "count", label: "Movimientos", color: flowColors.count },
+    savingsRate: { key: "savingsRate", label: "% de ahorro", color: flowColors.rate },
+  };
 
   const renderTrendChart = (expanded: boolean) => {
-    const height = expanded ? 520 : 340;
-    const tickFormatter = getTickFormatter(trendValueMode);
-    const valueFormatter = getValueFormatter(trendValueMode);
-    const singleDataKey = trendMetric === "income"
-      ? "income"
-      : trendMetric === "expenses"
-        ? "expenses"
-        : trendMetric === "net"
-          ? "net"
-          : trendMetric === "count"
-            ? "count"
-            : trendMetric === "savingsRate"
-              ? "savingsRate"
-              : null;
-    const singleColor = trendMetric === "income"
-      ? INCOME_COLOR
-      : trendMetric === "expenses"
-        ? EXPENSE_COLOR
-        : trendMetric === "net"
-          ? NET_COLOR
-          : trendMetric === "count"
-            ? "#7c3aed"
-            : "#0f766e";
-    const singleLabel = trendMetric === "income"
-      ? "Ingresos"
-      : trendMetric === "expenses"
-        ? "Gastos"
-        : trendMetric === "net"
-          ? "Flujo neto"
-          : trendMetric === "count"
-            ? "Movimientos"
-            : "% ahorro";
+    const format = fmtValue(trendMode);
+    const all = trendMetric === "all";
+    const single = all ? null : TREND_SERIES[trendMetric];
+    // Recharts no recorre Fragments: ejes y series van como arrays con key.
+    const axes = [
+      <CartesianGrid key="grid" {...chartGrid} />,
+      <XAxis key="x" dataKey="label" {...chartAxis} interval="preserveStartEnd" minTickGap={16} />,
+      <YAxis key="y" {...chartAxis} tickFormatter={fmtTick(trendMode)} width={56} />,
+    ];
+    const legend = all
+      ? [
+        { color: flowColors.income, label: "Ingresos" },
+        { color: flowColors.expense, label: "Gastos" },
+        { color: flowColors.net, label: "Flujo neto", line: trendView === "bars" },
+      ]
+      : [{ color: single!.color, label: single!.label, line: trendView === "line" }];
 
+    let chart;
     if (trendView === "line") {
-      return (
-        <ResponsiveContainer width="100%" height={height}>
-          <ComposedChart data={monthlyChartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-            <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
-            <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
-            <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
-            <Legend />
-            {trendMetric === "all" ? (
-              <>
-                <Line type="monotone" dataKey="income" name="Ingresos" stroke={INCOME_COLOR} strokeWidth={3} dot={false} />
-                <Line type="monotone" dataKey="expenses" name="Gastos" stroke={EXPENSE_COLOR} strokeWidth={3} dot={false} />
-                <Line type="monotone" dataKey="net" name="Flujo neto" stroke={NET_COLOR} strokeWidth={3} dot={false} />
-              </>
-            ) : singleDataKey ? (
-              <Line type="monotone" dataKey={singleDataKey} name={singleLabel} stroke={singleColor} strokeWidth={3} dot={false} />
-            ) : null}
-          </ComposedChart>
-        </ResponsiveContainer>
+      chart = (
+        <ComposedChart data={monthlyChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          {axes}
+          <Tooltip content={<SeriesTooltip format={format} />} cursor={chartCursor} />
+          {all ? [
+            <Line key="income" type="monotone" dataKey="income" name="Ingresos" stroke={flowColors.income} strokeWidth={2} dot={false} activeDot={chartActiveDot} />,
+            <Line key="expenses" type="monotone" dataKey="expenses" name="Gastos" stroke={flowColors.expense} strokeWidth={2} dot={false} activeDot={chartActiveDot} />,
+            <Line key="net" type="monotone" dataKey="net" name="Flujo neto" stroke={flowColors.net} strokeWidth={2} dot={false} activeDot={chartActiveDot} />,
+          ] : (
+            <Line type="monotone" dataKey={single!.key} name={single!.label} stroke={single!.color} strokeWidth={2} dot={false} activeDot={chartActiveDot} />
+          )}
+        </ComposedChart>
       );
-    }
-
-    if (trendView === "area") {
-      return (
-        <ResponsiveContainer width="100%" height={height}>
-          <AreaChart data={monthlyChartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-            <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
-            <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
-            <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
-            <Legend />
-            {trendMetric === "all" ? (
-              <>
-                <Area type="monotone" dataKey="income" name="Ingresos" stroke={INCOME_COLOR} fill={`${INCOME_COLOR}22`} strokeWidth={2.5} />
-                <Area type="monotone" dataKey="expenses" name="Gastos" stroke={EXPENSE_COLOR} fill={`${EXPENSE_COLOR}20`} strokeWidth={2.5} />
-                <Area type="monotone" dataKey="net" name="Flujo neto" stroke={NET_COLOR} fill={`${NET_COLOR}20`} strokeWidth={2.5} />
-              </>
-            ) : singleDataKey ? (
-              <Area type="monotone" dataKey={singleDataKey} name={singleLabel} stroke={singleColor} fill={`${singleColor}22`} strokeWidth={2.5} />
-            ) : null}
-          </AreaChart>
-        </ResponsiveContainer>
+    } else if (trendView === "area") {
+      chart = (
+        <AreaChart data={monthlyChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          {axes}
+          <Tooltip content={<SeriesTooltip format={format} />} cursor={chartCursor} />
+          {all ? [
+            <Area key="income" type="monotone" dataKey="income" name="Ingresos" stroke={flowColors.income} fill={flowColors.income} fillOpacity={0.12} strokeWidth={2} activeDot={chartActiveDot} />,
+            <Area key="expenses" type="monotone" dataKey="expenses" name="Gastos" stroke={flowColors.expense} fill={flowColors.expense} fillOpacity={0.1} strokeWidth={2} activeDot={chartActiveDot} />,
+            <Area key="net" type="monotone" dataKey="net" name="Flujo neto" stroke={flowColors.net} fill={flowColors.net} fillOpacity={0.1} strokeWidth={2} activeDot={chartActiveDot} />,
+          ] : (
+            <Area type="monotone" dataKey={single!.key} name={single!.label} stroke={single!.color} fill={single!.color} fillOpacity={0.14} strokeWidth={2} activeDot={chartActiveDot} />
+          )}
+        </AreaChart>
+      );
+    } else {
+      chart = (
+        <ComposedChart data={monthlyChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barGap={3}>
+          {axes}
+          <Tooltip content={<SeriesTooltip format={format} />} cursor={chartBarCursor} />
+          {all ? [
+            <Bar key="income" dataKey="income" name="Ingresos" fill={flowColors.income} radius={[4, 4, 0, 0]} maxBarSize={24} />,
+            <Bar key="expenses" dataKey="expenses" name="Gastos" fill={flowColors.expense} fillOpacity={0.75} radius={[4, 4, 0, 0]} maxBarSize={24} />,
+            <Line key="net" type="monotone" dataKey="net" name="Flujo neto" stroke={flowColors.net} strokeWidth={2} dot={false} activeDot={chartActiveDot} />,
+          ] : (
+            <Bar dataKey={single!.key} name={single!.label} fill={single!.color} radius={[4, 4, 0, 0]} maxBarSize={32} />
+          )}
+        </ComposedChart>
       );
     }
 
     return (
-      <ResponsiveContainer width="100%" height={height}>
-        <ComposedChart data={monthlyChartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
-          <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
-          <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
-          <Legend />
-          {trendMetric === "all" ? (
-            <>
-              <Bar dataKey="income" name="Ingresos" fill={INCOME_COLOR} radius={[8, 8, 0, 0]} />
-              <Bar dataKey="expenses" name="Gastos" fill={EXPENSE_COLOR} radius={[8, 8, 0, 0]} />
-              <Line type="monotone" dataKey="net" name="Flujo neto" stroke={NET_COLOR} strokeWidth={3} dot={false} />
-            </>
-          ) : singleDataKey ? (
-            <Bar dataKey={singleDataKey} name={singleLabel} fill={singleColor} radius={[8, 8, 0, 0]} />
-          ) : null}
-        </ComposedChart>
-      </ResponsiveContainer>
+      <>
+        <div style={{ height: chartHeight(expanded, 320) }}>
+          <ResponsiveContainer width="100%" height="100%">{chart}</ResponsiveContainer>
+        </div>
+        <div className="mt-4"><ChartLegend items={legend} /></div>
+      </>
     );
   };
 
   const renderCumulativeChart = (expanded: boolean) => {
-    const height = expanded ? 500 : 320;
-    const tickFormatter = getTickFormatter(cumulativeValueMode);
-    const valueFormatter = getValueFormatter(cumulativeValueMode);
-
-    if (cumulativeView === "line") {
-      return (
-        <ResponsiveContainer width="100%" height={height}>
-          <ComposedChart data={cumulativeChartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-            <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
-            <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
-            <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
-            <Line type="monotone" dataKey={cumulativeDataKey} name="Acumulado" stroke={CUMULATIVE_COLOR} strokeWidth={3} dot={false} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      );
-    }
-
+    const key = cumulativeMetric === "income" ? "cumulativeIncome"
+      : cumulativeMetric === "expenses" ? "cumulativeExpenses"
+        : cumulativeMetric === "count" ? "cumulativeCount"
+          : "cumulativeNet";
+    const color = cumulativeMetric === "income" ? flowColors.income
+      : cumulativeMetric === "expenses" ? flowColors.expense
+        : cumulativeMetric === "count" ? flowColors.count
+          : flowColors.net;
+    const common = [
+      <CartesianGrid key="grid" {...chartGrid} />,
+      <XAxis key="x" dataKey="label" {...chartAxis} interval="preserveStartEnd" minTickGap={16} />,
+      <YAxis key="y" {...chartAxis} tickFormatter={fmtTick(cumulativeMode)} width={56} />,
+      <Tooltip key="tt" content={<SeriesTooltip format={fmtValue(cumulativeMode)} />} cursor={chartCursor} />,
+    ];
     return (
-      <ResponsiveContainer width="100%" height={height}>
-        <AreaChart data={cumulativeChartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
-          <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
-          <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
-          <Area type="monotone" dataKey={cumulativeDataKey} name="Acumulado" stroke={CUMULATIVE_COLOR} fill={`${CUMULATIVE_COLOR}22`} strokeWidth={2.5} />
-        </AreaChart>
-      </ResponsiveContainer>
+      <div style={{ height: chartHeight(expanded, 260) }}>
+        <ResponsiveContainer width="100%" height="100%">
+          {cumulativeView === "line" ? (
+            <ComposedChart data={cumulativeChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              {common}
+              <Line type="monotone" dataKey={key} name="Acumulado" stroke={color} strokeWidth={2} dot={false} activeDot={chartActiveDot} />
+            </ComposedChart>
+          ) : (
+            <AreaChart data={cumulativeChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              {common}
+              <Area type="monotone" dataKey={key} name="Acumulado" stroke={color} fill={color} fillOpacity={0.14} strokeWidth={2} activeDot={chartActiveDot} />
+            </AreaChart>
+          )}
+        </ResponsiveContainer>
+      </div>
     );
   };
 
   const renderDistributionChart = (expanded: boolean) => {
-    const height = expanded ? 500 : 320;
-    const valueFormatter = getValueFormatter(distributionValueMode);
-    const tickFormatter = getTickFormatter(distributionValueMode);
-
+    const format = fmtValue(distributionMode);
     if (distributionData.length === 0) {
-      return <ChartPlaceholder message="No hay datos suficientes para esta combinación de variables." height={height} />;
+      return <ChartEmpty message="No hay datos para esta combinación de variables." height={chartHeight(expanded, 260)} />;
     }
-
-    if (distributionView === "donut") {
+    if (distributionView === "bars") {
       return (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-center">
-          <ResponsiveContainer width="100%" height={height}>
-            <PieChart>
-              <Pie data={distributionData} dataKey="value" nameKey="label" innerRadius={expanded ? 94 : 68} outerRadius={expanded ? 148 : 108} paddingAngle={3}>
-                {distributionData.map((item) => (
-                  <Cell key={item.key} fill={item.color} />
-                ))}
-              </Pie>
-              <Tooltip content={<MetricPieTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="space-y-3">
-            {distributionData.map((item) => (
-              <div key={item.key} className="flex items-start gap-3">
-                <span className="mt-1 h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{item.label}</p>
-                  {item.parentLabel ? <p className="text-xs text-muted-foreground">{item.parentLabel}</p> : null}
-                </div>
-                <div className="text-right">
-                  <p className="font-mono text-sm font-semibold text-foreground">{valueFormatter(item.value)}</p>
-                  <p className="text-xs text-muted-foreground">{formatPercent(item.share)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <RankedList
+          format={format}
+          items={distributionData.map((d) => ({ key: d.key, label: d.label, sublabel: d.parentLabel, value: d.value, color: d.color, meta: formatPct(d.share) }))}
+        />
       );
     }
-
+    const size = expanded ? 320 : 200;
     return (
-      <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={distributionData} layout="vertical" margin={{ left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-          <XAxis type="number" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
-          <YAxis type="category" dataKey="shortLabel" width={120} tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
-          <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
-          <Bar dataKey="value" name="Valor" radius={[0, 8, 8, 0]}>
-            {distributionData.map((item) => (
-              <Cell key={item.key} fill={item.color} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      <div className="grid items-center gap-6 sm:grid-cols-[auto_minmax(0,1fr)]">
+        <div className="mx-auto" style={{ width: size, height: size }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={distributionData} dataKey="value" nameKey="label" innerRadius="64%" outerRadius="100%" paddingAngle={2} strokeWidth={0}>
+                {distributionData.map((d) => <Cell key={d.key} fill={d.color} />)}
+              </Pie>
+              <Tooltip content={<PieTooltip format={format} />} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <ul className="min-w-0 space-y-2">
+          {distributionData.map((d) => (
+            <li key={d.key} className="flex items-center gap-2 text-sm">
+              <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
+              <span className="min-w-0 flex-1 truncate text-foreground" title={d.parentLabel ? `${d.label} · ${d.parentLabel}` : d.label}>{d.label}</span>
+              <span className="text-xs tabular-nums text-muted-foreground">{formatPct(d.share)}</span>
+              <span className="w-24 text-right font-medium tabular-nums text-foreground">{format(d.value)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
     );
   };
 
   const renderPayeesChart = (expanded: boolean) => {
-    const height = expanded ? 500 : 320;
-    const valueFormatter = getValueFormatter(payeeValueMode);
-    const tickFormatter = getTickFormatter(payeeValueMode);
-
     if (payeeData.length === 0) {
-      return <ChartPlaceholder message="No hay beneficiarios suficientes para esta combinación de variables." height={height} />;
+      return <ChartEmpty message="No hay beneficiarios para esta combinación de variables." height={chartHeight(expanded, 260)} />;
     }
-
+    const color = payeeMetric === "expense" ? flowColors.expense : flowColors.income;
     return (
-      <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={payeeData} layout="vertical" margin={{ left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-          <XAxis type="number" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
-          <YAxis type="category" dataKey="shortLabel" width={120} tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
-          <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
-          <Bar dataKey="value" name="Valor" radius={[0, 8, 8, 0]}>
-            {payeeData.map((item) => (
-              <Cell key={item.key} fill={item.color} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      <RankedList
+        format={fmtValue(payeeMode)}
+        items={payeeData.map((p, i) => ({
+          key: p.key,
+          label: expanded ? p.label : shortenLabel(p.label, 30),
+          value: p.value,
+          color: i === 0 ? color : chartColors.quaternary,
+          meta: payeeValue === "count" ? undefined : `${p.count} mov.`,
+        }))}
+      />
     );
   };
 
   const renderWeekdayChart = (expanded: boolean) => {
-    const height = expanded ? 500 : 320;
-    const valueFormatter = getValueFormatter(weekdayValueMode);
-    const tickFormatter = getTickFormatter(weekdayValueMode);
-
+    const format = fmtValue(weekdayMode);
     if (weekdayChartData.every((item) => item.value === 0)) {
-      return <ChartPlaceholder message="No hay patrón semanal para esta métrica con los filtros actuales." height={height} />;
+      return <ChartEmpty message="No hay patrón semanal para esta métrica con los filtros actuales." height={chartHeight(expanded, 260)} />;
     }
-
-    if (weekdayView === "radar") {
-      return (
-        <ResponsiveContainer width="100%" height={height}>
-          <RadarChart data={weekdayChartData} outerRadius="72%">
-            <PolarGrid stroke="var(--color-border)" />
-            <PolarAngleAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} />
-            <PolarRadiusAxis tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }} tickFormatter={tickFormatter} />
-            <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
-            <Radar dataKey="value" name="Valor" stroke={WEEKDAY_COLOR} fill={`${WEEKDAY_COLOR}33`} fillOpacity={0.7} />
-          </RadarChart>
-        </ResponsiveContainer>
-      );
-    }
-
+    const color = weekdayMetric === "income" ? flowColors.income
+      : weekdayMetric === "expense" ? flowColors.expense
+        : weekdayMetric === "net" ? flowColors.net
+          : flowColors.count;
     return (
-      <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={weekdayChartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
-          <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
-          <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
-          <Bar dataKey="value" name="Valor" fill={WEEKDAY_COLOR} radius={[8, 8, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
+      <div style={{ height: chartHeight(expanded, 260) }}>
+        <ResponsiveContainer width="100%" height="100%">
+          {weekdayView === "radar" ? (
+            <RadarChart data={weekdayChartData} outerRadius="74%">
+              <PolarGrid stroke={chartColors.grid} />
+              <PolarAngleAxis dataKey="label" tick={{ fontSize: 11, fill: chartColors.axis }} />
+              <PolarRadiusAxis tick={false} axisLine={false} />
+              <Tooltip content={<SeriesTooltip format={format} />} />
+              <Radar dataKey="value" name={weekdayMetric === "count" ? "Movimientos" : "Importe"} stroke={color} fill={color} fillOpacity={0.2} strokeWidth={2} />
+            </RadarChart>
+          ) : (
+            <BarChart data={weekdayChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid {...chartGrid} />
+              <XAxis dataKey="label" {...chartAxis} />
+              <YAxis {...chartAxis} tickFormatter={fmtTick(weekdayMode)} width={56} />
+              <Tooltip content={<SeriesTooltip format={format} />} cursor={chartBarCursor} />
+              <ReferenceLine y={0} stroke={chartColors.grid} />
+              <Bar dataKey="value" name={weekdayMetric === "count" ? "Movimientos" : "Importe"} fill={color} radius={[4, 4, 0, 0]} maxBarSize={36} />
+            </BarChart>
+          )}
+        </ResponsiveContainer>
+      </div>
     );
   };
 
   const renderStackChart = (expanded: boolean) => {
-    const height = expanded ? 520 : 340;
-
     if (stackTrend.series.length === 0) {
-      return <ChartPlaceholder message="No hay suficientes series para apilar con esta configuración." height={height} />;
+      return <ChartEmpty message="No hay series suficientes para apilar con esta configuración." height={chartHeight(expanded, 300)} />;
     }
-
-    if (stackView === "area") {
-      return (
-        <ResponsiveContainer width="100%" height={height}>
-          <AreaChart data={stackTrend.data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-            <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
-            <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={formatCompact} />
-            <Tooltip content={<ChartTooltip />} />
-            <Legend />
-            {stackTrend.series.map((series) => (
-              <Area key={series.key} type="monotone" dataKey={series.key} stackId="stack" name={series.label} stroke={series.color} fill={`${series.color}44`} />
-            ))}
-          </AreaChart>
-        </ResponsiveContainer>
-      );
-    }
-
+    const common = [
+      <CartesianGrid key="grid" {...chartGrid} />,
+      <XAxis key="x" dataKey="label" {...chartAxis} interval="preserveStartEnd" minTickGap={16} />,
+      <YAxis key="y" {...chartAxis} tickFormatter={fmtTick("currency")} width={56} />,
+    ];
     return (
-      <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={stackTrend.data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
-          <YAxis tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={formatCompact} />
-          <Tooltip content={<ChartTooltip />} />
-          <Legend />
-          {stackTrend.series.map((series) => (
-            <Bar key={series.key} dataKey={series.key} stackId="stack" name={series.label} fill={series.color} radius={[6, 6, 0, 0]} />
-          ))}
-        </BarChart>
-      </ResponsiveContainer>
+      <>
+        <div style={{ height: chartHeight(expanded, 300) }}>
+          <ResponsiveContainer width="100%" height="100%">
+            {stackView === "area" ? (
+              <AreaChart data={stackTrend.data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                {common}
+                <Tooltip content={<SeriesTooltip format={fmtValue("currency")} />} cursor={chartCursor} />
+                {stackTrend.series.map((s) => (
+                  <Area key={s.key} type="monotone" dataKey={s.key} stackId="stack" name={s.label} stroke={s.color} fill={s.color} fillOpacity={0.35} strokeWidth={1.5} />
+                ))}
+              </AreaChart>
+            ) : (
+              <BarChart data={stackTrend.data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                {common}
+                <Tooltip content={<SeriesTooltip format={fmtValue("currency")} />} cursor={chartBarCursor} />
+                {stackTrend.series.map((s, i) => (
+                  <Bar key={s.key} dataKey={s.key} stackId="stack" name={s.label} fill={s.color} maxBarSize={36} radius={i === stackTrend.series.length - 1 ? [4, 4, 0, 0] : undefined} />
+                ))}
+              </BarChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+        <div className="mt-4"><ChartLegend items={stackTrend.series.map((s) => ({ color: s.color, label: s.label }))} /></div>
+      </>
     );
   };
 
   const renderAccountsChart = (expanded: boolean) => {
-    const height = expanded ? 500 : 320;
-    const valueFormatter = getValueFormatter(accountValueMode);
-    const tickFormatter = getTickFormatter(accountValueMode);
-
+    const format = fmtValue(accountMode);
     if (accountChartData.length === 0) {
-      return <ChartPlaceholder message="No hay cuentas con datos para esta vista." height={height} />;
+      return <ChartEmpty message="No hay cuentas con datos para esta vista." height={chartHeight(expanded, 260)} />;
     }
-
     if (accountView === "donut" && accountMetric !== "net") {
+      const slices = accountChartData.filter((a) => a.value > 0);
+      const total = slices.reduce((s, a) => s + a.value, 0);
+      const size = expanded ? 320 : 200;
       return (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_240px] lg:items-center">
-          <ResponsiveContainer width="100%" height={height}>
-            <PieChart>
-              <Pie data={accountChartData} dataKey="value" nameKey="label" innerRadius={expanded ? 92 : 68} outerRadius={expanded ? 146 : 110} paddingAngle={3}>
-                {accountChartData.map((item, index) => (
-                  <Cell key={`${item.accountId}-${index}`} fill={item.color || SERIES_COLORS[index % SERIES_COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip content={<MetricPieTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="space-y-3">
-            {accountChartData.map((item) => (
-              <div key={item.accountId} className="flex items-center gap-3">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{item.label}</p>
-                  <p className="text-xs text-muted-foreground">{item.transactionCount} movimientos</p>
-                </div>
-                <p className="font-mono text-sm font-semibold text-foreground">{valueFormatter(item.value)}</p>
-              </div>
-            ))}
+        <div className="grid items-center gap-6 sm:grid-cols-[auto_minmax(0,1fr)]">
+          <div className="mx-auto" style={{ width: size, height: size }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={slices} dataKey="value" nameKey="label" innerRadius="64%" outerRadius="100%" paddingAngle={2} strokeWidth={0}>
+                  {slices.map((a) => <Cell key={a.key} fill={a.color} />)}
+                </Pie>
+                <Tooltip content={<PieTooltip format={format} />} />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
+          <ul className="min-w-0 space-y-2">
+            {accountChartData.map((a) => (
+              <li key={a.key} className="flex items-center gap-2 text-sm">
+                <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: a.color }} />
+                <span className="min-w-0 flex-1 truncate text-foreground">{a.label}</span>
+                <span className="text-xs tabular-nums text-muted-foreground">{total > 0 && a.value > 0 ? formatPct((a.value / total) * 100) : "—"}</span>
+                <span className={cn("w-24 text-right font-medium tabular-nums", a.value < 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>{format(a.value)}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       );
     }
-
     return (
-      <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={accountChartData} layout="vertical" margin={{ left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-          <XAxis type="number" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
-          <YAxis type="category" dataKey="shortLabel" width={120} tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
-          <Tooltip content={<ChartTooltip valueFormatter={valueFormatter} />} />
-          <Bar dataKey="value" name="Valor" radius={[0, 8, 8, 0]}>
-            {accountChartData.map((item, index) => (
-              <Cell key={`${item.accountId}-${index}`} fill={item.color || SERIES_COLORS[index % SERIES_COLORS.length]} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      <RankedList
+        format={format}
+        items={accountChartData.map((a) => ({
+          key: a.key,
+          label: a.label,
+          value: a.value,
+          color: a.color,
+          meta: accountMetric === "count" ? undefined : `${a.transactionCount} mov.`,
+        }))}
+      />
     );
   };
 
   const renderEfficiencyChart = (expanded: boolean) => {
-    const height = expanded ? 500 : 340;
-    const valueFormatter = getValueFormatter(efficiencyValueMode);
-    const tickFormatter = getTickFormatter(efficiencyValueMode);
-    const secondaryFormatter = efficiencyMetric === "count"
-      ? getValueFormatter("percent")
-      : getValueFormatter("count");
-    const secondaryTickFormatter = efficiencyMetric === "count"
-      ? getTickFormatter("percent")
-      : getTickFormatter("count");
-    const secondaryDataKey = efficiencyMetric === "count" ? "savingsRate" : "count";
-    const secondaryName = efficiencyMetric === "count" ? "% ahorro" : "Movimientos";
-
+    const primaryFormat = fmtValue(efficiencyMode);
+    const secondaryIsRate = efficiencyMetric === "count";
+    const secondaryKey = secondaryIsRate ? "savingsRate" : "count";
+    const secondaryName = secondaryIsRate ? "% de ahorro" : "Movimientos";
+    const metricName = efficiencyMetric === "savingsRate" ? "% de ahorro"
+      : efficiencyMetric === "avgMovement" ? "Media por movimiento"
+        : efficiencyMetric === "netPerMovement" ? "Neto por movimiento"
+          : "Movimientos";
+    const secondaryFormat = fmtValue(secondaryIsRate ? "percent" : "count");
     return (
-      <ResponsiveContainer width="100%" height={height}>
-        <ComposedChart data={efficiencyChartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-          <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
-          <YAxis yAxisId="left" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
-          <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={secondaryTickFormatter} />
-          <Tooltip
-            content={<ChartTooltip />}
-            formatter={(value: number, name: string) => {
-              if (name === secondaryName) {
-                return secondaryFormatter(value);
-              }
-              return valueFormatter(value);
-            }}
-          />
-          <Legend />
-          <Bar yAxisId="left" dataKey="displayMetric" name="Métrica" fill="#7c3aed" radius={[8, 8, 0, 0]} />
-          <Line yAxisId="right" type="monotone" dataKey={secondaryDataKey} name={secondaryName} stroke="#f59e0b" strokeWidth={3} dot={false} />
-        </ComposedChart>
-      </ResponsiveContainer>
+      <>
+        <div style={{ height: chartHeight(expanded, 260) }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={efficiencyChartData} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+              <CartesianGrid {...chartGrid} />
+              <XAxis dataKey="label" {...chartAxis} interval="preserveStartEnd" minTickGap={16} />
+              <YAxis yAxisId="left" {...chartAxis} tickFormatter={fmtTick(efficiencyMode)} width={56} />
+              <YAxis yAxisId="right" orientation="right" {...chartAxis} tickFormatter={fmtTick(secondaryIsRate ? "percent" : "count")} width={44} />
+              <Tooltip
+                content={<SeriesTooltip format={primaryFormat} formatters={{ [secondaryName]: secondaryFormat, [metricName]: primaryFormat }} />}
+                cursor={chartBarCursor}
+              />
+              <ReferenceLine yAxisId="left" y={0} stroke={chartColors.grid} />
+              <Bar yAxisId="left" dataKey="displayMetric" name={metricName} fill={flowColors.income} radius={[4, 4, 0, 0]} maxBarSize={28} />
+              <Line yAxisId="right" type="monotone" dataKey={secondaryKey} name={secondaryName} stroke={flowColors.net} strokeWidth={2} dot={false} activeDot={chartActiveDot} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="mt-4">
+          <ChartLegend items={[{ color: flowColors.income, label: metricName }, { color: flowColors.net, label: secondaryName, line: true }]} />
+        </div>
+      </>
     );
   };
 
   const renderCompareChart = (expanded: boolean) => {
-    const height = expanded ? 520 : 340;
-    const valueFormatter = getValueFormatter(compareValueMode);
-    const tickFormatter = getTickFormatter(compareValueMode);
-
     if (compareData.length === 0) {
-      return <ChartPlaceholder message="No hay datos suficientes para esta comparativa." height={height} />;
+      return <ChartEmpty message="No hay datos suficientes para esta comparativa." height={chartHeight(expanded, 260)} />;
     }
-
-    const chartData = compareData.map((item) => ({
-      ...item,
-      incomeDisplay: item.incomeValue,
-      expenseDisplay: item.expenseValue * -1,
-    }));
-
+    const format = fmtValue(compareMode);
+    const data = compareData.map((d) => ({ ...d, incomeDisplay: d.incomeValue, expenseDisplay: -d.expenseValue }));
+    const rowHeight = expanded ? 44 : 34;
     return (
-      <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={chartData} layout="vertical" margin={{ left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-          <ReferenceLine x={0} stroke="var(--color-border)" />
-          <XAxis type="number" tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" tickFormatter={tickFormatter} />
-          <YAxis type="category" dataKey="shortLabel" width={130} tick={{ fontSize: 12 }} stroke="var(--color-muted-foreground)" />
-          <Tooltip content={<ChartTooltip valueFormatter={(value) => valueFormatter(Math.abs(value))} />} />
-          <Legend />
-          <Bar dataKey="incomeDisplay" name="Ingresos" fill={INCOME_COLOR} radius={[0, 8, 8, 0]} />
-          <Bar dataKey="expenseDisplay" name="Gastos" fill={EXPENSE_COLOR} radius={[8, 0, 0, 8]} />
-        </BarChart>
-      </ResponsiveContainer>
+      <>
+        <div style={{ height: Math.max(data.length * rowHeight + 40, expanded ? 420 : 220) }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }} barGap={-12} barCategoryGap="28%">
+              <CartesianGrid {...chartGrid} vertical horizontal={false} />
+              <XAxis type="number" {...chartAxis} tickFormatter={(v: number) => fmtTick(compareMode)(Math.abs(v))} />
+              <YAxis type="category" dataKey="shortLabel" {...chartAxis} width={expanded ? 150 : 112} />
+              <Tooltip content={<SeriesTooltip format={(v) => format(Math.abs(v))} />} cursor={chartBarCursor} />
+              <ReferenceLine x={0} stroke={chartColors.axis} strokeOpacity={0.4} />
+              <Bar dataKey="incomeDisplay" name="Ingresos" fill={flowColors.income} radius={[0, 4, 4, 0]} maxBarSize={14} />
+              <Bar dataKey="expenseDisplay" name="Gastos" fill={flowColors.expense} fillOpacity={0.8} radius={[4, 0, 0, 4]} maxBarSize={14} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="mt-3"><ChartLegend items={[{ color: flowColors.expense, label: "← Gastos" }, { color: flowColors.income, label: "Ingresos →" }]} /></div>
+      </>
     );
   };
 
-  const renderMatrixChart = (expanded: boolean) => {
-    return (
-      <MatrixHeatmap
-        months={matrixData.months}
-        rows={matrixData.rows}
-        color={matrixMetric === "expense" ? EXPENSE_COLOR : INCOME_COLOR}
-        expanded={expanded}
-      />
-    );
-  };
-
-  const trendControls = (
-    <>
-      <SegmentedControl
-        value={trendMetric}
-        onChange={(value) => setTrendMetric(value as TrendMetric)}
-        options={[
-          { value: "all", label: "Todo" },
-          { value: "income", label: "Ingresos" },
-          { value: "expenses", label: "Gastos" },
-          { value: "net", label: "Neto" },
-          { value: "count", label: "Mov." },
-          { value: "savingsRate", label: "% ahorro" },
-        ]}
-      />
-      <SegmentedControl
-        value={trendView}
-        onChange={(value) => setTrendView(value as TrendView)}
-        options={[
-          { value: "bars", label: "Barras" },
-          { value: "area", label: "Área" },
-          { value: "line", label: "Líneas" },
-        ]}
-      />
-    </>
-  );
-
-  const cumulativeControls = (
-    <>
-      <SegmentedControl
-        value={cumulativeMetric}
-        onChange={(value) => setCumulativeMetric(value as CumulativeMetric)}
-        options={[
-          { value: "net", label: "Neto" },
-          { value: "income", label: "Ingresos" },
-          { value: "expenses", label: "Gastos" },
-          { value: "count", label: "Mov." },
-        ]}
-      />
-      <SegmentedControl
-        value={cumulativeView}
-        onChange={(value) => setCumulativeView(value as CumulativeView)}
-        options={[
-          { value: "area", label: "Área" },
-          { value: "line", label: "Línea" },
-        ]}
-      />
-    </>
-  );
-
-  const distributionControls = (
-    <>
-      <SegmentedControl
-        value={distributionMetric}
-        onChange={(value) => setDistributionMetric(value as DistributionMetric)}
-        options={[
-          { value: "expense", label: "Gasto" },
-          { value: "income", label: "Ingreso" },
-        ]}
-      />
-      <SegmentedControl
-        value={distributionScope}
-        onChange={(value) => setDistributionScope(value as DistributionScope)}
-        options={[
-          { value: "category", label: "Categoría" },
-          { value: "group", label: "Grupo" },
-        ]}
-      />
-      <SegmentedControl
-        value={distributionValue}
-        onChange={(value) => setDistributionValue(value as DistributionValue)}
-        options={[
-          { value: "total", label: "Importe" },
-          { value: "count", label: "Frecuencia" },
-          { value: "average", label: "Media" },
-        ]}
-      />
-      <SegmentedControl
-        value={distributionView}
-        onChange={(value) => setDistributionView(value as DistributionView)}
-        options={[
-          { value: "donut", label: "Donut" },
-          { value: "bars", label: "Barras" },
-        ]}
-      />
-      <select className="input w-auto min-w-[92px] py-2 text-sm" aria-label="Cantidad de series de distribución" value={distributionLimit} onChange={(event) => setDistributionLimit(Number(event.target.value))}>
-        <option value={5}>Top 5</option>
-        <option value={8}>Top 8</option>
-        <option value={12}>Top 12</option>
-      </select>
-    </>
-  );
-
-  const payeeControls = (
-    <>
-      <SegmentedControl
-        value={payeeMetric}
-        onChange={(value) => setPayeeMetric(value as DistributionMetric)}
-        options={[
-          { value: "expense", label: "Gasto" },
-          { value: "income", label: "Ingreso" },
-        ]}
-      />
-      <SegmentedControl
-        value={payeeValue}
-        onChange={(value) => setPayeeValue(value as PayeeValue)}
-        options={[
-          { value: "total", label: "Importe" },
-          { value: "count", label: "Frecuencia" },
-          { value: "average", label: "Media" },
-        ]}
-      />
-      <select className="input w-auto min-w-[92px] py-2 text-sm" aria-label="Cantidad de beneficiarios" value={payeeLimit} onChange={(event) => setPayeeLimit(Number(event.target.value))}>
-        <option value={5}>Top 5</option>
-        <option value={8}>Top 8</option>
-        <option value={12}>Top 12</option>
-      </select>
-    </>
-  );
-
-  const weekdayControls = (
-    <>
-      <SegmentedControl
-        value={weekdayMetric}
-        onChange={(value) => setWeekdayMetric(value as WeekdayMetric)}
-        options={[
-          { value: "expense", label: "Gasto" },
-          { value: "income", label: "Ingreso" },
-          { value: "net", label: "Neto" },
-          { value: "count", label: "Mov." },
-        ]}
-      />
-      <SegmentedControl
-        value={weekdayView}
-        onChange={(value) => setWeekdayView(value as WeekdayView)}
-        options={[
-          { value: "radar", label: "Radar" },
-          { value: "bars", label: "Barras" },
-        ]}
-      />
-    </>
-  );
-
-  const stackControls = (
-    <>
-      <SegmentedControl
-        value={stackGrouping}
-        onChange={(value) => setStackGrouping(value as StackGrouping)}
-        options={[
-          { value: "category", label: "Categoría" },
-          { value: "group", label: "Grupo" },
-        ]}
-      />
-      <SegmentedControl
-        value={stackMetric}
-        onChange={(value) => setStackMetric(value as DistributionMetric)}
-        options={[
-          { value: "expense", label: "Gasto" },
-          { value: "income", label: "Ingreso" },
-        ]}
-      />
-      <SegmentedControl
-        value={stackView}
-        onChange={(value) => setStackView(value as StackView)}
-        options={[
-          { value: "bars", label: "Barras" },
-          { value: "area", label: "Área" },
-        ]}
-      />
-      <select className="input w-auto min-w-[92px] py-2 text-sm" aria-label="Cantidad de series apiladas" value={stackLimit} onChange={(event) => setStackLimit(Number(event.target.value))}>
-        <option value={3}>Top 3</option>
-        <option value={5}>Top 5</option>
-        <option value={8}>Top 8</option>
-      </select>
-    </>
-  );
-
-  const accountControls = (
-    <>
-      <SegmentedControl
-        value={accountMetric}
-        onChange={(value) => {
-          const nextMetric = value as AccountMetric;
-          setAccountMetric(nextMetric);
-          if (nextMetric === "net" && accountView === "donut") {
-            setAccountView("bars");
-          }
-        }}
-        options={[
-          { value: "balance", label: "Saldo" },
-          { value: "income", label: "Ingresos" },
-          { value: "expenses", label: "Gastos" },
-          { value: "net", label: "Neto" },
-          { value: "count", label: "Mov." },
-        ]}
-      />
-      <SegmentedControl
-        value={accountView}
-        onChange={(value) => {
-          if (accountMetric === "net" && value === "donut") return;
-          setAccountView(value as AccountView);
-        }}
-        options={[
-          { value: "bars", label: "Barras" },
-          { value: "donut", label: "Donut" },
-        ]}
-      />
-      <select className="input w-auto min-w-[92px] py-2 text-sm" aria-label="Cantidad de cuentas visibles" value={accountLimit} onChange={(event) => setAccountLimit(Number(event.target.value))}>
-        <option value={4}>Top 4</option>
-        <option value={6}>Top 6</option>
-        <option value={8}>Top 8</option>
-      </select>
-    </>
-  );
-
-  const efficiencyControls = (
-    <SegmentedControl
-      value={efficiencyMetric}
-      onChange={(value) => setEfficiencyMetric(value as EfficiencyMetric)}
-      options={[
-        { value: "savingsRate", label: "% ahorro" },
-        { value: "avgMovement", label: "Media mov." },
-        { value: "netPerMovement", label: "Neto/mov." },
-        { value: "count", label: "Movimientos" },
-      ]}
+  const renderMatrixChart = (expanded: boolean) => (
+    <MatrixHeatmap
+      months={matrixData.months}
+      rows={matrixData.rows}
+      color={matrixMetric === "expense" ? flowColors.expense : flowColors.income}
+      expanded={expanded}
     />
   );
 
-  const compareControls = (
-    <>
-      <SegmentedControl
-        value={compareScope}
-        onChange={(value) => setCompareScope(value as CompareScope)}
-        options={[
-          { value: "group", label: "Grupo" },
-          { value: "category", label: "Categoría" },
-        ]}
-      />
-      <SegmentedControl
-        value={compareValue}
-        onChange={(value) => setCompareValue(value as CompareValue)}
-        options={[
-          { value: "total", label: "Importe" },
-          { value: "count", label: "Frecuencia" },
-          { value: "average", label: "Media" },
-        ]}
-      />
-      <select className="input w-auto min-w-[92px] py-2 text-sm" aria-label="Cantidad de filas comparativas" value={compareLimit} onChange={(event) => setCompareLimit(Number(event.target.value))}>
-        <option value={4}>Top 4</option>
-        <option value={6}>Top 6</option>
-        <option value={8}>Top 8</option>
-      </select>
-    </>
-  );
-
-  const matrixControls = (
-    <>
-      <SegmentedControl
-        value={matrixScope}
-        onChange={(value) => setMatrixScope(value as MatrixScope)}
-        options={[
-          { value: "category", label: "Categoría" },
-          { value: "group", label: "Grupo" },
-        ]}
-      />
-      <SegmentedControl
-        value={matrixMetric}
-        onChange={(value) => setMatrixMetric(value as DistributionMetric)}
-        options={[
-          { value: "expense", label: "Gasto" },
-          { value: "income", label: "Ingreso" },
-        ]}
-      />
-      <select className="input w-auto min-w-[92px] py-2 text-sm" aria-label="Cantidad de series en la matriz" value={matrixLimit} onChange={(event) => setMatrixLimit(Number(event.target.value))}>
-        <option value={4}>Top 4</option>
-        <option value={6}>Top 6</option>
-        <option value={8}>Top 8</option>
-      </select>
-    </>
-  );
-
-  const panelDefinitions: Record<PanelKey, PanelDefinition> = {
+  // ─── Paneles ──────────────────────────────────────────────────
+  const panels: Record<PanelKey, PanelConfig> = {
     trend: {
       title: "Pulso mensual",
-      subtitle: "Compara ingresos, gastos, flujo neto, volumen y porcentaje de ahorro.",
-      accent: "from-sky-500 to-cyan-400",
-      controls: trendControls,
-      renderContent: renderTrendChart,
+      description: [
+        "Ingresos, gastos, flujo neto, volumen y ahorro de cada mes.",
+        summary.topIncomeMonth && `Pico de ingresos: ${formatMonthLabel(summary.topIncomeMonth.month)} (${formatCurrency(summary.topIncomeMonth.total)}).`,
+        summary.topExpenseMonth && `Pico de gasto: ${formatMonthLabel(summary.topExpenseMonth.month)} (${formatCurrency(summary.topExpenseMonth.total)}).`,
+      ].filter(Boolean).join(" "),
+      controls: (
+        <>
+          <Segmented aria-label="Métrica" value={trendMetric} onChange={setTrendMetric} options={[
+            { value: "all", label: "Todo" },
+            { value: "income", label: "Ingresos" },
+            { value: "expenses", label: "Gastos" },
+            { value: "net", label: "Neto" },
+            { value: "count", label: "Mov." },
+            { value: "savingsRate", label: "% ahorro" },
+          ]} />
+          <Segmented aria-label="Tipo de gráfico" value={trendView} onChange={setTrendView} options={[
+            { value: "bars", label: "Barras" },
+            { value: "area", label: "Área" },
+            { value: "line", label: "Líneas" },
+          ]} />
+        </>
+      ),
+      render: renderTrendChart,
     },
     cumulative: {
       title: "Acumulado",
-      subtitle: "Mide la pendiente real del periodo y la progresión del volumen de actividad.",
-      accent: "from-emerald-500 to-teal-400",
-      controls: cumulativeControls,
-      renderContent: renderCumulativeChart,
-    },
-    distribution: {
-      title: "Distribución",
-      subtitle: "Alterna entre categorías o grupos y cambia la variable que define el ranking.",
-      accent: "from-amber-500 to-orange-400",
-      controls: distributionControls,
-      renderContent: renderDistributionChart,
-    },
-    payees: {
-      title: payeeMetric === "expense" ? "Beneficiarios principales" : "Orígenes principales",
-      subtitle: "Ya no sólo por importe: también por frecuencia o ticket medio.",
-      accent: "from-rose-500 to-pink-400",
-      controls: payeeControls,
-      renderContent: renderPayeesChart,
-    },
-    weekday: {
-      title: "Ritmo semanal",
-      subtitle: "Lee la concentración por día con gasto, ingreso, neto o volumen de movimientos.",
-      accent: "from-violet-500 to-indigo-400",
-      controls: weekdayControls,
-      renderContent: renderWeekdayChart,
-    },
-    stack: {
-      title: stackGrouping === "category" ? "Tendencia mensual por categoría" : "Tendencia mensual por grupo",
-      subtitle: "Apila focos y cambia entre lectura en barras o áreas para ver el peso temporal.",
-      accent: "from-cyan-500 to-sky-400",
-      controls: stackControls,
-      renderContent: renderStackChart,
-    },
-    accounts: {
-      title: "Peso por cuenta",
-      subtitle: "Abre el mapa financiero por saldo, ingresos, gastos, neto o volumen.",
-      accent: "from-slate-700 to-slate-500",
-      controls: accountControls,
-      renderContent: renderAccountsChart,
+      description: "La pendiente real del periodo: cuánto sumas mes a mes.",
+      controls: (
+        <>
+          <Segmented aria-label="Métrica acumulada" value={cumulativeMetric} onChange={setCumulativeMetric} options={[
+            { value: "net", label: "Neto" },
+            { value: "income", label: "Ingresos" },
+            { value: "expenses", label: "Gastos" },
+            { value: "count", label: "Mov." },
+          ]} />
+          <Segmented aria-label="Tipo de gráfico" value={cumulativeView} onChange={setCumulativeView} options={[
+            { value: "area", label: "Área" },
+            { value: "line", label: "Línea" },
+          ]} />
+        </>
+      ),
+      render: renderCumulativeChart,
     },
     efficiency: {
       title: "Eficiencia mensual",
-      subtitle: "Sigue la calidad del periodo con ahorro, media por movimiento y densidad de actividad.",
-      accent: "from-emerald-600 to-lime-500",
-      controls: efficiencyControls,
-      renderContent: renderEfficiencyChart,
+      description: "Ahorro, importe medio por movimiento y densidad de actividad.",
+      controls: (
+        <Segmented aria-label="Métrica de eficiencia" value={efficiencyMetric} onChange={setEfficiencyMetric} options={[
+          { value: "savingsRate", label: "% ahorro" },
+          { value: "avgMovement", label: "Media/mov." },
+          { value: "netPerMovement", label: "Neto/mov." },
+          { value: "count", label: "Movimientos" },
+        ]} />
+      ),
+      render: renderEfficiencyChart,
+    },
+    distribution: {
+      title: "Distribución",
+      description: "Qué categorías o grupos concentran el dinero o los movimientos.",
+      controls: (
+        <>
+          <Segmented aria-label="Tipo de flujo" value={distributionMetric} onChange={setDistributionMetric} options={FLOW_OPTIONS} />
+          <Segmented aria-label="Agrupación" value={distributionScope} onChange={setDistributionScope} options={SCOPE_OPTIONS} />
+          <Segmented aria-label="Valor" value={distributionValue} onChange={setDistributionValue} options={RANK_VALUE_OPTIONS} />
+          <Segmented aria-label="Tipo de gráfico" value={distributionView} onChange={setDistributionView} options={[
+            { value: "donut", label: "Donut" },
+            { value: "bars", label: "Ranking" },
+          ]} />
+          <LimitSelect label="Número de series" value={distributionLimit} onChange={setDistributionLimit} options={[5, 8, 12]} />
+        </>
+      ),
+      render: renderDistributionChart,
+    },
+    payees: {
+      title: payeeMetric === "expense" ? "Beneficiarios principales" : "Orígenes principales",
+      description: `Por ${RANK_VALUE_LABEL[payeeValue].toLowerCase()}: a quién pagas o de quién cobras más.`,
+      controls: (
+        <>
+          <Segmented aria-label="Tipo de flujo" value={payeeMetric} onChange={setPayeeMetric} options={FLOW_OPTIONS} />
+          <Segmented aria-label="Valor" value={payeeValue} onChange={setPayeeValue} options={RANK_VALUE_OPTIONS} />
+          <LimitSelect label="Número de beneficiarios" value={payeeLimit} onChange={setPayeeLimit} options={[5, 8, 12]} />
+        </>
+      ),
+      render: renderPayeesChart,
     },
     compare: {
-      title: "Comparativa ingreso/gasto",
-      subtitle: "Enfrenta ambas direcciones de flujo por grupo o categoría en una sola lectura.",
-      accent: "from-fuchsia-500 to-rose-400",
-      controls: compareControls,
-      renderContent: renderCompareChart,
+      title: "Ingresos frente a gastos",
+      description: "Ambas direcciones del flujo por grupo o categoría, en una sola lectura.",
+      controls: (
+        <>
+          <Segmented aria-label="Agrupación" value={compareScope} onChange={setCompareScope} options={[
+            { value: "group", label: "Grupo" },
+            { value: "category", label: "Categoría" },
+          ]} />
+          <Segmented aria-label="Valor" value={compareValue} onChange={setCompareValue} options={RANK_VALUE_OPTIONS} />
+          <LimitSelect label="Número de filas" value={compareLimit} onChange={setCompareLimit} options={[4, 6, 8]} />
+        </>
+      ),
+      render: renderCompareChart,
+    },
+    weekday: {
+      title: "Ritmo semanal",
+      description: "En qué días de la semana se concentra tu actividad.",
+      controls: (
+        <>
+          <Segmented aria-label="Métrica" value={weekdayMetric} onChange={setWeekdayMetric} options={[
+            { value: "expense", label: "Gasto" },
+            { value: "income", label: "Ingreso" },
+            { value: "net", label: "Neto" },
+            { value: "count", label: "Mov." },
+          ]} />
+          <Segmented
+            aria-label="Tipo de gráfico"
+            value={weekdayView}
+            onChange={(v) => { if (!(weekdayMetric === "net" && v === "radar")) setWeekdayView(v); }}
+            options={[
+              { value: "radar", label: "Radar" },
+              { value: "bars", label: "Barras" },
+            ]}
+          />
+        </>
+      ),
+      render: renderWeekdayChart,
+    },
+    stack: {
+      title: stackGrouping === "category" ? "Tendencia por categoría" : "Tendencia por grupo",
+      description: "El peso de cada serie mes a mes, apilado.",
+      controls: (
+        <>
+          <Segmented aria-label="Agrupación" value={stackGrouping} onChange={setStackGrouping} options={SCOPE_OPTIONS} />
+          <Segmented aria-label="Tipo de flujo" value={stackMetric} onChange={setStackMetric} options={FLOW_OPTIONS} />
+          <Segmented aria-label="Tipo de gráfico" value={stackView} onChange={setStackView} options={[
+            { value: "bars", label: "Barras" },
+            { value: "area", label: "Área" },
+          ]} />
+          <LimitSelect label="Número de series apiladas" value={stackLimit} onChange={setStackLimit} options={[3, 5, 8]} />
+        </>
+      ),
+      render: renderStackChart,
     },
     matrix: {
       title: "Matriz temporal",
-      subtitle: "Detecta de un vistazo qué series empujan cada mes y dónde aparecen picos.",
-      accent: "from-slate-600 to-slate-400",
-      controls: matrixControls,
-      renderContent: renderMatrixChart,
+      description: "Qué series empujan cada mes y dónde aparecen los picos.",
+      controls: (
+        <>
+          <Segmented aria-label="Agrupación" value={matrixScope} onChange={setMatrixScope} options={SCOPE_OPTIONS} />
+          <Segmented aria-label="Tipo de flujo" value={matrixMetric} onChange={setMatrixMetric} options={FLOW_OPTIONS} />
+          <LimitSelect label="Número de series" value={matrixLimit} onChange={setMatrixLimit} options={[4, 6, 8]} />
+        </>
+      ),
+      render: renderMatrixChart,
+    },
+    accounts: {
+      title: "Peso por cuenta",
+      description: "Tus cuentas por saldo, ingresos, gastos, neto o volumen.",
+      controls: (
+        <>
+          <Segmented aria-label="Métrica" value={accountMetric} onChange={setAccountMetric} options={[
+            { value: "balance", label: "Saldo" },
+            { value: "income", label: "Ingresos" },
+            { value: "expenses", label: "Gastos" },
+            { value: "net", label: "Neto" },
+            { value: "count", label: "Mov." },
+          ]} />
+          <Segmented
+            aria-label="Tipo de gráfico"
+            value={accountView}
+            onChange={(v) => { if (!(accountMetric === "net" && v === "donut")) setAccountView(v); }}
+            options={[
+              { value: "bars", label: "Ranking" },
+              { value: "donut", label: "Donut" },
+            ]}
+          />
+          <LimitSelect label="Número de cuentas" value={accountLimit} onChange={setAccountLimit} options={[4, 6, 8]} />
+        </>
+      ),
+      render: renderAccountsChart,
     },
   };
 
-  const expandedDefinition = expandedPanel ? panelDefinitions[expandedPanel] : null;
+  const panel = (key: PanelKey, className?: string) => (
+    <AnalyticsPanel panel={panels[key]} onExpand={() => setExpandedPanel(key)} className={className} />
+  );
+
+  // ─── Cabecera y filtros ───────────────────────────────────────
+  const scopeLabel = [
+    selectedAccount?.name ?? "Todas las cuentas",
+    selectedGroup?.name,
+    selectedCategory?.name,
+  ].filter(Boolean).join(" · ");
+
+  const categoryOptionGroups = (groupId ? categoryGroups.filter((g) => g.id === groupId) : categoryGroups).map((g) => ({
+    label: g.name,
+    options: g.categories.map((c) => ({ value: String(c.id), label: c.name })),
+  }));
+
+  const header = (
+    <PageHeader
+      eyebrow={
+        <span className="inline-flex items-center gap-1.5">
+          <CalendarRange className="size-3.5" />
+          {isFetching ? "Actualizando…" : `${rangeLabel(from, to)} · ${summary.visibleMonths} meses · ${summary.transactionCount} movimientos`}
+        </span>
+      }
+      title="Analítica"
+      accent="financiera."
+      description="Explora ingresos y gastos por periodo, cuenta y categoría. Cada panel se puede ampliar."
+      actions={
+        <>
+          <Segmented aria-label="Periodo" value={periodPreset} onChange={applyPreset} options={PRESET_OPTIONS} />
+          <Button variant="outline" size="icon-sm" className="bg-card" onClick={() => refetch()} disabled={isFetching} aria-label="Actualizar" title="Actualizar">
+            <RefreshCcw className={cn("size-3.5", isFetching && "animate-spin")} />
+          </Button>
+        </>
+      }
+    >
+      <AccountSelect accounts={accounts} value={accountId} onChange={setAccountId} />
+      <FilterSelect
+        label="Grupo"
+        allLabel="Todos los grupos"
+        value={groupId ? String(groupId) : ""}
+        onChange={(v) => {
+          const next = v ? Number(v) : undefined;
+          setGroupId(next);
+          if (next && !flatCategories.some((c) => c.id === categoryId && c.groupId === next)) setCategoryId(undefined);
+        }}
+        options={categoryGroups.map((g) => ({ value: String(g.id), label: g.name }))}
+      />
+      <FilterSelect
+        label="Categoría"
+        allLabel="Todas las categorías"
+        value={categoryId ? String(categoryId) : ""}
+        onChange={(v) => setCategoryId(v ? Number(v) : undefined)}
+        groups={categoryOptionGroups}
+      />
+      <div className="flex items-center gap-1.5">
+        <Input
+          type="date"
+          aria-label="Desde"
+          value={from}
+          onChange={(e) => { setPeriodPreset("custom"); setFrom(e.target.value); }}
+          className="h-7 w-[8.75rem] bg-card px-2 text-xs"
+        />
+        <span className="text-xs text-muted-foreground">–</span>
+        <Input
+          type="date"
+          aria-label="Hasta"
+          value={to}
+          onChange={(e) => { setPeriodPreset("custom"); setTo(e.target.value); }}
+          className="h-7 w-[8.75rem] bg-card px-2 text-xs"
+        />
+      </div>
+      {hasFiltersApplied && (
+        <Button variant="ghost" size="sm" onClick={resetFilters} className="gap-1 text-muted-foreground">
+          <X className="size-3.5" /> Limpiar filtros
+        </Button>
+      )}
+    </PageHeader>
+  );
 
   return (
-    <>
-      <div className="space-y-8 animate-fade-in">
-        <div className="card overflow-hidden p-0">
-          <div className="h-1.5 bg-gradient-to-r from-primary-600 via-primary-400 to-primary-200" />
-          <div className="bg-gradient-to-br from-primary-50 via-background to-accent-50 dark:from-primary-500/10 dark:via-background dark:to-accent-500/10 px-6 py-6 sm:px-8 sm:py-7">
-            <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-              <div className="max-w-3xl">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-background/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-primary-700 dark:text-primary-400 shadow-sm ring-1 ring-primary-100 dark:ring-primary-500/20">
-                  <BarChart3 className="h-3.5 w-3.5" /> Analítica financiera
-                </div>
-                <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Lectura completa, ampliable y mucho más configurable</h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-                  Cada panel puede abrirse en grande, casi todos admiten más variables y el tablero añade comparativas, métricas de eficiencia y matriz temporal para explorar patrones que antes no se veían.
-                </p>
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {scopePills.map((pill) => (
-                    <span key={pill} className="badge bg-background text-foreground shadow-sm ring-1 ring-border">
-                      {pill}
-                    </span>
-                  ))}
-                </div>
-              </div>
+    <div>
+      {header}
 
-              <div className="flex flex-col gap-2 rounded-2xl bg-background/85 p-4 shadow-sm ring-1 ring-border">
-                <div className="flex items-center justify-between gap-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">Estado</p>
-                  {isFetching ? (
-                    <span className="badge bg-accent-50 text-accent-700 dark:bg-accent-500/10 dark:text-accent-400">Actualizando</span>
-                  ) : (
-                    <span className="badge bg-success-50 text-success-700 dark:bg-success-500/10 dark:text-success-500">Sincronizado</span>
-                  )}
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="font-mono text-2xl font-bold text-foreground">{analytics.summary.visibleMonths}</span>
-                  <span className="text-sm text-muted-foreground">meses visibles</span>
-                </div>
-                <p className="text-sm text-muted-foreground">{analytics.summary.transactionCount} movimientos analizados.</p>
-                <button type="button" onClick={() => refetch()} className="btn-secondary mt-1 text-sm" disabled={isFetching}>
-                  <RefreshCcw className="h-4 w-4" /> Actualizar
-                </button>
-              </div>
-            </div>
+      <StatGrid>
+        <StatCard
+          label="Saldo actual"
+          value={formatCurrency(summary.totalBalance)}
+          icon={Wallet}
+          hint={scopeLabel}
+          emphasis
+        />
+        <StatCard
+          label="Ingresos"
+          value={formatCurrency(summary.incomeTotal)}
+          icon={ArrowUpRight}
+          hint={`Media ${formatCurrency(summary.monthlyAverageIncome)}/mes`}
+          sparkline={monthlyChartData.length > 2 ? monthlyChartData.map((m) => m.income) : undefined}
+          sparklineColor={flowColors.income}
+        />
+        <StatCard
+          label="Gastos"
+          value={formatCurrency(summary.expenseTotal)}
+          icon={ArrowDownRight}
+          hint={`Media ${formatCurrency(summary.monthlyAverageExpenses)}/mes`}
+          sparkline={monthlyChartData.length > 2 ? monthlyChartData.map((m) => m.expenses) : undefined}
+          sparklineColor={flowColors.expense}
+        />
+        <StatCard
+          label="Flujo neto"
+          value={formatCurrency(summary.netTotal)}
+          icon={Scale}
+          delta={
+            summary.incomeTotal > 0
+              ? {
+                value: formatPct(summary.savingsRate),
+                trend: summary.savingsRate > 0 ? "up" : summary.savingsRate < 0 ? "down" : "flat",
+                label: "de ahorro",
+              }
+              : undefined
+          }
+          sparkline={cumulativeChartData.length > 2 ? cumulativeChartData.map((m) => m.cumulativeNet) : undefined}
+          sparklineColor={flowColors.net}
+        />
+      </StatGrid>
 
-            <div className="mt-6 rounded-2xl border border-border bg-background/80 p-4 shadow-sm">
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  {[
-                    { value: "3m", label: "3M" },
-                    { value: "6m", label: "6M" },
-                    { value: "12m", label: "12M" },
-                    { value: "ytd", label: "YTD" },
-                    { value: "all", label: "Todo" },
-                  ].map((preset) => (
-                    <button
-                      key={preset.value}
-                      type="button"
-                      onClick={() => applyPreset(preset.value as Exclude<PeriodPreset, "custom">)}
-                      className={`rounded-xl px-3 py-2 text-sm font-semibold transition-colors ${
-                        periodPreset === preset.value
-                          ? "bg-foreground text-background"
-                          : "bg-muted text-muted-foreground hover:bg-muted hover:text-foreground"
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-                  <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground" htmlFor="finance-account-filter">Cuenta</label>
-                    <select
-                      id="finance-account-filter"
-                      className="input text-sm"
-                      value={accountId ?? ""}
-                      onChange={(event) => setAccountId(event.target.value ? Number(event.target.value) : undefined)}
-                    >
-                      <option value="">Todas las cuentas</option>
-                      {accounts.map((account) => (
-                        <option key={account.id} value={account.id}>{account.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground" htmlFor="finance-group-filter">Grupo</label>
-                    <select
-                      id="finance-group-filter"
-                      className="input text-sm"
-                      value={groupId ?? ""}
-                      onChange={(event) => {
-                        const nextGroupId = event.target.value ? Number(event.target.value) : undefined;
-                        setGroupId(nextGroupId);
-                        if (!nextGroupId) return;
-                        if (!flatCategories.some((category) => category.id === categoryId && category.groupId === nextGroupId)) {
-                          setCategoryId(undefined);
-                        }
-                      }}
-                    >
-                      <option value="">Todos los grupos</option>
-                      {categoryGroups.map((group) => (
-                        <option key={group.id} value={group.id}>{group.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground" htmlFor="finance-category-filter">Categoría</label>
-                    <select
-                      id="finance-category-filter"
-                      className="input text-sm"
-                      value={categoryId ?? ""}
-                      onChange={(event) => setCategoryId(event.target.value ? Number(event.target.value) : undefined)}
-                    >
-                      <option value="">Todas las categorías</option>
-                      {(groupId ? categoryGroups.filter((group) => group.id === groupId) : categoryGroups).map((group) => (
-                        <optgroup key={group.id} label={group.name}>
-                          {group.categories.map((category) => (
-                            <option key={category.id} value={category.id}>{category.name}</option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground" htmlFor="finance-date-from">Desde</label>
-                    <input
-                      id="finance-date-from"
-                      type="date"
-                      className="input text-sm"
-                      value={from}
-                      onChange={(event) => {
-                        setPeriodPreset("custom");
-                        setFrom(event.target.value);
-                      }}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground" htmlFor="finance-date-to">Hasta</label>
-                    <input
-                      id="finance-date-to"
-                      type="date"
-                      className="input text-sm"
-                      value={to}
-                      onChange={(event) => {
-                        setPeriodPreset("custom");
-                        setTo(event.target.value);
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-4 w-4 text-muted-foreground" />
-                    <span>Los filtros globales recalculan todo el tablero y los gráficos ampliados.</span>
-                  </div>
-                  {hasFiltersApplied ? (
-                    <button type="button" onClick={resetFilters} className="font-semibold text-primary-600 hover:text-primary-800">
-                      Limpiar filtros
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <KpiCard
-            label="Saldo actual"
-            value={formatCurrency(analytics.summary.totalBalance)}
-            subValue={selectedAccount ? selectedAccount.name : "Cuentas activas"}
-            icon={Wallet}
-            color="primary"
-          />
-          <KpiCard
-            label="Ingresos del periodo"
-            value={formatCurrency(analytics.summary.incomeTotal)}
-            subValue={`Media ${formatCurrency(analytics.summary.monthlyAverageIncome)} por mes`}
-            icon={ArrowUpRight}
-            color="success"
-          />
-          <KpiCard
-            label="Gastos del periodo"
-            value={formatCurrency(analytics.summary.expenseTotal)}
-            subValue={`Media ${formatCurrency(analytics.summary.monthlyAverageExpenses)} por mes`}
-            icon={ArrowDownRight}
-            color="danger"
-          />
-          <KpiCard
-            label="Flujo neto"
-            value={formatCurrency(analytics.summary.netTotal)}
-            subValue={`${analytics.summary.transactionCount} movimientos`}
-            icon={Scale}
-            color={positiveNet ? "success" : "danger"}
-            trend={positiveNet ? "up" : analytics.summary.netTotal < 0 ? "down" : "neutral"}
-            trendValue={formatCurrency(Math.abs(analytics.summary.netTotal))}
-          />
-          <KpiCard
-            label="Mes más gastador"
-            value={analytics.summary.topExpenseMonth ? formatCurrency(analytics.summary.topExpenseMonth.total) : "—"}
-            subValue={analytics.summary.topExpenseMonth ? formatMonthLabel(analytics.summary.topExpenseMonth.month) : "Sin gasto en el rango"}
-            icon={CalendarRange}
-            color="danger"
-          />
-          <KpiCard
-            label="Tasa de ahorro"
-            value={analytics.summary.incomeTotal > 0 ? formatPercent(analytics.summary.savingsRate) : "—"}
-            subValue={analytics.summary.topIncomeMonth ? `Pico de ingresos: ${formatMonthLabel(analytics.summary.topIncomeMonth.month)}` : "Sin ingresos en el rango"}
-            icon={PiggyBank}
-            color="accent"
-            trend={savingsTrend}
-            trendValue={analytics.summary.incomeTotal > 0 ? formatPercent(Math.abs(analytics.summary.savingsRate)) : undefined}
-          />
-        </div>
-
-        {!hasTransactions ? (
-          <div className="card p-8 text-center">
-            <p className="text-lg font-semibold text-foreground">No hay movimientos conciliados para esta selección</p>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Ajusta el rango, cambia la categoría o revisa los movimientos pendientes si esperabas ver actividad aquí.
-            </p>
-            {hasFiltersApplied ? (
-              <button type="button" onClick={resetFilters} className="btn-primary mt-5">
-                Ver últimos 12 meses
-              </button>
-            ) : null}
-          </div>
-        ) : (
-          <>
-            <AnalyticsPanel {...panelDefinitions.trend} onExpand={() => setExpandedPanel("trend")}>
-              {panelDefinitions.trend.renderContent(false)}
-            </AnalyticsPanel>
-
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-              <AnalyticsPanel {...panelDefinitions.cumulative} onExpand={() => setExpandedPanel("cumulative")}>
-                {panelDefinitions.cumulative.renderContent(false)}
-              </AnalyticsPanel>
-              <AnalyticsPanel {...panelDefinitions.distribution} onExpand={() => setExpandedPanel("distribution")}>
-                {panelDefinitions.distribution.renderContent(false)}
-              </AnalyticsPanel>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-              <AnalyticsPanel {...panelDefinitions.payees} onExpand={() => setExpandedPanel("payees")}>
-                {panelDefinitions.payees.renderContent(false)}
-              </AnalyticsPanel>
-              <AnalyticsPanel {...panelDefinitions.weekday} onExpand={() => setExpandedPanel("weekday")}>
-                {panelDefinitions.weekday.renderContent(false)}
-              </AnalyticsPanel>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-              <AnalyticsPanel {...panelDefinitions.efficiency} onExpand={() => setExpandedPanel("efficiency")}>
-                {panelDefinitions.efficiency.renderContent(false)}
-              </AnalyticsPanel>
-              <AnalyticsPanel {...panelDefinitions.compare} onExpand={() => setExpandedPanel("compare")}>
-                {panelDefinitions.compare.renderContent(false)}
-              </AnalyticsPanel>
-            </div>
-
-            <AnalyticsPanel {...panelDefinitions.stack} onExpand={() => setExpandedPanel("stack")}>
-              {panelDefinitions.stack.renderContent(false)}
-            </AnalyticsPanel>
-
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-              <AnalyticsPanel {...panelDefinitions.accounts} onExpand={() => setExpandedPanel("accounts")}>
-                {panelDefinitions.accounts.renderContent(false)}
-              </AnalyticsPanel>
-              <AnalyticsPanel {...panelDefinitions.matrix} onExpand={() => setExpandedPanel("matrix")}>
-                {panelDefinitions.matrix.renderContent(false)}
-              </AnalyticsPanel>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <div className="card p-5">
-                <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-600 dark:bg-primary-500/10 dark:text-primary-400">
-                    <Target className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Foco</p>
-                    <p className="text-sm font-semibold text-foreground">Serie dominante</p>
-                  </div>
-                </div>
-                <p className="text-xl font-bold text-foreground">{distributionData[0]?.label ?? "—"}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {distributionData[0]
-                    ? `${getValueFormatter(distributionValueMode)(distributionData[0].value)} · ${formatPercent(distributionData[0].share)}`
-                    : "Sin serie dominante"}
-                </p>
-              </div>
-
-              <div className="card p-5">
-                <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-success-50 text-success-600 dark:bg-success-500/10 dark:text-success-500">
-                    <Activity className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cadencia</p>
-                    <p className="text-sm font-semibold text-foreground">Día dominante</p>
-                  </div>
-                </div>
-                <p className="text-xl font-bold text-foreground">{topWeekday?.label ?? "—"}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {topWeekday ? getValueFormatter(weekdayValueMode)(Math.abs(topWeekday.value)) : "Sin patrón semanal"}
-                </p>
-              </div>
-
-              <div className="card p-5">
-                <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-50 text-accent-600 dark:bg-accent-500/10 dark:text-accent-400">
-                    <Layers3 className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Mix</p>
-                    <p className="text-sm font-semibold text-foreground">Series activas</p>
-                  </div>
-                </div>
-                <p className="text-xl font-bold text-foreground">{stackTrend.series.length}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{stackGrouping === "category" ? "Categorías" : "Grupos"} visibles en el apilado.</p>
-              </div>
-
-              <div className="card p-5">
-                <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-foreground">
-                    <Landmark className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Cuenta líder</p>
-                    <p className="text-sm font-semibold text-foreground">Mayor peso</p>
-                  </div>
-                </div>
-                <p className="text-xl font-bold text-foreground">{accountChartData[0]?.label ?? "—"}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {accountChartData[0] ? getValueFormatter(accountValueMode)(accountChartData[0].value) : "Sin datos de cuenta"}
-                </p>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-
-      {expandedDefinition ? (
-        <ExpandedChartDialog
-          title={expandedDefinition.title}
-          subtitle={expandedDefinition.subtitle}
-          controls={expandedDefinition.controls}
-          onClose={() => setExpandedPanel(null)}
+      {!hasTransactions ? (
+        <EmptyState
+          className="mt-6"
+          icon={CalendarRange}
+          title="Sin movimientos para esta selección"
+          description="Ajusta el periodo o los filtros, o revisa los movimientos pendientes si esperabas ver actividad."
         >
-          {expandedDefinition.renderContent(true)}
-        </ExpandedChartDialog>
-      ) : null}
-    </>
+          {hasFiltersApplied && <Button variant="outline" onClick={resetFilters}>Ver últimos 12 meses</Button>}
+        </EmptyState>
+      ) : (
+        <>
+          <AnalyticsSection title="Evolución" description="Cómo se mueve tu dinero mes a mes.">
+            {panel("trend")}
+            <div className="grid gap-6 xl:grid-cols-2">
+              {panel("cumulative")}
+              {panel("efficiency")}
+            </div>
+          </AnalyticsSection>
+
+          <AnalyticsSection title="Reparto" description="Dónde se concentran ingresos y gastos.">
+            <div className="grid gap-6 xl:grid-cols-2">
+              {panel("distribution")}
+              {panel("payees")}
+            </div>
+            <div className="grid gap-6 xl:grid-cols-2">
+              {panel("compare")}
+              {panel("weekday")}
+            </div>
+          </AnalyticsSection>
+
+          <AnalyticsSection title="Categorías en el tiempo" description="Qué series pesan cada mes y cuándo aparecen los picos.">
+            {panel("stack")}
+            {panel("matrix")}
+          </AnalyticsSection>
+
+          <AnalyticsSection title="Cuentas y claves" description="Tus cuentas y lo más destacado según los paneles de arriba.">
+            <div className="grid gap-6 xl:grid-cols-2">
+              {panel("accounts")}
+              <SectionCard title="Lecturas rápidas" description="Se recalculan con los filtros y controles de cada panel">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Insight
+                    label="Serie dominante"
+                    value={distributionData[0]?.label ?? "—"}
+                    hint={distributionData[0] ? `${fmtValue(distributionMode)(distributionData[0].value)} · ${formatPct(distributionData[0].share)}` : "Sin datos en Distribución"}
+                  />
+                  <Insight
+                    label="Día con más actividad"
+                    value={topWeekday && topWeekday.value !== 0 ? topWeekday.label : "—"}
+                    hint={topWeekday && topWeekday.value !== 0 ? fmtValue(weekdayMode)(Math.abs(topWeekday.value)) : "Sin patrón semanal"}
+                  />
+                  <Insight
+                    label="Series apiladas"
+                    value={String(stackTrend.series.length)}
+                    hint={`${stackGrouping === "category" ? "Categorías" : "Grupos"} en la tendencia`}
+                  />
+                  <Insight
+                    label="Cuenta con más peso"
+                    value={accountChartData[0]?.label ?? "—"}
+                    hint={accountChartData[0] ? fmtValue(accountMode)(accountChartData[0].value) : "Sin datos de cuenta"}
+                  />
+                </div>
+                <a href="/app/transactions" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-5 w-full")}>
+                  Ver movimientos
+                </a>
+              </SectionCard>
+            </div>
+          </AnalyticsSection>
+        </>
+      )}
+
+      <ExpandedPanelDialog panel={expandedPanel ? panels[expandedPanel] : null} onClose={() => setExpandedPanel(null)} />
+    </div>
   );
 }
 

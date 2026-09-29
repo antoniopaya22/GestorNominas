@@ -17,7 +17,7 @@ import {
   chartAxis, chartGrid, chartBarCursor, chartColors, type StatDelta,
 } from "./app";
 import {
-  AccountSelect, ChartLegend, RankedList, adaptiveColor, flowColors, paletteColor, presetRange, PRESET_LABELS,
+  AccountSelect, ChartLegend, PieTooltip, RankedList, adaptiveColor, flowColors, paletteColor, presetRange, PRESET_LABELS,
   shortenLabel, type RangePreset,
 } from "./finance/finance-ui";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -264,7 +264,7 @@ function FinanceDashboardView() {
                         <Pie data={derived.categorySlices} dataKey="value" nameKey="label" innerRadius={52} outerRadius={76} paddingAngle={2} strokeWidth={0}>
                           {derived.categorySlices.map((s) => <Cell key={s.key} fill={s.color} />)}
                         </Pie>
-                        <Tooltip content={<ChartTooltip />} />
+                        <Tooltip content={<PieTooltip format={formatCurrency} />} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">

@@ -248,3 +248,56 @@ export function ChartEmpty({ message, height = 280 }: { message: string; height?
     </div>
   );
 }
+
+// ─── Tooltips ───────────────────────────────────────────────────
+interface TooltipEntry {
+  name?: string;
+  value?: number;
+  color?: string;
+  payload?: Record<string, unknown>;
+}
+
+/** Como ui/ChartTooltip, pero con formato por serie (ejes con unidades distintas). */
+export function SeriesTooltip({ active, payload, label, format, formatters }: {
+  active?: boolean;
+  payload?: TooltipEntry[];
+  label?: string;
+  format: (value: number) => string;
+  formatters?: Record<string, (value: number) => string>;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="min-w-40 rounded-lg border border-border bg-popover px-3 py-2.5 text-xs text-popover-foreground shadow-lg shadow-black/10">
+      {label != null && <p className="mb-1.5 font-medium text-muted-foreground">{label}</p>}
+      <div className="space-y-1">
+        {payload.map((entry, i) => {
+          const name = String(entry.name ?? "");
+          const fmt = formatters?.[name] ?? format;
+          return (
+            <div key={i} className="flex items-center gap-2">
+              <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: entry.color }} />
+              <span className="text-muted-foreground">{name}</span>
+              <span className="ml-auto pl-3 font-medium tabular-nums text-foreground">{fmt(Number(entry.value ?? 0))}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Tooltip de tartas: el color viene en el payload del sector, no en la entrada. */
+export function PieTooltip({ active, payload, format }: { active?: boolean; payload?: TooltipEntry[]; format: (value: number) => string }) {
+  if (!active || !payload?.length) return null;
+  const entry = payload[0];
+  const color = (entry.payload?.color as string | undefined) ?? (entry.payload?.fill as string | undefined) ?? entry.color;
+  return (
+    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg shadow-black/10">
+      <div className="flex items-center gap-2">
+        <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+        <span className="text-muted-foreground">{entry.name}</span>
+        <span className="ml-auto pl-3 font-medium tabular-nums text-foreground">{format(Number(entry.value ?? 0))}</span>
+      </div>
+    </div>
+  );
+}
