@@ -109,7 +109,7 @@ function formatCadence(cadence: RecurringCadence, intervalCount: number): string
 }
 
 function SortIcon({ field, currentSort, currentDir }: { field: SortField; currentSort: SortField; currentDir: SortDir }) {
-  if (currentSort !== field) return <ChevronsUpDown className="w-3 h-3 text-surface-300" />;
+  if (currentSort !== field) return <ChevronsUpDown className="w-3 h-3 text-muted-foreground" />;
   return currentDir === "asc"
     ? <ChevronUp className="w-3 h-3 text-primary-500" />
     : <ChevronDown className="w-3 h-3 text-primary-500" />;
@@ -557,7 +557,7 @@ function TransactionsView() {
                 <label className="sr-only" htmlFor="tx-account-select">Seleccionar cuenta</label>
                 <select
                   id="tx-account-select"
-                  className="bg-transparent text-surface-900 font-bold text-base cursor-pointer border-none p-0 pr-6 focus:outline-none focus:ring-0 appearance-none w-full"
+                  className="bg-transparent text-foreground font-bold text-base cursor-pointer border-none p-0 pr-6 focus:outline-none focus:ring-0 appearance-none w-full"
                   value={selectedAccountId ?? ""}
                   onChange={(e) => setSelectedAccountId(e.target.value ? Number(e.target.value) : null)}
                   style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 0 center" }}
@@ -568,13 +568,13 @@ function TransactionsView() {
                   ))}
                 </select>
                 {selectedAccount && (
-                  <p className="text-xs text-surface-400 mt-0.5">{selectedAccount.type === "credit_card" ? "Tarjeta de crédito" : selectedAccount.type === "bank" ? "Cuenta bancaria" : selectedAccount.type === "cash" ? "Efectivo" : selectedAccount.type === "investment" ? "Inversión" : "Otra"}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{selectedAccount.type === "credit_card" ? "Tarjeta de crédito" : selectedAccount.type === "bank" ? "Cuenta bancaria" : selectedAccount.type === "cash" ? "Efectivo" : selectedAccount.type === "investment" ? "Inversión" : "Otra"}</p>
                 )}
               </div>
             </div>
             {selectedAccount && (
               <div className="text-right flex-shrink-0">
-                <p className="text-xs text-surface-400 uppercase tracking-wider">Saldo</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Saldo</p>
                 <p className={`text-lg font-bold font-mono tabular-nums ${selectedAccount.balance >= 0 ? "text-primary-700" : "text-danger-600"}`}>
                   {formatCurrency(selectedAccount.balance)}
                 </p>
@@ -709,7 +709,7 @@ function TransactionsView() {
           </div>
           <div className="relative">
             <label className="sr-only" htmlFor="tx-search">Buscar transacciones</label>
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400" aria-hidden="true" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
             <input
               id="tx-search"
               type="text"
@@ -729,11 +729,11 @@ function TransactionsView() {
 
       {showCategoryManager && (
         <div className="card p-0 overflow-hidden mb-3">
-          <div className="px-4 py-4 sm:px-5 sm:py-4 border-b border-surface-100">
+          <div className="px-4 py-4 sm:px-5 sm:py-4 border-b border-border">
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div>
-                <h3 className="font-semibold text-surface-900 text-sm">Alta rápida de grupos y categorías</h3>
-                <p className="text-xs text-surface-500 mt-1">
+                <h3 className="font-semibold text-foreground text-sm">Alta rápida de grupos y categorías</h3>
+                <p className="text-xs text-muted-foreground mt-1">
                   Crea nuevas categorías sin salir de transacciones y selecciónalas después en el movimiento.
                 </p>
               </div>
@@ -745,11 +745,11 @@ function TransactionsView() {
           </div>
 
           <div className="p-5 grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <form onSubmit={handleCreateGroup} className="rounded-2xl border border-surface-200 bg-surface-50/70 p-4">
+            <form onSubmit={handleCreateGroup} className="rounded-2xl border border-border bg-muted/70 p-4">
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div>
-                  <h4 className="text-sm font-semibold text-surface-900">Nuevo grupo</h4>
-                  <p className="text-xs text-surface-500 mt-1">Agrupa categorías como vivienda, ahorro o transporte.</p>
+                  <h4 className="text-sm font-semibold text-foreground">Nuevo grupo</h4>
+                  <p className="text-xs text-muted-foreground mt-1">Agrupa categorías como vivienda, ahorro o transporte.</p>
                 </div>
               </div>
               <div className="flex gap-2 flex-wrap">
@@ -766,11 +766,11 @@ function TransactionsView() {
               </div>
             </form>
 
-            <form onSubmit={handleCreateCategory} className="rounded-2xl border border-surface-200 bg-surface-50/70 p-4">
+            <form onSubmit={handleCreateCategory} className="rounded-2xl border border-border bg-muted/70 p-4">
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div>
-                  <h4 className="text-sm font-semibold text-surface-900">Nueva categoría</h4>
-                  <p className="text-xs text-surface-500 mt-1">La categoría nueva queda disponible al instante en el formulario.</p>
+                  <h4 className="text-sm font-semibold text-foreground">Nueva categoría</h4>
+                  <p className="text-xs text-muted-foreground mt-1">La categoría nueva queda disponible al instante en el formulario.</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)_auto] gap-2 items-start">
@@ -796,24 +796,24 @@ function TransactionsView() {
                 </button>
               </div>
               {categoryGroups.length === 0 && (
-                <p className="text-xs text-surface-500 mt-3">Primero crea un grupo para poder añadir categorías.</p>
+                <p className="text-xs text-muted-foreground mt-3">Primero crea un grupo para poder añadir categorías.</p>
               )}
             </form>
           </div>
 
           {categoryGroups.length > 0 && (
-            <div className="border-t border-surface-100 px-5 py-4">
+            <div className="border-t border-border px-5 py-4">
               <div className="flex flex-wrap gap-3">
                 {categoryGroups.map((group) => (
-                  <div key={group.id} className="rounded-2xl border border-surface-200 bg-white px-3 py-2 min-w-[180px]">
-                    <p className="text-sm font-semibold text-surface-900">{group.name}</p>
+                  <div key={group.id} className="rounded-2xl border border-border bg-white px-3 py-2 min-w-[180px]">
+                    <p className="text-sm font-semibold text-foreground">{group.name}</p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {group.categories.length > 0 ? group.categories.map((category) => (
-                        <span key={category.id} className="rounded-full bg-surface-100 px-2 py-0.5 text-[11px] font-medium text-surface-600">
+                        <span key={category.id} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                           {category.name}
                         </span>
                       )) : (
-                        <span className="text-[11px] text-surface-400">Sin categorías</span>
+                        <span className="text-[11px] text-muted-foreground">Sin categorías</span>
                       )}
                     </div>
                   </div>
@@ -829,12 +829,12 @@ function TransactionsView() {
         <button
           type="button"
           onClick={() => setShowRecurringPanel((v) => !v)}
-          className="w-full px-4 py-3 sm:px-5 flex items-center justify-between gap-3 hover:bg-surface-50 transition-colors"
+          className="w-full px-4 py-3 sm:px-5 flex items-center justify-between gap-3 hover:bg-muted transition-colors"
         >
           <div className="flex items-center gap-2">
             <Repeat className="w-4 h-4 text-primary-600" aria-hidden="true" />
-            <h3 className="font-semibold text-surface-900 text-sm">Pagos recurrentes</h3>
-            <span className="text-xs text-surface-400 hidden sm:inline">
+            <h3 className="font-semibold text-foreground text-sm">Pagos recurrentes</h3>
+            <span className="text-xs text-muted-foreground hidden sm:inline">
               Las instancias se crean como pendientes y no afectan al saldo hasta que las marques como validadas.
             </span>
           </div>
@@ -844,14 +844,14 @@ function TransactionsView() {
               <span className="text-xs font-bold text-primary-800 font-mono">{visibleRecurringRules.length}</span>
               <span className="text-xs font-medium text-primary-700">activos o pausados</span>
             </div>
-            {showRecurringPanel ? <ChevronUp className="w-4 h-4 text-surface-400" /> : <ChevronDown className="w-4 h-4 text-surface-400" />}
+            {showRecurringPanel ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
           </div>
         </button>
 
-        {showRecurringPanel && <div className="border-t border-surface-100">
+        {showRecurringPanel && <div className="border-t border-border">
 
         {showRecurringForm && (
-          <form onSubmit={handleCreateRecurring} className="p-5 border-b border-surface-100">
+          <form onSubmit={handleCreateRecurring} className="p-5 border-b border-border">
             <div className="flex gap-2 mb-4">
               {(["expense", "income"] as const).map((type) => {
                 const cfg = TYPE_CONFIG[type];
@@ -863,7 +863,7 @@ function TransactionsView() {
                     className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-all ${
                       recurringType === type
                         ? `${cfg.bg} ${cfg.color} border-current`
-                        : "border-surface-200 text-surface-500 hover:bg-surface-50"
+                        : "border-border text-muted-foreground hover:bg-muted"
                     }`}
                   >
                     {cfg.label}
@@ -874,14 +874,14 @@ function TransactionsView() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3 mb-4">
               <div>
-                <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Cuenta</label>
+                <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Cuenta</label>
                 <select className="input text-sm" value={recurringAccountId} onChange={(e) => setRecurringAccountId(e.target.value ? Number(e.target.value) : "")}> 
                   <option value="">Seleccionar...</option>
                   {activeAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Categoría</label>
+                <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Categoría</label>
                 <select className="input text-sm" value={recurringCategoryId} onChange={(e) => setRecurringCategoryId(e.target.value ? Number(e.target.value) : "")}> 
                   <option value="">Sin categoría</option>
                   {categoryGroups.map((group) => (
@@ -892,7 +892,7 @@ function TransactionsView() {
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Frecuencia</label>
+                <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Frecuencia</label>
                 <select className="input text-sm" value={recurringCadence} onChange={(e) => setRecurringCadence(e.target.value as RecurringCadence)}>
                   <option value="weekly">Semanal</option>
                   <option value="monthly">Mensual</option>
@@ -900,33 +900,33 @@ function TransactionsView() {
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Cada N</label>
+                <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Cada N</label>
                 <input type="number" min="1" max="12" step="1" className="input text-sm" value={recurringIntervalCount} onChange={(e) => setRecurringIntervalCount(Math.max(1, Math.min(12, Number(e.target.value) || 1)))} title={`Repetir cada ${recurringIntervalCount} ${recurringCadence === "weekly" ? "semana(s)" : recurringCadence === "yearly" ? "año(s)" : "mes(es)"}`} />
               </div>
               <div>
-                <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Inicio</label>
+                <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Inicio</label>
                 <input type="date" className="input text-sm" value={recurringStartDate} onChange={(e) => setRecurringStartDate(e.target.value)} />
               </div>
               <div>
-                <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Fin</label>
+                <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Fin</label>
                 <input type="date" className="input text-sm" value={recurringEndDate} onChange={(e) => setRecurringEndDate(e.target.value)} />
               </div>
               <div>
-                <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Importe</label>
+                <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Importe</label>
                 <input type="number" min="0.01" step="0.01" className="input text-sm" value={recurringAmount} onChange={(e) => setRecurringAmount(e.target.value)} placeholder="0,00" />
               </div>
               <div className="sm:col-span-2 lg:col-span-3">
-                <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Beneficiario</label>
+                <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Beneficiario</label>
                 <input type="text" className="input text-sm" value={recurringPayee} onChange={(e) => setRecurringPayee(e.target.value)} placeholder="Ej: Spotify o Nómina" />
               </div>
               <div className="sm:col-span-2 lg:col-span-4">
-                <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Nota</label>
+                <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Nota</label>
                 <input type="text" className="input text-sm" value={recurringMemo} onChange={(e) => setRecurringMemo(e.target.value)} placeholder="Opcional" />
               </div>
             </div>
 
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <p className="text-xs text-surface-500">
+              <p className="text-xs text-muted-foreground">
                 {editingRecurringId
                   ? "Al guardar los cambios, se regenerarán las instancias pendientes de esta regla."
                   : "Si partes de una transacción ya existente, usa el botón de recurrencia de esa fila para arrancar desde el siguiente vencimiento."}
@@ -948,14 +948,14 @@ function TransactionsView() {
         {visibleRecurringRules.length > 0 ? (
           <div className="p-4 grid grid-cols-1 xl:grid-cols-2 gap-3">
             {visibleRecurringRules.map((rule) => (
-              <div key={rule.id} className={`rounded-2xl border p-4 ${rule.active ? "border-surface-200 bg-white" : "border-surface-100 bg-surface-50/80"}`}>
+              <div key={rule.id} className={`rounded-2xl border p-4 ${rule.active ? "border-border bg-white" : "border-border bg-muted/80"}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-surface-900">
+                      <p className="font-semibold text-foreground">
                         {rule.payee || (rule.type === "expense" ? "Pago recurrente" : "Ingreso recurrente")}
                       </p>
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${rule.active ? "bg-success-50 text-success-700" : "bg-surface-100 text-surface-500"}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${rule.active ? "bg-success-50 text-success-700" : "bg-muted text-muted-foreground"}`}>
                         {rule.active ? "Activa" : "Pausada"}
                       </span>
                       {rule.pendingCount > 0 && (
@@ -964,7 +964,7 @@ function TransactionsView() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-surface-500 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       {rule.accountName}
                       {rule.categoryName ? ` · ${rule.groupName}: ${rule.categoryName}` : ""}
                     </p>
@@ -975,7 +975,7 @@ function TransactionsView() {
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                  <span className="rounded-full bg-surface-100 px-2.5 py-1 font-medium text-surface-600">
+                  <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-muted-foreground">
                     {formatCadence(rule.cadence, rule.intervalCount)}
                   </span>
                   <span className="rounded-full bg-primary-50 px-2.5 py-1 font-medium text-primary-700">
@@ -984,7 +984,7 @@ function TransactionsView() {
                 </div>
 
                 {rule.memo && (
-                  <p className="mt-3 text-xs text-surface-500">
+                  <p className="mt-3 text-xs text-muted-foreground">
                     {rule.memo}
                   </p>
                 )}
@@ -1021,7 +1021,7 @@ function TransactionsView() {
             ))}
           </div>
         ) : !showRecurringForm ? (
-          <div className="px-4 py-5 text-sm text-surface-500">
+          <div className="px-4 py-5 text-sm text-muted-foreground">
             {selectedAccount
               ? `No hay pagos recurrentes programados en ${selectedAccount.name}.`
               : "No hay pagos recurrentes programados todavía."}
@@ -1035,14 +1035,14 @@ function TransactionsView() {
         <form onSubmit={handleTransactionSubmit} className="card p-5 mb-3">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="font-semibold text-surface-900 text-sm">
+              <h3 className="font-semibold text-foreground text-sm">
                 {editingTransactionId
                   ? "Editar transacción"
                   : formType === "transfer"
                     ? "Nuevo movimiento entre cuentas"
                     : "Nueva transacción"}
               </h3>
-              <p className="text-xs text-surface-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 {editingTransactionId
                   ? "Actualiza importe, cuenta, categoría o notas y guarda los cambios."
                   : formType === "transfer"
@@ -1050,8 +1050,8 @@ function TransactionsView() {
                     : "Añade un gasto, ingreso o cambia el tipo a transferencia si mueves saldo entre cuentas."}
               </p>
             </div>
-            <button type="button" onClick={resetForm} className="p-1 hover:bg-surface-100 rounded-lg" aria-label="Cerrar formulario">
-              <X className="w-4 h-4 text-surface-400" aria-hidden="true" />
+            <button type="button" onClick={resetForm} className="p-1 hover:bg-muted rounded-lg" aria-label="Cerrar formulario">
+              <X className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
             </button>
           </div>
 
@@ -1071,7 +1071,7 @@ function TransactionsView() {
                   className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium border transition-all ${
                     formType === t
                       ? `${cfg.bg} ${cfg.color} border-current`
-                      : "border-surface-200 text-surface-500 hover:bg-surface-50"
+                      : "border-border text-muted-foreground hover:bg-muted"
                   }`}
                 >
                   {cfg.label}
@@ -1083,7 +1083,7 @@ function TransactionsView() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
             {!selectedAccountId && (
               <div>
-                <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Cuenta</label>
+                <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Cuenta</label>
                 <select className="input text-sm" value={formAccountId} onChange={(e) => setFormAccountId(e.target.value ? Number(e.target.value) : "")}>
                   <option value="">Seleccionar...</option>
                   {activeAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -1092,7 +1092,7 @@ function TransactionsView() {
             )}
             {formType === "transfer" && (
               <div>
-                <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Destino</label>
+                <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Destino</label>
                 <select className="input text-sm" value={formTargetAccountId} onChange={(e) => setFormTargetAccountId(e.target.value ? Number(e.target.value) : "")}>
                   <option value="">Seleccionar...</option>
                   {activeAccounts.filter((a) => a.id !== (formAccountId || selectedAccountId)).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -1102,7 +1102,7 @@ function TransactionsView() {
             {formType !== "transfer" && (
               <div>
                 <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider">Categoría</label>
+                  <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Categoría</label>
                   <button
                     type="button"
                     onClick={() => setShowCategoryManager(true)}
@@ -1122,24 +1122,24 @@ function TransactionsView() {
               </div>
             )}
             <div>
-              <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Fecha</label>
+              <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Fecha</label>
               <input type="date" className="input text-sm" value={formDate} onChange={(e) => setFormDate(e.target.value)} />
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Beneficiario</label>
+              <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Beneficiario</label>
               <input type="text" className="input text-sm" value={formPayee} onChange={(e) => setFormPayee(e.target.value)} placeholder={formType === "transfer" ? "Opcional" : "Ej: Mercadona"} />
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Importe</label>
+              <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Importe</label>
               <input type="number" min="0.01" step="0.01" className="input text-sm" value={formAmount} onChange={(e) => setFormAmount(e.target.value)} placeholder="0,00" />
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Nota</label>
+              <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Nota</label>
               <input type="text" className="input text-sm" value={formMemo} onChange={(e) => setFormMemo(e.target.value)} placeholder="Opcional" />
             </div>
           </div>
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-xs text-surface-500">
+            <p className="text-xs text-muted-foreground">
               {formType === "transfer"
                 ? "El sistema refleja el cargo en la cuenta origen y el abono en la cuenta destino."
                 : "Puedes crear grupos y categorías desde el bloque superior sin perder lo que ya has escrito."}
@@ -1173,23 +1173,23 @@ function TransactionsView() {
         <div className="card overflow-hidden">
           <div className="overflow-auto" style={{ maxHeight: "calc(100vh - 16rem)" }}>
             <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10 bg-surface-50">
-                <tr className="border-b border-surface-200 text-surface-500 text-xs uppercase tracking-wider">
+              <thead className="sticky top-0 z-10 bg-muted">
+                <tr className="border-b border-border text-muted-foreground text-xs uppercase tracking-wider">
                   <th className="px-3 py-2.5 text-left font-semibold w-10"></th>
                   <th
-                    className="px-3 py-2.5 text-left font-semibold cursor-pointer select-none hover:text-surface-700 transition-colors"
+                    className="px-3 py-2.5 text-left font-semibold cursor-pointer select-none hover:text-foreground transition-colors"
                     onClick={() => toggleSort("date")}
                   >
                     <span className="inline-flex items-center gap-1">Fecha <SortIcon field="date" currentSort={sortBy} currentDir={sortDir} /></span>
                   </th>
                   <th
-                    className="px-3 py-2.5 text-left font-semibold cursor-pointer select-none hover:text-surface-700 transition-colors"
+                    className="px-3 py-2.5 text-left font-semibold cursor-pointer select-none hover:text-foreground transition-colors"
                     onClick={() => toggleSort("payee")}
                   >
                     <span className="inline-flex items-center gap-1">Beneficiario <SortIcon field="payee" currentSort={sortBy} currentDir={sortDir} /></span>
                   </th>
                   <th
-                    className="px-3 py-2.5 text-left font-semibold cursor-pointer select-none hover:text-surface-700 transition-colors"
+                    className="px-3 py-2.5 text-left font-semibold cursor-pointer select-none hover:text-foreground transition-colors"
                     onClick={() => toggleSort("category")}
                   >
                     <span className="inline-flex items-center gap-1">Categoría <SortIcon field="category" currentSort={sortBy} currentDir={sortDir} /></span>
@@ -1199,7 +1199,7 @@ function TransactionsView() {
                   )}
                   <th className="px-3 py-2.5 text-left font-semibold">Nota</th>
                   <th
-                    className="px-3 py-2.5 text-right font-semibold cursor-pointer select-none hover:text-surface-700 transition-colors"
+                    className="px-3 py-2.5 text-right font-semibold cursor-pointer select-none hover:text-foreground transition-colors"
                     onClick={() => toggleSort("amount")}
                   >
                     <span className="inline-flex items-center gap-1 justify-end">{isCreditCard ? "Importe" : "Salida"} <SortIcon field="amount" currentSort={sortBy} currentDir={sortDir} /></span>
@@ -1210,7 +1210,7 @@ function TransactionsView() {
                   <th className="px-3 py-2.5 text-center font-semibold w-10"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-surface-100">
+              <tbody className="divide-y divide-border">
                 {transactions.map((tx) => {
                   const cfg = TYPE_CONFIG[tx.type];
                   const outflow = tx.type === "expense" || tx.type === "transfer" ? tx.amount : null;
@@ -1221,15 +1221,15 @@ function TransactionsView() {
                   return (
                     <tr
                       key={tx.id}
-                      className="group hover:bg-surface-50 transition-colors"
+                      className="group hover:bg-muted transition-colors"
                     >
                       <td className="px-3 py-2">
                         <span className={`inline-flex w-3 h-3 rounded-sm ${cfg.bg}`} />
                       </td>
-                      <td className="px-3 py-2 text-surface-700 font-mono tabular-nums whitespace-nowrap">
+                      <td className="px-3 py-2 text-foreground font-mono tabular-nums whitespace-nowrap">
                         {formatDateShort(tx.date)}
                       </td>
-                      <td className="px-3 py-2 text-surface-900 font-medium">
+                      <td className="px-3 py-2 text-foreground font-medium">
                         <div className="flex items-center gap-1.5">
                           {tx.type === "transfer" && (
                             <ArrowLeftRight className="w-3.5 h-3.5 text-primary-400 flex-shrink-0" />
@@ -1253,7 +1253,7 @@ function TransactionsView() {
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-surface-500">
+                      <td className="px-3 py-2 text-muted-foreground">
                         <span className="truncate max-w-[200px] block">
                           {tx.type === "transfer"
                             ? tx.targetAccountName
@@ -1265,11 +1265,11 @@ function TransactionsView() {
                         </span>
                       </td>
                       {!selectedAccountId && (
-                        <td className="px-3 py-2 text-surface-500 whitespace-nowrap">
+                        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
                           {tx.accountName}
                         </td>
                       )}
-                      <td className="px-3 py-2 text-surface-400">
+                      <td className="px-3 py-2 text-muted-foreground">
                         <div className="space-y-1">
                           <span className="truncate max-w-[150px] block">{tx.memo || ""}</span>
                           {tx.recurringTransactionId && tx.scheduledFor && (
@@ -1298,20 +1298,20 @@ function TransactionsView() {
                           {canEditTransaction && (
                             <button
                               onClick={() => openEditForm(tx)}
-                              className="p-0.5 rounded hover:bg-surface-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                              className="p-0.5 rounded hover:bg-muted sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                               aria-label="Editar transacción"
                             >
-                              <Edit3 className="w-3.5 h-3.5 text-surface-400" aria-hidden="true" />
+                              <Edit3 className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
                             </button>
                           )}
                           <button
                             onClick={() => clearMut.mutate(tx.id)}
-                            className="p-0.5 rounded hover:bg-surface-100"
+                            className="p-0.5 rounded hover:bg-muted"
                             aria-label={tx.cleared ? "Marcar como pendiente" : "Marcar como liquidado"}
                           >
                             {tx.cleared
                               ? <CheckCircle2 className="w-4 h-4 text-success-500" aria-hidden="true" />
-                              : <Circle className="w-4 h-4 text-surface-300" aria-hidden="true" />}
+                              : <Circle className="w-4 h-4 text-muted-foreground" aria-hidden="true" />}
                           </button>
                           {canScheduleFromTransaction && (
                             <button
@@ -1341,28 +1341,28 @@ function TransactionsView() {
           </div>
 
           {/* Footer with pagination */}
-          <div className="border-t border-surface-200 bg-surface-50 px-4 py-2 flex-shrink-0 flex items-center justify-between gap-3">
-            <span className="text-xs text-surface-500 font-mono tabular-nums">{totalCount} transacciones</span>
+          <div className="border-t border-border bg-muted px-4 py-2 flex-shrink-0 flex items-center justify-between gap-3">
+            <span className="text-xs text-muted-foreground font-mono tabular-nums">{totalCount} transacciones</span>
             {totalCount > PAGE_SIZE && (
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1}
-                  className="p-1 rounded hover:bg-surface-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className="p-1 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   aria-label="Página anterior"
                 >
-                  <ChevronLeft className="w-4 h-4 text-surface-600" />
+                  <ChevronLeft className="w-4 h-4 text-muted-foreground" />
                 </button>
-                <span className="text-xs text-surface-600 font-mono tabular-nums">
+                <span className="text-xs text-muted-foreground font-mono tabular-nums">
                   {page} / {Math.ceil(totalCount / PAGE_SIZE)}
                 </span>
                 <button
                   onClick={() => setPage((p) => Math.min(Math.ceil(totalCount / PAGE_SIZE), p + 1))}
                   disabled={page >= Math.ceil(totalCount / PAGE_SIZE)}
-                  className="p-1 rounded hover:bg-surface-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className="p-1 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   aria-label="Página siguiente"
                 >
-                  <ChevronRight className="w-4 h-4 text-surface-600" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 </button>
               </div>
             )}

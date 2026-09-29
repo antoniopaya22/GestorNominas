@@ -375,11 +375,11 @@ function DashboardView() {
     if (hasDateFilter) {
       return (
         <div className="card p-10 text-center animate-fade-in">
-          <div className="w-20 h-20 rounded-2xl bg-surface-100 flex items-center justify-center mx-auto mb-5">
-            <Calendar className="w-10 h-10 text-surface-300" />
+          <div className="w-20 h-20 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-5">
+            <Calendar className="w-10 h-10 text-muted-foreground" />
           </div>
-          <h3 className="text-lg font-semibold text-surface-900 mb-1.5">No hay nóminas en el rango seleccionado</h3>
-          <p className="text-surface-500 text-sm max-w-sm mx-auto mb-6">
+          <h3 className="text-lg font-semibold text-foreground mb-1.5">No hay nóminas en el rango seleccionado</h3>
+          <p className="text-muted-foreground text-sm max-w-sm mx-auto mb-6">
             Prueba con otro periodo o limpia el rango para volver a ver todo el histórico disponible.
           </p>
           <div className="flex justify-center">
@@ -407,14 +407,14 @@ function DashboardView() {
         <div className="px-6 py-6 sm:px-8 sm:py-7">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
-              <p className="text-surface-400 text-xs uppercase tracking-wider mb-0.5">Salario neto medio</p>
+              <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Salario neto medio</p>
               <p className="text-3xl sm:text-4xl font-bold font-mono tracking-tight text-accent-700">
                 {formatCurrency(data.kpis.avgNet)}
               </p>
             </div>
             {profiles.length > 1 && (
               <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-surface-400" aria-hidden="true" />
+                <Filter className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
                 <ProfileSelector
                   profiles={profiles}
                   value={profileIds}
@@ -493,12 +493,12 @@ function DashboardView() {
               </div>
             )}
 
-            <div className="flex self-start sm:self-end bg-surface-100 rounded-lg p-0.5" role="group" aria-label="Tipo de gráfico">
+            <div className="flex self-start sm:self-end bg-muted rounded-lg p-0.5" role="group" aria-label="Tipo de gráfico">
               <button
                 onClick={() => setChartType("area")}
                 aria-pressed={chartType === "area"}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                  chartType === "area" ? "bg-white shadow-sm text-surface-900" : "text-surface-500 hover:text-surface-700"
+                  chartType === "area" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Área
@@ -507,14 +507,14 @@ function DashboardView() {
                 onClick={() => setChartType("line")}
                 aria-pressed={chartType === "line"}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                  chartType === "line" ? "bg-white shadow-sm text-surface-900" : "text-surface-500 hover:text-surface-700"
+                  chartType === "line" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Línea
               </button>
             </div>
 
-            <p className="text-[11px] text-surface-400 sm:text-right">
+            <p className="text-[11px] text-muted-foreground sm:text-right">
               {hasDateFilter && isFilteredDashboardFetching ? "Actualizando rango..." : `Rango: ${activeRangeLabel}`}
             </p>
           </div>
@@ -683,15 +683,15 @@ function DashboardView() {
             subtitle="Métricas clave"
           />
           <div className="space-y-3">
-            <SummaryRow label="Bruto medio" value={formatCurrency(data.kpis.avgGross)} color="text-surface-900" />
+            <SummaryRow label="Bruto medio" value={formatCurrency(data.kpis.avgGross)} color="text-foreground" />
             <SummaryRow label="Neto medio" value={formatCurrency(data.kpis.avgNet)} color="text-success-700" />
             <SummaryRow label="IRPF medio" value={formatCurrency(data.kpis.avgIrpf)} color="text-danger-600" />
-            <div className="border-t border-surface-100 pt-3">
-              <SummaryRow label="Total bruto" value={formatCurrency(data.kpis.totalGrossYear)} color="text-surface-900" bold />
+            <div className="border-t border-border pt-3">
+              <SummaryRow label="Total bruto" value={formatCurrency(data.kpis.totalGrossYear)} color="text-foreground" bold />
               <SummaryRow label="Total neto" value={formatCurrency(data.kpis.totalNetYear)} color="text-success-700" bold />
             </div>
-            <div className="border-t border-surface-100 pt-3">
-              <SummaryRow label="Nóminas" value={String(data.kpis.totalPayslips)} color="text-surface-700" />
+            <div className="border-t border-border pt-3">
+              <SummaryRow label="Nóminas" value={String(data.kpis.totalPayslips)} color="text-foreground" />
               <SummaryRow label="Retención" value={`${retentionRate.toFixed(1)}%`} color="text-primary-600" />
             </div>
           </div>
@@ -739,8 +739,8 @@ function DashboardView() {
               {topDevengos.map((c, i) => (
                 <div key={c.name} className="flex items-center gap-2 text-xs">
                   <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
-                  <span className="text-surface-600 truncate">{c.name}</span>
-                  <span className="ml-auto font-mono text-surface-900 font-medium">{formatCurrency(c.average)}</span>
+                  <span className="text-muted-foreground truncate">{c.name}</span>
+                  <span className="ml-auto font-mono text-foreground font-medium">{formatCurrency(c.average)}</span>
                 </div>
               ))}
             </div>
@@ -784,7 +784,7 @@ function DashboardView() {
                   {topDeducciones.map((c) => (
                     <div key={c.name} className="flex items-center gap-2 text-xs">
                       <div className="w-2.5 h-2.5 rounded-full bg-danger-500 flex-shrink-0" />
-                      <span className="text-surface-600 truncate">{c.name}</span>
+                      <span className="text-muted-foreground truncate">{c.name}</span>
                       <span className="ml-auto font-mono text-danger-600 font-medium">{formatCurrency(c.average)}</span>
                     </div>
                   ))}
@@ -825,52 +825,52 @@ function DashboardView() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-y border-surface-100 bg-surface-50/50">
-                  <th scope="col" aria-sort={conceptSort.column === "name" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"} className="text-left px-6 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                <tr className="border-y border-border bg-muted/50">
+                  <th scope="col" aria-sort={conceptSort.column === "name" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"} className="text-left px-6 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                     <button
                       type="button"
                       onClick={() => handleConceptSort("name")}
-                      className="inline-flex items-center gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                      className="inline-flex items-center gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
                     >
                       <span>Concepto</span>
                       <SortIndicator active={conceptSort.column === "name"} direction={conceptSort.direction} />
                     </button>
                   </th>
-                  <th scope="col" aria-sort={conceptSort.column === "category" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"} className="text-left px-4 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                  <th scope="col" aria-sort={conceptSort.column === "category" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"} className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                     <button
                       type="button"
                       onClick={() => handleConceptSort("category")}
-                      className="inline-flex items-center gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                      className="inline-flex items-center gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
                     >
                       <span>Tipo</span>
                       <SortIndicator active={conceptSort.column === "category"} direction={conceptSort.direction} />
                     </button>
                   </th>
-                  <th scope="col" aria-sort={conceptSort.column === "average" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"} className="text-right px-4 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                  <th scope="col" aria-sort={conceptSort.column === "average" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"} className="text-right px-4 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                     <button
                       type="button"
                       onClick={() => handleConceptSort("average")}
-                      className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                      className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
                     >
                       <span>Promedio</span>
                       <SortIndicator active={conceptSort.column === "average"} direction={conceptSort.direction} />
                     </button>
                   </th>
-                  <th scope="col" aria-sort={conceptSort.column === "total" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"} className="text-right px-4 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                  <th scope="col" aria-sort={conceptSort.column === "total" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"} className="text-right px-4 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                     <button
                       type="button"
                       onClick={() => handleConceptSort("total")}
-                      className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                      className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
                     >
                       <span>Total</span>
                       <SortIndicator active={conceptSort.column === "total"} direction={conceptSort.direction} />
                     </button>
                   </th>
-                  <th scope="col" aria-sort={conceptSort.column === "count" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"} className="text-right px-6 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                  <th scope="col" aria-sort={conceptSort.column === "count" ? (conceptSort.direction === "asc" ? "ascending" : "descending") : "none"} className="text-right px-6 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                     <button
                       type="button"
                       onClick={() => handleConceptSort("count")}
-                      className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                      className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
                     >
                       <span>Apariciones</span>
                       <SortIndicator active={conceptSort.column === "count"} direction={conceptSort.direction} />
@@ -880,22 +880,22 @@ function DashboardView() {
               </thead>
               <tbody>
                 {sortedConceptBreakdown.map((c) => (
-                    <tr key={c.name} className="border-b border-surface-50 hover:bg-surface-50/80 transition-colors">
-                      <td className="px-6 py-3 text-sm font-medium text-surface-900">{c.name}</td>
+                    <tr key={c.name} className="border-b border-border hover:bg-muted/80 transition-colors">
+                      <td className="px-6 py-3 text-sm font-medium text-foreground">{c.name}</td>
                       <td className="px-4 py-3">
                         <span className={`badge ${
                           c.category === "devengo"
                             ? "bg-success-50 text-success-700"
                             : c.category === "deduccion"
                             ? "bg-danger-50 text-danger-700"
-                            : "bg-surface-100 text-surface-600"
+                            : "bg-muted text-muted-foreground"
                         }`}>
                           {getConceptCategoryLabel(c.category)}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-right font-mono font-medium text-surface-700">{formatCurrency(c.average)}</td>
-                      <td className="px-4 py-3 text-sm text-right font-mono font-medium text-surface-900">{formatCurrency(c.total)}</td>
-                      <td className="px-6 py-3 text-sm text-right text-surface-500">{c.count}</td>
+                      <td className="px-4 py-3 text-sm text-right font-mono font-medium text-foreground">{formatCurrency(c.average)}</td>
+                      <td className="px-4 py-3 text-sm text-right font-mono font-medium text-foreground">{formatCurrency(c.total)}</td>
+                      <td className="px-6 py-3 text-sm text-right text-muted-foreground">{c.count}</td>
                     </tr>
                   ))}
               </tbody>
@@ -925,7 +925,7 @@ function DashboardView() {
                     <option key={s.year} value={s.year}>{s.year}</option>
                   ))}
                 </select>
-                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400 pointer-events-none" />
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               </div>
             )}
           </div>
@@ -938,8 +938,8 @@ function DashboardView() {
                     <Calendar className="w-5 h-5 text-primary-600" />
                   </div>
                   <div>
-                    <h4 className="text-base font-bold text-surface-900">{s.year}</h4>
-                    <p className="text-xs text-surface-400">{s.months} nóminas · {s.pagasExtra > 0 ? `${s.pagasExtra} paga${s.pagasExtra > 1 ? "s" : ""} extra` : "Sin pagas extra"}</p>
+                    <h4 className="text-base font-bold text-foreground">{s.year}</h4>
+                    <p className="text-xs text-muted-foreground">{s.months} nóminas · {s.pagasExtra > 0 ? `${s.pagasExtra} paga${s.pagasExtra > 1 ? "s" : ""} extra` : "Sin pagas extra"}</p>
                   </div>
                   <div className="ml-auto">
                     <span className={`badge ${s.retentionRate >= 70 ? "bg-success-50 text-success-700" : "bg-accent-50 text-accent-700"}`}>
@@ -949,9 +949,9 @@ function DashboardView() {
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
-                  <div className="bg-surface-50 rounded-xl p-4">
-                    <p className="text-[11px] font-semibold text-surface-500 uppercase tracking-wider">Bruto Total</p>
-                    <p className="text-lg font-bold text-surface-900 font-mono mt-1">{formatCurrency(s.totalGross)}</p>
+                  <div className="bg-muted rounded-xl p-4">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Bruto Total</p>
+                    <p className="text-lg font-bold text-foreground font-mono mt-1">{formatCurrency(s.totalGross)}</p>
                   </div>
                   <div className="bg-success-50/50 rounded-xl p-4">
                     <p className="text-[11px] font-semibold text-success-600 uppercase tracking-wider">Neto Total</p>
@@ -982,21 +982,21 @@ function DashboardView() {
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <div className="flex flex-col">
-                    <span className="text-[11px] text-surface-400">Media Bruto/mes</span>
-                    <span className="text-sm font-mono font-semibold text-surface-900">{formatCurrency(s.avgMonthlyGross)}</span>
+                    <span className="text-[11px] text-muted-foreground">Media Bruto/mes</span>
+                    <span className="text-sm font-mono font-semibold text-foreground">{formatCurrency(s.avgMonthlyGross)}</span>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[11px] text-surface-400">Media Neto/mes</span>
+                    <span className="text-[11px] text-muted-foreground">Media Neto/mes</span>
                     <span className="text-sm font-mono font-semibold text-success-700">{formatCurrency(s.avgMonthlyNet)}</span>
                   </div>
                   {s.months < 12 && (
                     <>
                       <div className="flex flex-col">
-                        <span className="text-[11px] text-surface-400">Proyección Bruto Anual</span>
-                        <span className="text-sm font-mono font-semibold text-surface-700">{formatCurrency(s.projectedAnnualGross)}</span>
+                        <span className="text-[11px] text-muted-foreground">Proyección Bruto Anual</span>
+                        <span className="text-sm font-mono font-semibold text-foreground">{formatCurrency(s.projectedAnnualGross)}</span>
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[11px] text-surface-400">Proyección Neto Anual</span>
+                        <span className="text-[11px] text-muted-foreground">Proyección Neto Anual</span>
                         <span className="text-sm font-mono font-semibold text-success-600">{formatCurrency(s.projectedAnnualNet)}</span>
                       </div>
                     </>
@@ -1086,7 +1086,7 @@ function MonthRangeSelect({
 }) {
   return (
     <label className="block min-w-[9rem]">
-      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-surface-500">{label}</span>
+      <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
       <div className="relative">
         <select
           value={value}
@@ -1101,7 +1101,7 @@ function MonthRangeSelect({
             </option>
           ))}
         </select>
-        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-surface-400" />
+        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
       </div>
     </label>
   );
@@ -1110,7 +1110,7 @@ function MonthRangeSelect({
 function SummaryRow({ label, value, color, bold }: { label: string; value: string; color: string; bold?: boolean }) {
   return (
     <div className="flex items-center justify-between py-1">
-      <span className="text-xs text-surface-500">{label}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
       <span className={`text-sm font-mono ${bold ? "font-bold" : "font-medium"} ${color}`}>{value}</span>
     </div>
   );

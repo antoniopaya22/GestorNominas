@@ -5,6 +5,11 @@ import { Providers } from "./Providers";
 import { useAuth } from "./AuthProvider";
 import { toast } from "sonner";
 import { updateUserProfile } from "../lib/api";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 
 function SettingsView() {
   const { user, logout } = useAuth();
@@ -22,8 +27,7 @@ function SettingsView() {
     if (typeof document === "undefined") return false;
     return document.documentElement.classList.contains("dark");
   });
-  const toggleDarkMode = () => {
-    const next = !darkMode;
+  const toggleDarkMode = (next: boolean) => {
     setDarkMode(next);
     document.documentElement.classList.toggle("dark", next);
     localStorage.setItem("theme", next ? "dark" : "light");
@@ -32,77 +36,69 @@ function SettingsView() {
   return (
     <div className="space-y-8 max-w-2xl">
       <div>
-        <h1 className="text-2xl font-bold text-surface-900">Ajustes</h1>
-        <p className="text-sm text-surface-500 mt-1">Configura tu cuenta y preferencias</p>
+        <h1 className="text-2xl font-bold text-foreground">Ajustes</h1>
+        <p className="text-sm text-muted-foreground mt-1">Configura tu cuenta y preferencias</p>
       </div>
 
       {/* Profile Section */}
-      <section className="card p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <User className="w-5 h-5 text-primary-600" />
-          <h2 className="text-lg font-semibold text-surface-900">Perfil</h2>
-        </div>
-        <form onSubmit={(e) => { e.preventDefault(); updateProfileMut.mutate(); }} className="space-y-4">
-          <div>
-            <label htmlFor="settings-email" className="block text-sm font-medium text-surface-700 mb-1">Email</label>
-            <input
-              id="settings-email"
-              type="email"
-              value={user?.email ?? ""}
-              disabled
-              className="w-full rounded-xl border border-surface-200 bg-surface-50 px-3 py-2 text-sm text-surface-500"
-            />
-          </div>
-          <div>
-            <label htmlFor="settings-name" className="block text-sm font-medium text-surface-700 mb-1">Nombre</label>
-            <input
-              id="settings-name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="w-full rounded-xl border border-surface-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={updateProfileMut.isPending}
-            className="btn-primary px-4 py-2 text-sm disabled:opacity-50"
-          >
-            {updateProfileMut.isPending ? "Guardando..." : "Guardar cambios"}
-          </button>
-        </form>
-      </section>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-3 text-lg">
+            <User className="w-5 h-5 text-primary-600" />
+            Perfil
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={(e) => { e.preventDefault(); updateProfileMut.mutate(); }} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="settings-email">Email</Label>
+              <Input id="settings-email" type="email" value={user?.email ?? ""} disabled />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="settings-name">Nombre</Label>
+              <Input
+                id="settings-name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" disabled={updateProfileMut.isPending}>
+              {updateProfileMut.isPending ? "Guardando..." : "Guardar cambios"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       {/* Appearance Section */}
-      <section className="card p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-surface-900">Apariencia</h2>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {darkMode ? <Moon className="w-5 h-5 text-primary-600" /> : <Sun className="w-5 h-5 text-amber-500" />}
-            <div>
-              <p className="text-sm font-medium text-surface-900">Modo oscuro</p>
-              <p className="text-xs text-surface-500">Cambia entre tema claro y oscuro</p>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Apariencia</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {darkMode ? <Moon className="w-5 h-5 text-primary-600" /> : <Sun className="w-5 h-5 text-amber-500" />}
+              <div>
+                <p className="text-sm font-medium text-foreground">Modo oscuro</p>
+                <p className="text-xs text-muted-foreground">Cambia entre tema claro y oscuro</p>
+              </div>
             </div>
+            <Switch checked={darkMode} onCheckedChange={toggleDarkMode} aria-label="Modo oscuro" />
           </div>
-          <button
-            onClick={toggleDarkMode}
-            className={`relative w-11 h-6 rounded-full transition-colors ${darkMode ? "bg-primary-600" : "bg-surface-300"}`}
-            role="switch"
-            aria-checked={darkMode}
-          >
-            <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${darkMode ? "translate-x-5" : ""}`} />
-          </button>
-        </div>
-      </section>
+        </CardContent>
+      </Card>
 
       {/* Logout */}
-      <section className="card p-6">
-        <button onClick={logout} className="flex items-center gap-2 text-red-600 hover:text-red-700 text-sm font-medium">
-          <LogOut className="w-4 h-4" />
-          Cerrar sesión
-        </button>
-      </section>
+      <Card>
+        <CardContent>
+          <Button variant="destructive" onClick={logout} className="gap-2">
+            <LogOut className="w-4 h-4" />
+            Cerrar sesión
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }

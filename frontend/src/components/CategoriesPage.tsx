@@ -4,6 +4,10 @@ import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, FolderPlus } from "luc
 import { Providers } from "./Providers";
 import { toast } from "sonner";
 import { ConfirmModal } from "./ui/ConfirmModal";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   getCategories,
   createCategoryGroup,
@@ -113,8 +117,8 @@ function CategoriesView() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="h-8 bg-surface-100 rounded-xl animate-pulse w-48" />
-        {[1, 2, 3].map((i) => <div key={i} className="h-16 bg-surface-100 rounded-xl animate-pulse" />)}
+        <Skeleton className="h-8 w-48" />
+        {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16" />)}
       </div>
     );
   }
@@ -123,15 +127,12 @@ function CategoriesView() {
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-surface-900">Categorías</h1>
-          <p className="text-sm text-surface-500 mt-1">Gestiona los grupos y categorías de transacciones</p>
+          <h1 className="text-2xl font-bold text-foreground">Categorías</h1>
+          <p className="text-sm text-muted-foreground mt-1">Gestiona los grupos y categorías de transacciones</p>
         </div>
-        <button
-          onClick={() => { setShowGroupForm(true); setEditingGroup(null); setGroupName(""); }}
-          className="btn-primary text-sm px-4 py-2 flex items-center gap-2"
-        >
+        <Button onClick={() => { setShowGroupForm(true); setEditingGroup(null); setGroupName(""); }} className="gap-2">
           <FolderPlus className="w-4 h-4" /> Nuevo grupo
-        </button>
+        </Button>
       </div>
 
       {/* New / Edit Group Form */}
@@ -141,130 +142,140 @@ function CategoriesView() {
             e.preventDefault();
             editingGroup ? updateGroupMut.mutate() : createGroupMut.mutate();
           }}
-          className="card p-4 flex items-center gap-3"
         >
-          <input
-            type="text"
-            value={groupName}
-            onChange={(e) => setGroupName(e.target.value)}
-            placeholder="Nombre del grupo"
-            required
-            autoFocus
-            className="flex-1 rounded-xl border border-surface-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-          <button type="submit" className="btn-primary text-sm px-4 py-2">
-            {editingGroup ? "Guardar" : "Crear"}
-          </button>
-          <button
-            type="button"
-            onClick={() => { setShowGroupForm(false); setEditingGroup(null); setGroupName(""); }}
-            className="text-sm text-surface-500 hover:text-surface-700"
-          >
-            Cancelar
-          </button>
+          <Card className="p-4 flex-row items-center gap-3">
+            <Input
+              type="text"
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              placeholder="Nombre del grupo"
+              required
+              autoFocus
+              className="flex-1"
+            />
+            <Button type="submit" size="sm">
+              {editingGroup ? "Guardar" : "Crear"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => { setShowGroupForm(false); setEditingGroup(null); setGroupName(""); }}
+            >
+              Cancelar
+            </Button>
+          </Card>
         </form>
       )}
 
       {/* Groups List */}
       {groups.length === 0 ? (
-        <div className="card p-8 text-center">
-          <p className="text-sm text-surface-500">No hay grupos de categorías. Crea uno para empezar.</p>
-        </div>
+        <Card className="p-8 text-center">
+          <p className="text-sm text-muted-foreground">No hay grupos de categorías. Crea uno para empezar.</p>
+        </Card>
       ) : (
         <div className="space-y-3">
           {groups.map((group) => {
             const isExpanded = expanded.has(group.id);
             return (
-              <div key={group.id} className="card overflow-hidden">
+              <Card key={group.id} className="p-0 overflow-hidden">
                 {/* Group Header */}
-                <div className="flex items-center gap-3 px-4 py-3 hover:bg-surface-50 cursor-pointer" onClick={() => toggleExpand(group.id)}>
-                  {isExpanded ? <ChevronDown className="w-4 h-4 text-surface-400" /> : <ChevronRight className="w-4 h-4 text-surface-400" />}
-                  <span className="font-medium text-surface-900 flex-1">{group.name}</span>
-                  <span className="text-xs text-surface-400">{group.categories.length} categorías</span>
+                <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted cursor-pointer" onClick={() => toggleExpand(group.id)}>
+                  {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                  <span className="font-medium text-foreground flex-1">{group.name}</span>
+                  <span className="text-xs text-muted-foreground">{group.categories.length} categorías</span>
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
                       onClick={() => { setEditingGroup(group); setGroupName(group.name); setShowGroupForm(false); }}
-                      className="p-1.5 rounded-lg hover:bg-surface-100 text-surface-400 hover:text-surface-600"
                       title="Editar grupo"
                     >
                       <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
                       onClick={() => setConfirm({ type: "group", id: group.id, name: group.name })}
-                      className="p-1.5 rounded-lg hover:bg-red-50 text-surface-400 hover:text-red-600"
                       title="Eliminar grupo"
+                      className="hover:bg-destructive/10 hover:text-destructive"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
                       onClick={() => { setAddingToGroupId(group.id); setCatName(""); setExpanded((p) => new Set(p).add(group.id)); }}
-                      className="p-1.5 rounded-lg hover:bg-primary-50 text-surface-400 hover:text-primary-600"
                       title="Añadir categoría"
+                      className="hover:bg-primary-50 hover:text-primary-600 dark:hover:bg-primary-500/10 dark:hover:text-primary-400"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
                 {/* Categories */}
                 {isExpanded && (
-                  <div className="border-t border-surface-100">
+                  <div className="border-t border-border">
                     {/* Add category form */}
                     {addingToGroupId === group.id && (
                       <form
                         onSubmit={(e) => { e.preventDefault(); createCatMut.mutate(); }}
-                        className="flex items-center gap-3 px-4 py-2 bg-surface-50"
+                        className="flex items-center gap-3 px-4 py-2 bg-muted"
                       >
-                        <input
+                        <Input
                           type="text"
                           value={catName}
                           onChange={(e) => setCatName(e.target.value)}
                           placeholder="Nombre de categoría"
                           required
                           autoFocus
-                          className="flex-1 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          className="flex-1"
                         />
-                        <button type="submit" className="btn-primary text-xs px-3 py-1.5">Crear</button>
-                        <button type="button" onClick={() => setAddingToGroupId(null)} className="text-xs text-surface-500 hover:text-surface-700">Cancelar</button>
+                        <Button type="submit" size="sm">Crear</Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setAddingToGroupId(null)}>Cancelar</Button>
                       </form>
                     )}
 
                     {group.categories.length === 0 && addingToGroupId !== group.id ? (
-                      <p className="px-4 py-3 text-sm text-surface-400 italic">Sin categorías</p>
+                      <p className="px-4 py-3 text-sm text-muted-foreground italic">Sin categorías</p>
                     ) : (
                       group.categories.map((cat) => (
-                        <div key={cat.id} className="flex items-center gap-3 px-4 py-2 pl-10 hover:bg-surface-50">
+                        <div key={cat.id} className="flex items-center gap-3 px-4 py-2 pl-10 hover:bg-muted">
                           {editingCat?.id === cat.id ? (
                             <form
                               onSubmit={(e) => { e.preventDefault(); updateCatMut.mutate(); }}
                               className="flex items-center gap-3 flex-1"
                             >
-                              <input
+                              <Input
                                 type="text"
                                 value={catName}
                                 onChange={(e) => setCatName(e.target.value)}
                                 required
                                 autoFocus
-                                className="flex-1 rounded-lg border border-surface-200 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                className="flex-1"
                               />
-                              <button type="submit" className="btn-primary text-xs px-3 py-1.5">Guardar</button>
-                              <button type="button" onClick={() => setEditingCat(null)} className="text-xs text-surface-500 hover:text-surface-700">Cancelar</button>
+                              <Button type="submit" size="sm">Guardar</Button>
+                              <Button type="button" variant="ghost" size="sm" onClick={() => setEditingCat(null)}>Cancelar</Button>
                             </form>
                           ) : (
                             <>
-                              <span className="text-sm text-surface-700 flex-1">{cat.name}</span>
-                              <button
+                              <span className="text-sm text-foreground flex-1">{cat.name}</span>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
                                 onClick={() => { setEditingCat({ id: cat.id, groupId: cat.groupId, name: cat.name }); setCatName(cat.name); }}
-                                className="p-1 rounded-lg hover:bg-surface-100 text-surface-400 hover:text-surface-600"
                               >
                                 <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
                                 onClick={() => setConfirm({ type: "category", id: cat.id, name: cat.name })}
-                                className="p-1 rounded-lg hover:bg-red-50 text-surface-400 hover:text-red-600"
+                                className="hover:bg-destructive/10 hover:text-destructive"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              </Button>
                             </>
                           )}
                         </div>
@@ -272,7 +283,7 @@ function CategoriesView() {
                     )}
                   </div>
                 )}
-              </div>
+              </Card>
             );
           })}
         </div>

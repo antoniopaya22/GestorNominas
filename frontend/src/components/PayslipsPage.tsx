@@ -167,8 +167,8 @@ function PayslipsList() {
         <div className="px-6 py-5 sm:px-8 sm:py-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <p className="text-surface-400 text-xs uppercase tracking-wider mb-0.5">Mis Nóminas</p>
-              <p className="text-2xl font-bold text-surface-900">
+              <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Mis Nóminas</p>
+              <p className="text-2xl font-bold text-foreground">
                 {filteredPayslips.length} nómina{filteredPayslips.length !== 1 ? "s" : ""}
               </p>
             </div>
@@ -184,7 +184,7 @@ function PayslipsList() {
             {profileId && (
               <button
                 onClick={() => exportData(profileId, yearFilter ? Number(yearFilter) : undefined, "csv")}
-                className="flex items-center gap-1.5 bg-surface-100 hover:bg-surface-200 rounded-lg px-3 py-1.5 text-xs font-medium text-surface-700 transition-colors"
+                className="flex items-center gap-1.5 bg-muted hover:bg-muted rounded-lg px-3 py-1.5 text-xs font-medium text-foreground transition-colors"
                 aria-label="Exportar CSV"
               >
                 <Download className="w-3.5 h-3.5" aria-hidden="true" />
@@ -209,8 +209,8 @@ function PayslipsList() {
               aria-pressed={profileId === p.id}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer ${
                 profileId === p.id
-                  ? "bg-white shadow-card border border-surface-200 text-surface-900"
-                  : "text-surface-400 hover:text-surface-600 hover:bg-surface-100"
+                  ? "bg-white shadow-card border border-border text-foreground"
+                  : "text-muted-foreground hover:text-muted-foreground hover:bg-muted"
               }`}
             >
               <div
@@ -226,7 +226,7 @@ function PayslipsList() {
       {/* Extended Filters Bar */}
       <div className="card p-3 mb-6 flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <input
             type="text"
             placeholder="Buscar por archivo o empresa..."
@@ -248,7 +248,7 @@ function PayslipsList() {
                 <option key={y} value={y ?? ""}>{y}</option>
               ))}
             </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400 pointer-events-none" />
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
           </div>
         )}
 
@@ -263,7 +263,7 @@ function PayslipsList() {
               <option key={i} value={i + 1}>{m}</option>
             ))}
           </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400 pointer-events-none" />
+          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
         </div>
 
         <div className="relative">
@@ -278,7 +278,7 @@ function PayslipsList() {
             <option value="review">Revisar</option>
             <option value="error">Error</option>
           </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400 pointer-events-none" />
+          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
         </div>
 
         <div className="relative">
@@ -291,7 +291,7 @@ function PayslipsList() {
             <option value="ordinal">Mensual</option>
             <option value="extra">Paga Extra</option>
           </select>
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-surface-400 pointer-events-none" />
+          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
         </div>
 
         {(searchFilter || yearFilter || monthFilter || statusFilter || typeFilter) && (
@@ -308,25 +308,25 @@ function PayslipsList() {
       {filteredPayslips.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <div className="card p-3 text-center">
-            <p className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Bruto Medio</p>
-            <p className="text-sm font-bold font-mono text-surface-900 mt-0.5">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Bruto Medio</p>
+            <p className="text-sm font-bold font-mono text-foreground mt-0.5">
               {formatCurrency(filteredPayslips.reduce((s, p) => s + (p.grossSalary ?? 0), 0) / filteredPayslips.length)}
             </p>
           </div>
           <div className="card p-3 text-center">
-            <p className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Neto Medio</p>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Neto Medio</p>
             <p className="text-sm font-bold font-mono text-success-700 mt-0.5">
               {formatCurrency(filteredPayslips.reduce((s, p) => s + (p.netSalary ?? 0), 0) / filteredPayslips.length)}
             </p>
           </div>
           <div className="card p-3 text-center">
-            <p className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Total Bruto</p>
-            <p className="text-sm font-bold font-mono text-surface-900 mt-0.5">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total Bruto</p>
+            <p className="text-sm font-bold font-mono text-foreground mt-0.5">
               {formatCurrency(filteredPayslips.reduce((s, p) => s + (p.grossSalary ?? 0), 0))}
             </p>
           </div>
           <div className="card p-3 text-center">
-            <p className="text-[10px] font-semibold text-surface-400 uppercase tracking-wider">Total Neto</p>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Total Neto</p>
             <p className="text-sm font-bold font-mono text-success-700 mt-0.5">
               {formatCurrency(filteredPayslips.reduce((s, p) => s + (p.netSalary ?? 0), 0))}
             </p>
@@ -349,11 +349,11 @@ function PayslipsList() {
         </div>
       ) : filteredPayslips.length === 0 ? (
         <div className="card text-center py-16">
-          <div className="w-16 h-16 rounded-2xl bg-surface-100 flex items-center justify-center mx-auto mb-4">
-            <Search className="w-8 h-8 text-surface-300" />
+          <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+            <Search className="w-8 h-8 text-muted-foreground" />
           </div>
-          <h3 className="font-semibold text-surface-900 text-sm mb-1">No hay nóminas</h3>
-          <p className="text-surface-500 text-xs mb-5">Sube nóminas para este perfil.</p>
+          <h3 className="font-semibold text-foreground text-sm mb-1">No hay nóminas</h3>
+          <p className="text-muted-foreground text-xs mb-5">Sube nóminas para este perfil.</p>
           <a href="/app/upload" className="btn-primary text-sm">
             Subir nóminas <ArrowRight className="w-3.5 h-3.5" />
           </a>
@@ -362,52 +362,52 @@ function PayslipsList() {
         <div className="card overflow-hidden">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-surface-100 bg-surface-50/50">
-                <th scope="col" aria-sort={sortField === "period" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="text-left px-5 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+              <tr className="border-b border-border bg-muted/50">
+                <th scope="col" aria-sort={sortField === "period" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="text-left px-5 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   <button
                     type="button"
                     onClick={() => handleSort("period")}
-                    className="inline-flex items-center gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                    className="inline-flex items-center gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
                   >
                     <span>Período</span>
                     <SortIndicator active={sortField === "period"} direction={sortDir} />
                   </button>
                 </th>
-                <th scope="col" aria-sort={sortField === "fileName" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="text-left px-4 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                <th scope="col" aria-sort={sortField === "fileName" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   <button
                     type="button"
                     onClick={() => handleSort("fileName")}
-                    className="inline-flex items-center gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                    className="inline-flex items-center gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
                   >
                     <span>Archivo</span>
                     <SortIndicator active={sortField === "fileName"} direction={sortDir} />
                   </button>
                 </th>
-                <th scope="col" aria-sort={sortField === "grossSalary" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="text-right px-4 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                <th scope="col" aria-sort={sortField === "grossSalary" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="text-right px-4 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   <button
                     type="button"
                     onClick={() => handleSort("grossSalary")}
-                    className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                    className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
                   >
                     <span>Bruto</span>
                     <SortIndicator active={sortField === "grossSalary"} direction={sortDir} />
                   </button>
                 </th>
-                <th scope="col" aria-sort={sortField === "netSalary" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="text-right px-4 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                <th scope="col" aria-sort={sortField === "netSalary" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="text-right px-4 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   <button
                     type="button"
                     onClick={() => handleSort("netSalary")}
-                    className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                    className="inline-flex w-full items-center justify-end gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
                   >
                     <span>Neto</span>
                     <SortIndicator active={sortField === "netSalary"} direction={sortDir} />
                   </button>
                 </th>
-                <th scope="col" aria-sort={sortField === "parsingStatus" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="text-center px-5 py-2.5 text-[11px] font-semibold text-surface-500 uppercase tracking-wider">
+                <th scope="col" aria-sort={sortField === "parsingStatus" ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className="text-center px-5 py-2.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                   <button
                     type="button"
                     onClick={() => handleSort("parsingStatus")}
-                    className="inline-flex items-center justify-center gap-1 transition-colors hover:text-surface-700 focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-surface-700 dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
+                    className="inline-flex items-center justify-center gap-1 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-500 focus-visible:text-foreground dark:hover:text-surface-200 dark:focus-visible:text-surface-200"
                   >
                     <span>Estado</span>
                     <SortIndicator active={sortField === "parsingStatus"} direction={sortDir} />
@@ -425,21 +425,21 @@ function PayslipsList() {
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedPayslip(p.id); } }}
                     role="button"
                     tabIndex={0}
-                    className="border-b border-surface-50 hover:bg-surface-50/80 cursor-pointer transition-colors group focus-visible:outline-2 focus-visible:outline-accent-500"
+                    className="border-b border-border hover:bg-muted/80 cursor-pointer transition-colors group focus-visible:outline-2 focus-visible:outline-accent-500"
                   >
                     <td className="px-5 py-3.5">
-                      <span className="text-sm font-semibold text-surface-900">{formatPeriod(p.periodMonth, p.periodYear)}</span>
+                      <span className="text-sm font-semibold text-foreground">{formatPeriod(p.periodMonth, p.periodYear)}</span>
                       {p.payslipType === "extra" && (
                         <span className="ml-2 badge bg-accent-50 text-accent-700 text-[10px]">Extra</span>
                       )}
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2">
-                        <FileText className="w-3.5 h-3.5 text-surface-400" aria-hidden="true" />
-                        <span className="text-sm text-surface-600 group-hover:text-surface-900 transition-colors truncate max-w-[200px]">{p.fileName}</span>
+                        <FileText className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
+                        <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors truncate max-w-[200px]">{p.fileName}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3.5 text-sm text-right font-mono tabular-nums text-surface-700">{formatCurrency(p.grossSalary)}</td>
+                    <td className="px-4 py-3.5 text-sm text-right font-mono tabular-nums text-foreground">{formatCurrency(p.grossSalary)}</td>
                     <td className="px-4 py-3.5 text-sm text-right font-mono tabular-nums font-semibold text-success-700">{formatCurrency(p.netSalary)}</td>
                     <td className="px-5 py-3.5 text-center">
                       <span className={`badge ${status.cls}`}>{status.label}</span>
@@ -455,7 +455,7 @@ function PayslipsList() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4 text-sm">
-          <p className="text-surface-500 text-xs">
+          <p className="text-muted-foreground text-xs">
             {totalPayslips} nómina{totalPayslips !== 1 ? "s" : ""} en total
           </p>
           <div className="flex items-center gap-1.5">
@@ -466,7 +466,7 @@ function PayslipsList() {
             >
               Anterior
             </button>
-            <span className="text-xs text-surface-600 px-2">
+            <span className="text-xs text-muted-foreground px-2">
               {page} / {totalPages}
             </span>
             <button
@@ -558,7 +558,7 @@ function PayslipDetail({
     <div className="animate-fade-in">
       <button
         onClick={onBack}
-        className="flex items-center gap-1.5 text-xs font-medium text-surface-500 hover:text-surface-900 mb-5 transition-colors cursor-pointer"
+        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground mb-5 transition-colors cursor-pointer"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
         Volver al listado
@@ -572,8 +572,8 @@ function PayslipDetail({
               <FileText className="w-6 h-6 text-primary-600" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-surface-900">{payslip.fileName}</h2>
-              <div className="flex items-center gap-3 mt-1.5 text-xs text-surface-500">
+              <h2 className="text-base font-bold text-foreground">{payslip.fileName}</h2>
+              <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                 {payslip.company && (
                   <span className="flex items-center gap-1">
                     <Building2 className="w-3 h-3" /> {payslip.company}
@@ -588,7 +588,7 @@ function PayslipDetail({
                 <button
                   onClick={() => typeMut.mutate(payslip.payslipType === "extra" ? "ordinal" : "extra")}
                   disabled={typeMut.isPending}
-                  className={`badge text-[10px] cursor-pointer transition-colors ${payslip.payslipType === "extra" ? "bg-accent-50 text-accent-700 hover:bg-accent-100" : "bg-surface-100 text-surface-500 hover:bg-surface-200"}`}
+                  className={`badge text-[10px] cursor-pointer transition-colors ${payslip.payslipType === "extra" ? "bg-accent-50 text-accent-700 hover:bg-accent-100" : "bg-muted text-muted-foreground hover:bg-muted"}`}
                   title="Haz clic para cambiar el tipo"
                 >
                   {payslip.payslipType === "extra" ? "Paga Extra" : "Mensual"}
@@ -621,25 +621,25 @@ function PayslipDetail({
       {editing && (
         <div className="card p-5 mb-6 grid grid-cols-2 sm:grid-cols-4 gap-4 animate-slide-up">
           <div>
-            <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Mes</label>
+            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Mes</label>
             <input type="number" min={1} max={12}
               value={periodMonth} onChange={(e) => setPeriodMonth(Number(e.target.value))}
               className="input text-sm" />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Año</label>
+            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Año</label>
             <input type="number" min={1990} max={2100}
               value={periodYear} onChange={(e) => setPeriodYear(Number(e.target.value))}
               className="input text-sm" />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Bruto</label>
+            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Bruto</label>
             <input type="number" step="0.01"
               value={grossSalary} onChange={(e) => setGrossSalary(Number(e.target.value))}
               className="input text-sm" />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-surface-500 uppercase tracking-wider mb-1.5">Neto</label>
+            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Neto</label>
             <input type="number" step="0.01"
               value={netSalary} onChange={(e) => setNetSalary(Number(e.target.value))}
               className="input text-sm" />
@@ -653,8 +653,8 @@ function PayslipDetail({
         <div className="card p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-2.5 h-2.5 rounded-full bg-success-500" />
-            <h3 className="font-semibold text-surface-900 text-sm">Devengos</h3>
-            <span className="text-[11px] text-surface-400 ml-auto">{devengos.length}</span>
+            <h3 className="font-semibold text-foreground text-sm">Devengos</h3>
+            <span className="text-[11px] text-muted-foreground ml-auto">{devengos.length}</span>
           </div>
           <div className="space-y-2">
             {devengos.map((c, i) => {
@@ -669,20 +669,20 @@ function PayslipDetail({
                         onChange={(e) => updateConcept(realIndex, "amount", Number(e.target.value))}
                         className="input text-xs w-24 text-right font-mono" />
                       <button onClick={() => removeConcept(realIndex)}
-                        className="w-6 h-6 rounded hover:bg-danger-50 flex items-center justify-center text-surface-400 hover:text-danger-500 transition-colors cursor-pointer">
+                        className="w-6 h-6 rounded hover:bg-danger-50 flex items-center justify-center text-muted-foreground hover:text-danger-500 transition-colors cursor-pointer">
                         <X className="w-3 h-3" />
                       </button>
                     </>
                   ) : (
                     <>
-                      <span className="text-xs text-surface-600 flex-1">{c.name}</span>
-                      <span className="text-xs font-mono font-semibold text-surface-900">{formatCurrency(c.amount)}</span>
+                      <span className="text-xs text-muted-foreground flex-1">{c.name}</span>
+                      <span className="text-xs font-mono font-semibold text-foreground">{formatCurrency(c.amount)}</span>
                     </>
                   )}
                 </div>
               );
             })}
-            {devengos.length === 0 && <p className="text-xs text-surface-400">Sin devengos detectados</p>}
+            {devengos.length === 0 && <p className="text-xs text-muted-foreground">Sin devengos detectados</p>}
             {editing && (
               <button onClick={() => addConcept("devengo")}
                 className="flex items-center gap-1 text-xs text-primary-600 font-medium hover:text-primary-700 transition-colors cursor-pointer mt-1">
@@ -696,8 +696,8 @@ function PayslipDetail({
         <div className="card p-5">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-2.5 h-2.5 rounded-full bg-danger-500" />
-            <h3 className="font-semibold text-surface-900 text-sm">Deducciones</h3>
-            <span className="text-[11px] text-surface-400 ml-auto">{deducciones.length}</span>
+            <h3 className="font-semibold text-foreground text-sm">Deducciones</h3>
+            <span className="text-[11px] text-muted-foreground ml-auto">{deducciones.length}</span>
           </div>
           <div className="space-y-2">
             {deducciones.map((c, i) => {
@@ -712,20 +712,20 @@ function PayslipDetail({
                         onChange={(e) => updateConcept(realIndex, "amount", Number(e.target.value))}
                         className="input text-xs w-24 text-right font-mono" />
                       <button onClick={() => removeConcept(realIndex)}
-                        className="w-6 h-6 rounded hover:bg-danger-50 flex items-center justify-center text-surface-400 hover:text-danger-500 transition-colors cursor-pointer">
+                        className="w-6 h-6 rounded hover:bg-danger-50 flex items-center justify-center text-muted-foreground hover:text-danger-500 transition-colors cursor-pointer">
                         <X className="w-3 h-3" />
                       </button>
                     </>
                   ) : (
                     <>
-                      <span className="text-xs text-surface-600 flex-1">{c.name}</span>
+                      <span className="text-xs text-muted-foreground flex-1">{c.name}</span>
                       <span className="text-xs font-mono font-semibold text-danger-600">{formatCurrency(c.amount)}</span>
                     </>
                   )}
                 </div>
               );
             })}
-            {deducciones.length === 0 && <p className="text-xs text-surface-400">Sin deducciones detectadas</p>}
+            {deducciones.length === 0 && <p className="text-xs text-muted-foreground">Sin deducciones detectadas</p>}
             {editing && (
               <button onClick={() => addConcept("deduccion")}
                 className="flex items-center gap-1 text-xs text-primary-600 font-medium hover:text-primary-700 transition-colors cursor-pointer mt-1">
@@ -740,12 +740,12 @@ function PayslipDetail({
       {!editing && (
         <div className="card mt-6 p-5 flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-semibold text-surface-500 uppercase tracking-wider">Total Bruto</p>
-            <p className="text-lg font-bold text-surface-900 font-mono">{formatCurrency(payslip.grossSalary)}</p>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Total Bruto</p>
+            <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(payslip.grossSalary)}</p>
           </div>
-          <div className="w-px h-10 bg-surface-100" />
+          <div className="w-px h-10 bg-muted" />
           <div className="text-right">
-            <p className="text-[11px] font-semibold text-surface-500 uppercase tracking-wider">Líquido a Percibir</p>
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Líquido a Percibir</p>
             <p className="text-lg font-bold text-success-700 font-mono">{formatCurrency(payslip.netSalary)}</p>
           </div>
         </div>
