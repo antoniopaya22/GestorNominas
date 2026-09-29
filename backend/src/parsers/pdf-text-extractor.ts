@@ -5,6 +5,13 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const pdfjs = require("pdfjs-dist/legacy/build/pdf.js") as typeof import("pdfjs-dist");
 
+// pdfjs-dist carga su "fake worker" en Node con un require oculto tras
+// eval() (para esquivar bundlers) — el analizador de dependencias de Vercel
+// no lo detecta y `pdf.worker.js` se queda fuera del paquete desplegado
+// ("Cannot find module './pdf.worker.js'" en producción). Fijar workerSrc
+// con un require.resolve() normal hace que sí se detecte y se incluya.
+pdfjs.GlobalWorkerOptions.workerSrc = require.resolve("pdfjs-dist/legacy/build/pdf.worker.js");
+
 const BOX_DRAWING_CHARS = /[│├┤┌┐└┘┬┴┼─═║╔╗╚╝╠╣╦╩╬]/g;
 const ROW_Y_TOLERANCE = 2; // pt
 const COLUMN_GAP_THRESHOLD = 8; // pt — hueco en X que se interpreta como límite de columna (2+ espacios)
