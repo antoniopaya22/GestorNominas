@@ -256,7 +256,7 @@ function PayslipsList() {
         </div>
 
         {years.length > 0 && (
-          <Select value={yearFilter || ALL} onValueChange={(v) => { setYearFilter(v === ALL ? "" : v); setPage(1); }}>
+          <Select value={yearFilter || ALL} onValueChange={(v) => { setYearFilter(v === ALL || v === null ? "" : v); setPage(1); }}>
             <SelectTrigger className="w-auto" size="sm">
               <SelectValue placeholder="Año">{(v: string) => (v === ALL ? "Año" : v)}</SelectValue>
             </SelectTrigger>
@@ -269,7 +269,7 @@ function PayslipsList() {
           </Select>
         )}
 
-        <Select value={monthFilter || ALL} onValueChange={(v) => setMonthFilter(v === ALL ? "" : v)}>
+        <Select value={monthFilter || ALL} onValueChange={(v) => setMonthFilter(v === ALL || v === null ? "" : v)}>
           <SelectTrigger className="w-auto" size="sm">
             <SelectValue placeholder="Mes">{(v: string) => (v === ALL ? "Mes" : MONTH_NAMES[Number(v) - 1])}</SelectValue>
           </SelectTrigger>
@@ -281,7 +281,7 @@ function PayslipsList() {
           </SelectContent>
         </Select>
 
-        <Select value={statusFilter || ALL} onValueChange={(v) => { setStatusFilter(v === ALL ? "" : v); setPage(1); }}>
+        <Select value={statusFilter || ALL} onValueChange={(v) => { setStatusFilter(v === ALL || v === null ? "" : v); setPage(1); }}>
           <SelectTrigger className="w-auto" size="sm">
             <SelectValue placeholder="Estado">{(v: string) => (STATUS_MAP[v]?.label ?? "Estado")}</SelectValue>
           </SelectTrigger>
@@ -294,7 +294,7 @@ function PayslipsList() {
           </SelectContent>
         </Select>
 
-        <Select value={typeFilter || ALL} onValueChange={(v) => { setTypeFilter(v === ALL ? "" : v); setPage(1); }}>
+        <Select value={typeFilter || ALL} onValueChange={(v) => { setTypeFilter(v === ALL || v === null ? "" : v); setPage(1); }}>
           <SelectTrigger className="w-auto" size="sm">
             <SelectValue placeholder="Tipo">{(v: string) => (TYPE_FILTER_LABELS[v] ?? "Tipo")}</SelectValue>
           </SelectTrigger>

@@ -211,7 +211,7 @@ function AccountsView() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="account-type">Tipo</Label>
-            <Select value={type} onValueChange={setType}>
+            <Select value={type} onValueChange={(v) => v && setType(v)}>
               <SelectTrigger id="account-type" className="w-full">
                 <SelectValue>{(v: string) => ACCOUNT_TYPES.find((t) => t.value === v)?.label ?? v}</SelectValue>
               </SelectTrigger>
