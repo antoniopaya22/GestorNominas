@@ -2,15 +2,108 @@ import { useState, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDropzone } from "react-dropzone";
 import {
-  Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, ArrowRight,
-  AlertTriangle, Eye,
+  Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, ArrowRight, AlertTriangle,
+  Eye, X, Landmark, Tags, Receipt, CalendarRange, Check, RotateCcw,
 } from "lucide-react";
 import { importYnab, type ImportResult } from "../lib/api";
 import { Providers } from "./Providers";
 import { toast } from "sonner";
-import { Card } from "@/components/ui/card";
+import { PageHeader, SectionCard } from "./app";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "cn";
+
+type Step = 1 | 2 | 3;
+
+const STEPS: { n: Step; label: string }[] = [
+  { n: 1, label: "Archivo" },
+  { n: 2, label: "Revisión" },
+  { n: 3, label: "Listo" },
+];
+
+function formatRangeDate(d: string) {
+  if (!/^\d{4}-\d{2}-\d{2}/.test(d)) return d;
+  return new Date(d.slice(0, 10) + "T00:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function formatSize(bytes: number) {
+  return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toLocaleString("es-ES", { maximumFractionDigits: 1 })} MB`;
+}
+
+function Stepper({ step }: { step: Step }) {
+  return (
+    <ol className="flex items-center gap-2" aria-label="Pasos de la importación">
+      {STEPS.map((s, i) => {
+        const done = step > s.n;
+        const current = step === s.n;
+        return (
+          <li key={s.n} className="flex flex-1 items-center gap-2 last:flex-none" aria-current={current ? "step" : undefined}>
+            <span
+              className={cn(
+                "flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold tabular-nums transition-colors",
+                done && "border-primary bg-primary text-primary-foreground",
+                current && "border-primary/50 bg-primary/10 text-primary-700 dark:text-primary",
+                !done && !current && "border-border text-muted-foreground",
+              )}
+            >
+              {done ? <Check className="size-3.5" /> : s.n}
+            </span>
+            <span className={cn("text-sm", current ? "font-medium text-foreground" : "text-muted-foreground")}>{s.label}</span>
+            {i < STEPS.length - 1 && <span className={cn("mx-1 h-px flex-1", done ? "bg-primary/50" : "bg-border")} aria-hidden="true" />}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function SummaryTiles({ summary }: { summary: ImportResult["summary"] }) {
+  const tiles = [
+    { label: "Cuentas", value: summary.accounts, icon: Landmark, hint: summary.accounts === 1 ? "cuenta" : "cuentas" },
+    { label: "Categorías", value: summary.categoryGroups + summary.categories, icon: Tags, hint: `${summary.categoryGroups} grupos · ${summary.categories} categorías` },
+    { label: "Transacciones", value: summary.transactions, icon: Receipt, hint: "movimientos" },
+  ];
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {tiles.map((t) => (
+        <div key={t.label} className="rounded-xl border border-border bg-muted/30 p-4">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            {t.label}
+            <t.icon className="size-3.5" aria-hidden="true" />
+          </div>
+          <p className="mt-1.5 text-2xl font-semibold tracking-tight text-foreground tabular-nums">{t.value.toLocaleString("es-ES")}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">{t.hint}</p>
+        </div>
+      ))}
+      <div className="rounded-xl border border-border bg-muted/30 p-4">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          Periodo
+          <CalendarRange className="size-3.5" aria-hidden="true" />
+        </div>
+        <p className="mt-2 text-sm font-semibold text-foreground">{formatRangeDate(summary.dateRange.from)}</p>
+        <p className="text-sm font-semibold text-foreground">→ {formatRangeDate(summary.dateRange.to)}</p>
+      </div>
+    </div>
+  );
+}
+
+function DuplicatesNote({ count, done }: { count: number; done: boolean }) {
+  if (count <= 0) return null;
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5" role="status">
+      <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+      <p className="text-sm text-amber-900 dark:text-amber-200">
+        {done ? (
+          <>Se importaron <strong>{count}</strong> transacciones que podrían estar duplicadas.</>
+        ) : (
+          <>
+            Hay <strong>{count}</strong> posibles duplicados (misma fecha, importe, cuenta y beneficiario que movimientos ya existentes).
+            Se importarán igualmente.
+          </>
+        )}
+      </p>
+    </div>
+  );
+}
 
 function ImportView() {
   const queryClient = useQueryClient();
@@ -41,12 +134,20 @@ function ImportView() {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["finance-analytics"] });
     },
     onError: (err: Error) => {
       setError(err.message);
       toast.error("Error al importar datos");
     },
   });
+
+  const reset = () => {
+    setFile(null);
+    setPreview(null);
+    setResult(null);
+    setError(null);
+  };
 
   const onDrop = useCallback((accepted: File[]) => {
     if (accepted.length > 0) {
@@ -57,13 +158,15 @@ function ImportView() {
     }
   }, []);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: {
       "text/csv": [".csv"],
       "text/tab-separated-values": [".tsv"],
     },
     multiple: false,
+    noClick: !!file,
+    onDropRejected: () => setError("El archivo debe ser un CSV o TSV exportado desde YNAB."),
   });
 
   const handlePreview = () => {
@@ -78,212 +181,164 @@ function ImportView() {
     importMut.mutate(file);
   };
 
+  const step: Step = result ? 3 : preview ? 2 : 1;
+  const busy = previewMut.isPending || importMut.isPending;
+
   return (
-    <div className="max-w-2xl animate-fade-in space-y-6">
-      {/* Hero */}
-      <Card className="p-0 overflow-hidden">
-        <div className="h-1.5 bg-gradient-to-r from-primary-500 to-primary-400" />
-        <div className="px-6 py-5 sm:px-8 sm:py-6">
-          <p className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Importar datos</p>
-          <p className="text-base font-semibold text-foreground">Importa transacciones desde un archivo CSV de YNAB</p>
-        </div>
-      </Card>
+    <div>
+      <PageHeader
+        title="Importar"
+        accent="desde YNAB."
+        description="Trae tus cuentas, categorías y transacciones a partir del CSV que exporta YNAB. Puedes revisar el resultado antes de confirmar."
+      />
 
-      {/* Dropzone */}
-      <Card
-        {...getRootProps()}
-        aria-label="Zona de carga de archivos CSV"
-        className={cn(
-          "p-8 border-2 border-dashed text-center cursor-pointer transition-all",
-          isDragActive
-            ? "border-primary-400 bg-primary-50/50 dark:bg-primary-500/10"
-            : "border-border hover:border-primary-300 hover:bg-muted"
-        )}
-      >
-        <input {...getInputProps()} />
-        <div className="w-14 h-14 rounded-2xl bg-primary-50 dark:bg-primary-500/10 flex items-center justify-center mx-auto mb-4">
-          <FileSpreadsheet className="w-7 h-7 text-primary-600 dark:text-primary-400" aria-hidden="true" />
-        </div>
-        {file ? (
-          <>
-            <p className="font-semibold text-foreground mb-1">{file.name}</p>
-            <p className="text-sm text-muted-foreground font-mono">{(file.size / 1024).toFixed(0)} KB</p>
-          </>
-        ) : (
-          <>
-            <p className="font-semibold text-foreground mb-1">
-              {isDragActive ? "Suelta el archivo aquí" : "Arrastra tu archivo CSV de YNAB"}
-            </p>
-            <p className="text-sm text-muted-foreground">o haz clic para seleccionar (.csv, .tsv)</p>
-          </>
-        )}
-      </Card>
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <SectionCard>
+          <Stepper step={step} />
 
-      {/* Action buttons */}
-      {file && !result && (
-        <div className="flex justify-end gap-3">
-          {!preview && (
-            <Button onClick={handlePreview} disabled={previewMut.isPending} variant="secondary" className="gap-2">
-              {previewMut.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Analizando...
-                </>
-              ) : (
-                <>
-                  <Eye className="w-4 h-4" />
-                  Vista previa
-                </>
-              )}
-            </Button>
-          )}
-          <Button onClick={handleImport} disabled={importMut.isPending} className="gap-2">
-            {importMut.isPending ? (
+          <div className="mt-6 space-y-5">
+            {/* Paso 1 — archivo */}
+            {step === 1 && (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Importando...
-              </>
-            ) : (
-              <>
-                <Upload className="w-4 h-4" />
-                Importar
+                <div
+                  {...getRootProps()}
+                  aria-label="Zona de carga de archivos CSV"
+                  className={cn(
+                    "relative flex flex-col items-center rounded-xl border-2 border-dashed px-6 py-12 text-center outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
+                    file ? "border-border bg-muted/20" : "cursor-pointer",
+                    isDragActive ? "border-primary/60 bg-primary/5" : !file && "border-border hover:border-primary/40 hover:bg-primary/[0.03]",
+                  )}
+                >
+                  <input {...getInputProps()} />
+                  <div className="relative mb-4 flex size-14 items-center justify-center rounded-2xl border border-border bg-card shadow-sm">
+                    <div className="absolute inset-0 rounded-2xl bg-primary/5" />
+                    <FileSpreadsheet className="relative size-6 text-primary-600 dark:text-primary" aria-hidden="true" />
+                  </div>
+                  {file ? (
+                    <>
+                      <p className="font-medium text-foreground">{file.name}</p>
+                      <p className="mt-0.5 text-sm text-muted-foreground tabular-nums">{formatSize(file.size)}</p>
+                      <div className="mt-4 flex gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={open} disabled={busy}>Cambiar archivo</Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={reset} disabled={busy} className="gap-1 text-muted-foreground">
+                          <X className="size-3.5" /> Quitar
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-medium text-foreground">{isDragActive ? "Suelta el archivo aquí" : "Arrastra tu CSV de YNAB"}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        o <span className="font-medium text-primary-700 underline-offset-4 hover:underline dark:text-primary">elige un archivo</span> (.csv, .tsv)
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {file && (
+                  <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <Button variant="outline" onClick={handleImport} disabled={busy} className="gap-1.5">
+                      {importMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                      {importMut.isPending ? "Importando…" : "Importar sin revisar"}
+                    </Button>
+                    <Button onClick={handlePreview} disabled={busy} className="gap-1.5">
+                      {previewMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}
+                      {previewMut.isPending ? "Analizando…" : "Revisar antes de importar"}
+                    </Button>
+                  </div>
+                )}
               </>
             )}
-          </Button>
-        </div>
-      )}
 
-      {/* Error */}
-      {error && (
-        <Card className="p-4 bg-destructive/5 border-destructive/20 flex-row items-start gap-3" role="alert">
-          <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" aria-hidden="true" />
-          <div>
-            <p className="font-semibold text-destructive text-sm">Error al importar</p>
-            <p className="text-sm text-destructive/80">{error}</p>
+            {/* Paso 2 — revisión */}
+            {step === 2 && preview && (
+              <>
+                <div>
+                  <h2 className="text-base font-semibold text-foreground">Esto es lo que se va a importar</h2>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    Desde <span className="font-medium text-foreground">{file?.name}</span>. Todavía no se ha guardado nada.
+                  </p>
+                </div>
+                <SummaryTiles summary={preview.summary} />
+                <DuplicatesNote count={preview.summary.duplicates ?? 0} done={false} />
+                <div className="flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:justify-between">
+                  <Button variant="ghost" onClick={reset} disabled={busy} className="gap-1.5 text-muted-foreground">
+                    <RotateCcw className="size-4" /> Elegir otro archivo
+                  </Button>
+                  <Button onClick={handleImport} disabled={busy} className="gap-1.5">
+                    {importMut.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                    {importMut.isPending ? "Importando…" : "Confirmar importación"}
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {/* Paso 3 — listo */}
+            {step === 3 && result && (
+              <>
+                <div className="flex items-start gap-4">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-emerald-500/10">
+                    <CheckCircle2 className="size-6 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-foreground">Importación completada</h2>
+                    <p className="mt-0.5 text-sm text-muted-foreground">Tus datos ya están disponibles en Finanzas.</p>
+                  </div>
+                </div>
+                <SummaryTiles summary={result.summary} />
+                <DuplicatesNote count={result.summary.duplicates ?? 0} done />
+                <div className="flex flex-wrap gap-2 border-t border-border pt-5">
+                  <a href="/app/transactions" className={cn(buttonVariants(), "gap-1.5")}>
+                    Ver transacciones <ArrowRight className="size-4" />
+                  </a>
+                  <a href="/app/accounts" className={buttonVariants({ variant: "outline" })}>Ver cuentas</a>
+                  <Button variant="ghost" onClick={reset} className="gap-1.5 text-muted-foreground">
+                    <RotateCcw className="size-4" /> Importar otro archivo
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {error && (
+              <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4" role="alert">
+                <AlertCircle className="mt-0.5 size-5 shrink-0 text-destructive" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-destructive">No se pudo procesar el archivo</p>
+                  <p className="mt-0.5 text-sm text-destructive/80">{error}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Comprueba que es el CSV de transacciones exportado desde YNAB, sin modificar.</p>
+                </div>
+              </div>
+            )}
           </div>
-        </Card>
-      )}
+        </SectionCard>
 
-      {/* Preview */}
-      {preview && (
-        <Card className="p-6 bg-primary-50/60 border-primary-200 dark:bg-primary-500/10 dark:border-primary-500/20">
-          <div className="flex items-center gap-3 mb-4">
-            <Eye className="w-6 h-6 text-primary-600 dark:text-primary-400" aria-hidden="true" />
-            <h3 className="font-semibold text-primary-800 dark:text-primary-300">Vista previa de importación</h3>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-            <div>
-              <p className="text-xs text-primary-600 dark:text-primary-400 uppercase font-semibold">Cuentas</p>
-              <p className="text-2xl font-bold font-mono tabular-nums text-primary-800 dark:text-primary-300">{preview.summary.accounts}</p>
-            </div>
-            <div>
-              <p className="text-xs text-primary-600 dark:text-primary-400 uppercase font-semibold">Categorías</p>
-              <p className="text-2xl font-bold font-mono tabular-nums text-primary-800 dark:text-primary-300">
-                {preview.summary.categoryGroups + preview.summary.categories}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-primary-600 dark:text-primary-400 uppercase font-semibold">Transacciones</p>
-              <p className="text-2xl font-bold font-mono tabular-nums text-primary-800 dark:text-primary-300">{preview.summary.transactions}</p>
-            </div>
-            <div>
-              <p className="text-xs text-primary-600 dark:text-primary-400 uppercase font-semibold">Periodo</p>
-              <p className="text-sm font-bold text-primary-800 dark:text-primary-300">
-                {preview.summary.dateRange.from} — {preview.summary.dateRange.to}
-              </p>
-            </div>
-          </div>
-
-          {(preview.summary.duplicates ?? 0) > 0 && (
-            <div className="flex items-start gap-2 p-3 bg-accent-50 dark:bg-accent-500/10 rounded-xl border border-accent-200 dark:border-accent-500/20 mb-4">
-              <AlertTriangle className="w-4 h-4 text-accent-600 dark:text-accent-400 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-accent-800 dark:text-accent-300">
-                Se detectaron <strong>{preview.summary.duplicates}</strong> posibles duplicados
-                (transacciones con misma fecha, importe, cuenta y beneficiario ya existentes).
-                Se importarán igualmente.
-              </p>
-            </div>
-          )}
-
-          <p className="text-sm text-primary-700 dark:text-primary-400">
-            Haz clic en &laquo;Importar&raquo; para confirmar la importación.
-          </p>
-        </Card>
-      )}
-
-      {/* Success */}
-      {result && (
-        <Card className="p-6 bg-success-50 border-success-100 dark:bg-success-500/10 dark:border-success-500/20">
-          <div className="flex items-center gap-3 mb-4">
-            <CheckCircle2 className="w-6 h-6 text-success-600" aria-hidden="true" />
-            <h3 className="font-semibold text-success-700 dark:text-success-500">Importación completada</h3>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-            <div>
-              <p className="text-xs text-success-600 uppercase font-semibold">Cuentas</p>
-              <p className="text-2xl font-bold font-mono tabular-nums text-success-700 dark:text-success-500">{result.summary.accounts}</p>
-            </div>
-            <div>
-              <p className="text-xs text-success-600 uppercase font-semibold">Categorías</p>
-              <p className="text-2xl font-bold font-mono tabular-nums text-success-700 dark:text-success-500">
-                {result.summary.categoryGroups + result.summary.categories}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-success-600 uppercase font-semibold">Transacciones</p>
-              <p className="text-2xl font-bold font-mono tabular-nums text-success-700 dark:text-success-500">{result.summary.transactions}</p>
-            </div>
-            <div>
-              <p className="text-xs text-success-600 uppercase font-semibold">Periodo</p>
-              <p className="text-sm font-bold text-success-700 dark:text-success-500">
-                {result.summary.dateRange.from} — {result.summary.dateRange.to}
-              </p>
-            </div>
-          </div>
-
-          {(result.summary.duplicates ?? 0) > 0 && (
-            <div className="flex items-start gap-2 p-3 bg-accent-50 dark:bg-accent-500/10 rounded-xl border border-accent-200 dark:border-accent-500/20 mb-4">
-              <AlertTriangle className="w-4 h-4 text-accent-600 dark:text-accent-400 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-accent-800 dark:text-accent-300">
-                Se importaron <strong>{result.summary.duplicates}</strong> transacciones
-                que podrían ser duplicadas.
-              </p>
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <a href="/app/transactions" className={cn(buttonVariants({ size: "sm" }), "gap-1.5")}>
-              Ver transacciones <ArrowRight className="w-3.5 h-3.5" />
-            </a>
-            <a href="/app/accounts" className={cn(buttonVariants({ variant: "secondary", size: "sm" }))}>
-              Ver cuentas
-            </a>
-          </div>
-        </Card>
-      )}
-
-      {/* Instructions */}
-      <Card className="p-5">
-        <h3 className="font-semibold text-foreground text-sm mb-3">¿Cómo exportar desde YNAB?</h3>
-        <ol className="space-y-2 text-sm text-muted-foreground">
-          <li className="flex gap-2">
-            <span className="font-bold text-primary-600 dark:text-primary-400">1.</span>
-            Abre YNAB y ve a la sección de tu presupuesto
-          </li>
-          <li className="flex gap-2">
-            <span className="font-bold text-primary-600 dark:text-primary-400">2.</span>
-            En la cuenta o en &laquo;Todas las cuentas&raquo;, haz clic en exportar
-          </li>
-          <li className="flex gap-2">
-            <span className="font-bold text-primary-600 dark:text-primary-400">3.</span>
-            Selecciona formato CSV y descarga el archivo
-          </li>
-          <li className="flex gap-2">
-            <span className="font-bold text-primary-600 dark:text-primary-400">4.</span>
-            Sube el archivo aquí para importar tus datos automáticamente
-          </li>
-        </ol>
-      </Card>
+        <aside className="space-y-4">
+          <SectionCard title="Cómo exportar desde YNAB">
+            <ol className="space-y-3">
+              {[
+                "Abre YNAB y entra en tu presupuesto.",
+                "En una cuenta o en «Todas las cuentas», pulsa Exportar.",
+                "Elige formato CSV y descarga el archivo.",
+                "Súbelo aquí y revisa el resultado antes de confirmar.",
+              ].map((text, i) => (
+                <li key={i} className="flex gap-3 text-sm text-muted-foreground">
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border bg-muted/60 text-[11px] font-semibold text-foreground tabular-nums">
+                    {i + 1}
+                  </span>
+                  <span>{text}</span>
+                </li>
+              ))}
+            </ol>
+          </SectionCard>
+          <SectionCard title="Qué se importa">
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li>Las cuentas y categorías que no existan se crean automáticamente.</li>
+              <li>Los movimientos que parezcan repetidos se marcan como posibles duplicados.</li>
+              <li>El archivo no se guarda: solo se leen sus movimientos.</li>
+            </ul>
+          </SectionCard>
+        </aside>
+      </div>
     </div>
   );
 }
