@@ -1,8 +1,7 @@
 ---
 import MarketingLayout from "../layouts/MarketingLayout.astro";
+import ProductMockup from "../components/marketing/ProductMockup.astro";
 import { buttonVariants } from "../components/ui/button";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
 import {
   FileScan, LayoutDashboard, Users, ShieldCheck, BellRing, TrendingUp,
   Upload, Sparkles, LineChart,
@@ -42,65 +41,82 @@ const features = [
 ];
 
 const steps = [
-  { icon: Upload, title: "Sube tu nómina", description: "Arrastra el PDF — nada de escáneres ni fotos, solo el documento digital." },
-  { icon: Sparkles, title: "Se procesa sola", description: "El sistema reconoce el formato y extrae cada concepto automáticamente." },
-  { icon: LineChart, title: "Analiza y decide", description: "Consulta tu evolución salarial y tus finanzas en un dashboard claro." },
+  { n: "01", icon: Upload, title: "Sube tu nómina", description: "Arrastra el PDF — nada de escáneres ni fotos, solo el documento digital." },
+  { n: "02", icon: Sparkles, title: "Se procesa sola", description: "El sistema reconoce el formato y extrae cada concepto automáticamente." },
+  { n: "03", icon: LineChart, title: "Analiza y decide", description: "Consulta tu evolución salarial y tus finanzas en un dashboard claro." },
 ];
 ---
 
 <MarketingLayout title="Inicio" description="Sube tus nóminas en PDF y consigue al instante un dashboard con tu evolución salarial, IRPF y alertas — sin rellenar nada a mano.">
   <!-- Hero -->
-  <section class="max-w-6xl mx-auto px-4 md:px-8 pt-20 pb-16 md:pt-28 md:pb-24 text-center">
-    <Badge variant="secondary" className="mb-6">Nuevo · Extracción sin OCR, directa del PDF</Badge>
-    <h1 class="text-4xl md:text-6xl font-bold tracking-tight text-balance max-w-3xl mx-auto">
-      Tus nóminas, entendidas automáticamente
-    </h1>
-    <p class="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto text-balance">
-      Sube el PDF de tu nómina y obtén al instante un dashboard con tu bruto, tu neto,
-      tus retenciones y su evolución — sin hojas de cálculo ni introducir nada a mano.
-    </p>
-    <div class="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
-      <a href="/login" class={buttonVariants({ size: "lg" }) + " px-8"}>Empezar gratis</a>
-      <a href="/caracteristicas" class={buttonVariants({ variant: "outline", size: "lg" }) + " px-8"}>Ver características</a>
+  <section class="max-w-6xl mx-auto px-4 md:px-8 pt-16 pb-20 md:pt-24 md:pb-28">
+    <div class="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+      <div>
+        <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-700 dark:text-primary-400 bg-primary-50 dark:bg-primary-950/40 rounded-full px-3 py-1 mb-6">
+          Extracción sin OCR, directa del PDF
+        </span>
+        <h1 class="text-4xl md:text-5xl lg:text-[3.25rem] font-bold tracking-tight text-balance leading-[1.08]">
+          Tus nóminas, entendidas automáticamente
+        </h1>
+        <p class="mt-6 text-lg text-muted-foreground max-w-lg text-balance">
+          Sube el PDF de tu nómina y obtén al instante un dashboard con tu bruto, tu neto,
+          tus retenciones y su evolución — sin hojas de cálculo ni introducir nada a mano.
+        </p>
+        <div class="mt-9 flex flex-col sm:flex-row items-start gap-3">
+          <a
+            href="/login"
+            class="inline-flex items-center justify-center rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-base font-medium h-12 px-8 transition-colors"
+          >
+            Empezar gratis
+          </a>
+          <a href="/caracteristicas" class={buttonVariants({ variant: "outline" }) + " h-12 px-8 text-base"}>
+            Ver características
+          </a>
+        </div>
+        <p class="mt-5 text-sm text-muted-foreground">Gratis, sin tarjeta de crédito.</p>
+      </div>
+
+      <ProductMockup />
     </div>
   </section>
 
   <!-- Features -->
   <section class="max-w-6xl mx-auto px-4 md:px-8 py-16 md:py-24">
-    <div class="text-center mb-12">
-      <h2 class="text-3xl font-bold tracking-tight">Todo lo que necesitas para entender tu nómina</h2>
-      <p class="mt-3 text-muted-foreground max-w-xl mx-auto">Pensado para nóminas españolas, tanto de empresa privada como de organismos públicos.</p>
+    <div class="max-w-xl mb-12">
+      <h2 class="text-3xl font-bold tracking-tight text-balance">Todo lo que necesitas para entender tu nómina</h2>
+      <p class="mt-3 text-muted-foreground">Pensado para nóminas españolas, tanto de empresa privada como de organismos públicos.</p>
     </div>
-    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-border rounded-2xl overflow-hidden border border-border">
       {features.map(({ icon: Icon, title, description }) => (
-        <Card>
-          <CardHeader>
-            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-2">
-              <Icon className="w-5 h-5 text-primary" />
-            </div>
-            <CardTitle>{title}</CardTitle>
-            <CardDescription>{description}</CardDescription>
-          </CardHeader>
-          <CardContent></CardContent>
-        </Card>
+        <div class="bg-card p-6">
+          <div class="w-9 h-9 rounded-lg bg-muted flex items-center justify-center mb-4">
+            <Icon className="w-[18px] h-[18px] text-foreground" />
+          </div>
+          <h3 class="font-semibold text-[15px]">{title}</h3>
+          <p class="mt-1.5 text-sm text-muted-foreground leading-relaxed">{description}</p>
+        </div>
       ))}
     </div>
   </section>
 
   <!-- How it works -->
-  <section class="border-y border-border bg-muted/30">
+  <section class="border-y border-border bg-card/50">
     <div class="max-w-6xl mx-auto px-4 md:px-8 py-16 md:py-24">
-      <div class="text-center mb-12">
-        <h2 class="text-3xl font-bold tracking-tight">Cómo funciona</h2>
-      </div>
-      <div class="grid md:grid-cols-3 gap-8">
-        {steps.map(({ icon: Icon, title, description }, i) => (
-          <div class="text-center">
-            <div class="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center mx-auto mb-4 font-bold">
-              {i + 1}
+      <h2 class="text-3xl font-bold tracking-tight mb-12">Cómo funciona</h2>
+      <div class="grid md:grid-cols-3 gap-x-8 gap-y-10">
+        {steps.map(({ n, icon: Icon, title, description }) => (
+          <div class="relative">
+            <span
+              class="absolute top-0 left-0 text-7xl font-bold tracking-tight text-foreground/[0.06] leading-none select-none -z-10"
+              aria-hidden="true"
+            >
+              {n}
+            </span>
+            <div class="w-9 h-9 rounded-lg bg-background border border-border flex items-center justify-center mb-4 ml-1">
+              <Icon className="w-[18px] h-[18px] text-primary-600 dark:text-primary-400" />
             </div>
-            <h3 class="font-semibold mb-2">{title}</h3>
-            <p class="text-sm text-muted-foreground">{description}</p>
+            <h3 class="font-semibold mb-1.5 ml-1">{title}</h3>
+            <p class="text-sm text-muted-foreground leading-relaxed max-w-[85%] ml-1">{description}</p>
           </div>
         ))}
       </div>
@@ -109,10 +125,15 @@ const steps = [
 
   <!-- CTA -->
   <section class="max-w-4xl mx-auto px-4 md:px-8 py-20 md:py-28 text-center">
-    <h2 class="text-3xl md:text-4xl font-bold tracking-tight">Empieza a entender tu nómina hoy</h2>
+    <h2 class="text-3xl md:text-4xl font-bold tracking-tight text-balance">Empieza a entender tu nómina hoy</h2>
     <p class="mt-4 text-muted-foreground">Gratis, sin tarjeta de crédito.</p>
     <div class="mt-8">
-      <a href="/login" class={buttonVariants({ size: "lg" }) + " px-10"}>Crear cuenta gratis</a>
+      <a
+        href="/login"
+        class="inline-flex items-center justify-center rounded-lg bg-primary-600 hover:bg-primary-700 text-white text-base font-medium h-12 px-10 transition-colors"
+      >
+        Crear cuenta gratis
+      </a>
     </div>
   </section>
 </MarketingLayout>
