@@ -60,7 +60,9 @@ async function categoryBelongsToUser(userId: number, categoryId: number): Promis
 recurringTransactionsRouter.get("/", async (req, res, next) => {
   try {
     const { userId } = req.user!;
-    await syncRecurringTransactions(userId, getRecurringSyncThroughDate());
+    // La generación de ocurrencias ya no pasa por aquí (un GET no debería
+    // escribir) — corre en el cron diario y justo tras crear/editar/activar
+    // una regla, que es cuando de verdad puede haber cambiado algo.
 
     const rules = await db
       .select({
@@ -199,26 +201,33 @@ recurringTransactionsRouter.put("/:id", async (req, res, next) => {
       }
     }
 
-    const [updated] = await db
-      .update(recurringTransactions)
-      .set({
-        accountId: parsed.data.accountId,
-        categoryId: parsed.data.categoryId ?? null,
-        type: parsed.data.type,
-        amount: parsed.data.amount,
-        cadence: parsed.data.cadence,
-        intervalCount: parsed.data.intervalCount,
-        startDate: parsed.data.startDate,
-        endDate: parsed.data.endDate ?? null,
-        payee: parsed.data.payee ?? null,
-        memo: parsed.data.memo ?? null,
-        flag: parsed.data.flag ?? null,
-      })
-      .where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, userId)))
-      .returning();
+    // Cambiar la regla y regenerar sus ocurrencias futuras es una sola
+    // unidad: a medias, se quedarían ocurrencias pendientes que ya no
+    // corresponden a la regla nueva.
+    const updated = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(recurringTransactions)
+        .set({
+          accountId: parsed.data.accountId,
+          categoryId: parsed.data.categoryId ?? null,
+          type: parsed.data.type,
+          amount: parsed.data.amount,
+          cadence: parsed.data.cadence,
+          intervalCount: parsed.data.intervalCount,
+          startDate: parsed.data.startDate,
+          endDate: parsed.data.endDate ?? null,
+          payee: parsed.data.payee ?? null,
+          memo: parsed.data.memo ?? null,
+          flag: parsed.data.flag ?? null,
+        })
+        .where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, userId)))
+        .returning();
 
-    await deletePendingRecurringOccurrences(userId, id);
-    await syncRecurringTransactions(userId, getRecurringSyncThroughDate());
+      await deletePendingRecurringOccurrences(userId, id, tx);
+      await syncRecurringTransactions(userId, getRecurringSyncThroughDate(), tx);
+
+      return updated;
+    });
 
     res.json(updated);
   } catch (err) {
@@ -246,16 +255,20 @@ recurringTransactionsRouter.patch("/:id/active", async (req, res, next) => {
       return res.status(404).json({ error: "Programación recurrente no encontrada" });
     }
 
-    const [updated] = await db
-      .update(recurringTransactions)
-      .set({ active: parsed.data.active })
-      .where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, userId)))
-      .returning();
+    const updated = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(recurringTransactions)
+        .set({ active: parsed.data.active })
+        .where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, userId)))
+        .returning();
 
-    await deletePendingRecurringOccurrences(userId, id);
-    if (parsed.data.active) {
-      await syncRecurringTransactions(userId, getRecurringSyncThroughDate());
-    }
+      await deletePendingRecurringOccurrences(userId, id, tx);
+      if (parsed.data.active) {
+        await syncRecurringTransactions(userId, getRecurringSyncThroughDate(), tx);
+      }
+
+      return updated;
+    });
 
     res.json(updated);
   } catch (err) {
@@ -276,11 +289,13 @@ recurringTransactionsRouter.delete("/:id", async (req, res, next) => {
       return res.status(404).json({ error: "Programación recurrente no encontrada" });
     }
 
-    await deletePendingRecurringOccurrences(userId, id);
+    await db.transaction(async (tx) => {
+      await deletePendingRecurringOccurrences(userId, id, tx);
 
-    await db
-      .delete(recurringTransactions)
-      .where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, userId)));
+      await tx
+        .delete(recurringTransactions)
+        .where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, userId)));
+    });
 
     res.json({ ok: true });
   } catch (err) {

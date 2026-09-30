@@ -1,5 +1,5 @@
 import { and, eq, gte, isNotNull, lte } from "drizzle-orm";
-import { db } from "../db/index.js";
+import { db, type DbOrTx } from "../db/index.js";
 import { recurringTransactions, transactions } from "../db/schema.js";
 
 export type RecurringCadence = "weekly" | "monthly" | "yearly";
@@ -122,8 +122,9 @@ function buildOccurrenceKey(recurringTransactionId: number, scheduledFor: string
 export async function syncRecurringTransactions(
   userId: number,
   throughDate = getRecurringSyncThroughDate(),
+  dbOrTx: DbOrTx = db,
 ): Promise<number> {
-  const rules = await db
+  const rules = await dbOrTx
     .select()
     .from(recurringTransactions)
     .where(
@@ -138,7 +139,7 @@ export async function syncRecurringTransactions(
     return 0;
   }
 
-  const existingGeneratedTransactions = await db
+  const existingGeneratedTransactions = await dbOrTx
     .select({
       recurringTransactionId: transactions.recurringTransactionId,
       scheduledFor: transactions.scheduledFor,
@@ -202,7 +203,14 @@ export async function syncRecurringTransactions(
 
   for (let index = 0; index < rowsToInsert.length; index += 100) {
     const batch = rowsToInsert.slice(index, index + 100);
-    await db.insert(transactions).values(batch);
+    // onConflictDoNothing: red de seguridad además del chequeo en memoria de
+    // arriba — si dos peticiones sincronizan a la vez, la clave única de
+    // (recurring_transaction_id, scheduled_for) evita duplicar la fila
+    // aunque ambas hayan decidido insertarla antes de que la otra terminase.
+    await dbOrTx
+      .insert(transactions)
+      .values(batch)
+      .onConflictDoNothing({ target: [transactions.recurringTransactionId, transactions.scheduledFor] });
   }
 
   return rowsToInsert.length;
@@ -211,8 +219,9 @@ export async function syncRecurringTransactions(
 export async function deletePendingRecurringOccurrences(
   userId: number,
   recurringTransactionId: number,
+  dbOrTx: DbOrTx = db,
 ): Promise<void> {
-  await db
+  await dbOrTx
     .delete(transactions)
     .where(
       and(
@@ -268,4 +277,23 @@ export async function getPendingOccurrencesForRule(
     );
 
   return rows.length;
+}
+
+/**
+ * Genera las ocurrencias pendientes de todos los usuarios con alguna regla
+ * activa — pensado para el cron diario, ahora que GET /transactions y
+ * GET /recurring-transactions ya no lo hacen en cada lectura (crear,
+ * editar y activar/desactivar una regla lo siguen disparando al momento).
+ */
+export async function syncAllUsersRecurringTransactions(): Promise<{ usersSynced: number; occurrencesCreated: number }> {
+  const userIds = await db
+    .selectDistinct({ userId: recurringTransactions.userId })
+    .from(recurringTransactions)
+    .where(eq(recurringTransactions.active, true));
+
+  let occurrencesCreated = 0;
+  for (const { userId } of userIds) {
+    occurrencesCreated += await syncRecurringTransactions(userId);
+  }
+  return { usersSynced: userIds.length, occurrencesCreated };
 }

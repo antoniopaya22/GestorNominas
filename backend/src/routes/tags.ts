@@ -74,8 +74,21 @@ tagsRouter.post("/assign", async (req, res, next) => {
       .where(and(eq(tags.id, parsed.data.tagId), eq(tags.userId, userId)));
     if (!tag) return res.status(404).json({ error: "Etiqueta no encontrada" });
 
-    const [entry] = await db.insert(payslipTags).values(parsed.data).returning();
-    res.status(201).json(entry);
+    // onConflictDoNothing: asignar dos veces la misma etiqueta (doble clic)
+    // ya no puede duplicar la fila (payslip_tags tiene ahora una clave
+    // única) — si ya existía, se devuelve tal cual en vez de dar un 500.
+    const [entry] = await db
+      .insert(payslipTags)
+      .values(parsed.data)
+      .onConflictDoNothing({ target: [payslipTags.payslipId, payslipTags.tagId] })
+      .returning();
+    if (entry) return res.status(201).json(entry);
+
+    const [existing] = await db
+      .select()
+      .from(payslipTags)
+      .where(and(eq(payslipTags.payslipId, parsed.data.payslipId), eq(payslipTags.tagId, parsed.data.tagId)));
+    res.status(200).json(existing);
   } catch (err) {
     next(err);
   }

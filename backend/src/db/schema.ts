@@ -1,4 +1,4 @@
-import { pgTable, text, integer, serial, boolean, doublePrecision, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, serial, boolean, doublePrecision, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
 
 // Nota: las columnas de dinero usan doublePrecision (float8) en vez de numeric.
 // numeric devuelve string en el driver de Postgres (para no perder precisión
@@ -26,43 +26,62 @@ export const profiles = pgTable("profiles", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const payslips = pgTable("payslips", {
-  id: serial("id").primaryKey(),
-  profileId: integer("profile_id")
-    .notNull()
-    .references(() => profiles.id, { onDelete: "cascade" }),
-  fileName: text("file_name").notNull(),
-  periodMonth: integer("period_month"),
-  periodYear: integer("period_year"),
-  company: text("company"),
-  grossSalary: doublePrecision("gross_salary"),
-  netSalary: doublePrecision("net_salary"),
-  rawText: text("raw_text"),
-  parsingStatus: text("parsing_status", {
-    enum: ["pending", "parsed", "error", "review"],
-  })
-    .notNull()
-    .default("pending"),
-  payslipType: text("payslip_type", {
-    enum: ["ordinal", "extra"],
-  })
-    .notNull()
-    .default("ordinal"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const payslips = pgTable(
+  "payslips",
+  {
+    id: serial("id").primaryKey(),
+    profileId: integer("profile_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    fileName: text("file_name").notNull(),
+    periodMonth: integer("period_month"),
+    periodYear: integer("period_year"),
+    company: text("company"),
+    grossSalary: doublePrecision("gross_salary"),
+    netSalary: doublePrecision("net_salary"),
+    rawText: text("raw_text"),
+    parsingStatus: text("parsing_status", {
+      enum: ["pending", "parsed", "error", "review"],
+    })
+      .notNull()
+      .default("pending"),
+    payslipType: text("payslip_type", {
+      enum: ["ordinal", "extra"],
+    })
+      .notNull()
+      .default("ordinal"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    // Listado por perfil (siempre filtrado así) y detección de posibles
+    // duplicados (mismo perfil + periodo, ver routes/payslips.ts).
+    profilePeriodIdx: index("payslips_profile_period_idx").on(
+      table.profileId,
+      table.periodYear,
+      table.periodMonth,
+    ),
+  }),
+);
 
-export const payslipConcepts = pgTable("payslip_concepts", {
-  id: serial("id").primaryKey(),
-  payslipId: integer("payslip_id")
-    .notNull()
-    .references(() => payslips.id, { onDelete: "cascade" }),
-  category: text("category", {
-    enum: ["devengo", "deduccion", "otros"],
-  }).notNull(),
-  name: text("name").notNull(),
-  amount: doublePrecision("amount").notNull(),
-  isPercentage: boolean("is_percentage").notNull().default(false),
-});
+export const payslipConcepts = pgTable(
+  "payslip_concepts",
+  {
+    id: serial("id").primaryKey(),
+    payslipId: integer("payslip_id")
+      .notNull()
+      .references(() => payslips.id, { onDelete: "cascade" }),
+    category: text("category", {
+      enum: ["devengo", "deduccion", "otros"],
+    }).notNull(),
+    name: text("name").notNull(),
+    amount: doublePrecision("amount").notNull(),
+    isPercentage: boolean("is_percentage").notNull().default(false),
+  },
+  (table) => ({
+    // Toda pantalla que muestra una nómina carga sus conceptos por payslipId.
+    payslipIdx: index("payslip_concepts_payslip_idx").on(table.payslipId),
+  }),
+);
 
 // ─── Payslip Notes (document management) ────────────────────────
 export const payslipNotes = pgTable("payslip_notes", {
@@ -84,15 +103,23 @@ export const tags = pgTable("tags", {
   color: text("color").notNull().default("#6366f1"),
 });
 
-export const payslipTags = pgTable("payslip_tags", {
-  id: serial("id").primaryKey(),
-  payslipId: integer("payslip_id")
-    .notNull()
-    .references(() => payslips.id, { onDelete: "cascade" }),
-  tagId: integer("tag_id")
-    .notNull()
-    .references(() => tags.id, { onDelete: "cascade" }),
-});
+export const payslipTags = pgTable(
+  "payslip_tags",
+  {
+    id: serial("id").primaryKey(),
+    payslipId: integer("payslip_id")
+      .notNull()
+      .references(() => payslips.id, { onDelete: "cascade" }),
+    tagId: integer("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (table) => ({
+    // Evita asignar la misma etiqueta dos veces a la misma nómina (p. ej. un
+    // doble clic en "asignar").
+    payslipTagIdx: uniqueIndex("payslip_tags_payslip_tag_idx").on(table.payslipId, table.tagId),
+  }),
+);
 
 // ─── Alert Rules (automation) ───────────────────────────────────
 export const alertRules = pgTable("alert_rules", {
@@ -178,35 +205,49 @@ export const categories = pgTable("categories", {
 });
 
 // ─── Financial Transactions ─────────────────────────────────────
-export const transactions = pgTable("transactions", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  accountId: integer("account_id")
-    .notNull()
-    .references(() => accounts.id, { onDelete: "cascade" }),
-  categoryId: integer("category_id").references(() => categories.id, {
-    onDelete: "set null",
+export const transactions = pgTable(
+  "transactions",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    categoryId: integer("category_id").references(() => categories.id, {
+      onDelete: "set null",
+    }),
+    type: text("type", {
+      enum: ["expense", "income", "transfer"],
+    }).notNull(),
+    amount: doublePrecision("amount").notNull(),
+    date: text("date").notNull(),
+    recurringTransactionId: integer("recurring_transaction_id").references(
+      () => recurringTransactions.id,
+      { onDelete: "set null" },
+    ),
+    scheduledFor: text("scheduled_for"),
+    payee: text("payee"),
+    memo: text("memo"),
+    cleared: boolean("cleared").notNull().default(false),
+    transferId: integer("transfer_id"),
+    flag: text("flag"),
+    importedFrom: text("imported_from"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    // Patrón de consulta dominante: listar por usuario ordenado/filtrado por fecha.
+    userDateIdx: index("transactions_user_date_idx").on(table.userId, table.date),
+    // Balance por cuenta y listados filtrados por cuenta.
+    accountIdx: index("transactions_account_idx").on(table.accountId),
+    // Evita generar dos veces la misma ocurrencia de una recurrente si
+    // syncRecurringTransactions se solapa (dos peticiones concurrentes) —
+    // antes solo se evitaba comprobando en memoria, sin garantía atómica.
+    recurringOccurrenceIdx: uniqueIndex("transactions_recurring_occurrence_idx")
+      .on(table.recurringTransactionId, table.scheduledFor),
   }),
-  type: text("type", {
-    enum: ["expense", "income", "transfer"],
-  }).notNull(),
-  amount: doublePrecision("amount").notNull(),
-  date: text("date").notNull(),
-  recurringTransactionId: integer("recurring_transaction_id").references(
-    () => recurringTransactions.id,
-    { onDelete: "set null" },
-  ),
-  scheduledFor: text("scheduled_for"),
-  payee: text("payee"),
-  memo: text("memo"),
-  cleared: boolean("cleared").notNull().default(false),
-  transferId: integer("transfer_id"),
-  flag: text("flag"),
-  importedFrom: text("imported_from"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+);
 
 // ─── Recurring Transactions ────────────────────────────────────
 export const recurringTransactions = pgTable("recurring_transactions", {

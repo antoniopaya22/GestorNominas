@@ -269,49 +269,44 @@ export async function getAccountsWithBalance(userId: number): Promise<AccountWit
     .where(eq(accounts.userId, userId))
     .orderBy(accounts.name);
 
-  const result: AccountWithBalance[] = [];
+  // Una sola consulta agregada en vez de una por cuenta (N+1): Postgres
+  // suma el importe con signo (misma regla que antes para transferencias —
+  // la pata con el id más bajo del par es la entrada) agrupado por cuenta,
+  // en vez de traerse cada movimiento conciliado a memoria para sumarlo aquí.
+  const netByAccount = await db
+    .select({
+      accountId: transactions.accountId,
+      // sum() sobre doublePrecision devuelve double precision (número), no
+      // numeric (que sí llegaría como string) — ver la nota de schema.ts.
+      net: sql<number>`sum(
+        case
+          when ${transactions.type} = 'income' then ${transactions.amount}
+          when ${transactions.type} = 'expense' then -${transactions.amount}
+          when ${transactions.type} = 'transfer' and ${transactions.transferId} is not null and ${transactions.transferId} < ${transactions.id}
+            then ${transactions.amount}
+          when ${transactions.type} = 'transfer' then -${transactions.amount}
+          else 0
+        end
+      )`.as("net"),
+    })
+    .from(transactions)
+    .where(and(eq(transactions.userId, userId), eq(transactions.cleared, true)))
+    .groupBy(transactions.accountId);
 
-  for (const acc of userAccounts) {
-    const allTx = await db
-      .select({
-        id: transactions.id,
-        type: transactions.type,
-        amount: transactions.amount,
-        transferId: transactions.transferId,
-      })
-      .from(transactions)
-      .where(and(eq(transactions.accountId, acc.id), eq(transactions.userId, userId), eq(transactions.cleared, true)));
+  const netMap = new Map(netByAccount.map((row) => [row.accountId, Number(row.net)]));
 
-    let balance = acc.initialBalance;
-    for (const tx of allTx) {
-      if (tx.type === "income") {
-        balance += tx.amount;
-      } else if (tx.type === "expense") {
-        balance -= tx.amount;
-      } else if (tx.type === "transfer") {
-        if (tx.transferId != null && tx.transferId < tx.id) {
-          balance += tx.amount;
-        } else {
-          balance -= tx.amount;
-        }
-      }
-    }
-
-    result.push({
-      id: acc.id,
-      name: acc.name,
-      type: acc.type,
-      currency: acc.currency,
-      initialBalance: acc.initialBalance,
-      color: acc.color,
-      icon: acc.icon,
-      archived: acc.archived ?? false,
-      balance: roundValue(balance),
-      createdAt: acc.createdAt.toISOString(),
-    });
-  }
-
-  return result;
+  return userAccounts.map((acc) => ({
+    id: acc.id,
+    name: acc.name,
+    type: acc.type,
+    currency: acc.currency,
+    initialBalance: acc.initialBalance,
+    color: acc.color,
+    icon: acc.icon,
+    archived: acc.archived ?? false,
+    balance: roundValue(acc.initialBalance + (netMap.get(acc.id) ?? 0)),
+    createdAt: acc.createdAt.toISOString(),
+  }));
 }
 
 /* ───────── Monthly trends ───────────────────────────────────── */

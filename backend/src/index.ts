@@ -28,6 +28,14 @@ import { db, client } from "./db/index.js";
 
 const app = express();
 
+// Vercel es el único proxy entre el cliente y esta app — confiar en un solo
+// salto hace que `req.ip` (y por tanto express-rate-limit, que lo usa como
+// clave) lea la IP real del cliente desde X-Forwarded-For en vez de la IP
+// del propio proxy. Sin esto, express-rate-limit rechaza arrancar en cuanto
+// detecta X-Forwarded-For sin trust proxy configurado (from v7), porque
+// confiar en esa cabecera a ciegas permite falsearla.
+app.set("trust proxy", 1);
+
 // ─── Global middleware ──────────────────────────────────────────
 app.use(
   helmet({
@@ -52,7 +60,12 @@ app.use(
 app.use(express.json());
 app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => (req as express.Request).url === "/api/health" } }));
 
-// Rate limiting
+// Rate limiting — en memoria: cada instancia de la función lleva su propia
+// cuenta, así que el límite real es "max por instancia activa", no un tope
+// global estricto (en Vercel puede haber varias instancias a la vez bajo
+// carga). Para un tope compartido de verdad haría falta un almacén externo
+// (Redis/Upstash) — no lo añado aquí porque es una dependencia nueva de
+// infraestructura, no una corrección de código.
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 500,

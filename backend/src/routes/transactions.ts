@@ -9,10 +9,6 @@ import {
 import { eq, and, sql, desc, asc, gte, lte, ilike, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { validateIdParam } from "../middleware/params.js";
-import {
-  getRecurringSyncThroughDate,
-  syncRecurringTransactions,
-} from "../services/recurring-transactions.service.js";
 
 export const transactionsRouter = Router();
 transactionsRouter.param("id", validateIdParam);
@@ -88,7 +84,8 @@ async function getOwnedCategory(categoryId: number, userId: number) {
 transactionsRouter.get("/", async (req, res, next) => {
   try {
     const { userId } = req.user!;
-    await syncRecurringTransactions(userId, getRecurringSyncThroughDate());
+    // Igual que en GET /recurring-transactions: la generación de ocurrencias
+    // ya no vive en un GET — cron diario + tras crear/editar/activar la regla.
     const parsed = filtersSchema.safeParse(req.query);
     if (!parsed.success) {
       return res.status(400).json({
@@ -251,40 +248,48 @@ transactionsRouter.post("/", async (req, res, next) => {
       const target = await getOwnedAccount(targetAccountId, userId);
       if (!target) return res.status(404).json({ error: "Cuenta destino no encontrada" });
 
-      const [outflow] = await db
-        .insert(transactions)
-        .values({
-          ...txData,
-          userId,
-          categoryId: null,
-          payee: normalizeOptionalText(txData.payee),
-          memo: normalizeOptionalText(txData.memo),
-          flag: normalizeOptionalText(txData.flag),
-          cleared: txData.cleared ?? false,
-        })
-        .returning();
+      // Las dos patas de la transferencia + el enlace entre ellas se crean
+      // como una sola unidad: sin la transacción, un fallo a mitad dejaba un
+      // outflow huérfano sin transferId, o un inflow apuntando a un outflow
+      // que nunca llegó a enlazarse de vuelta.
+      const { outflow, inflow } = await db.transaction(async (tx) => {
+        const [outflow] = await tx
+          .insert(transactions)
+          .values({
+            ...txData,
+            userId,
+            categoryId: null,
+            payee: normalizeOptionalText(txData.payee),
+            memo: normalizeOptionalText(txData.memo),
+            flag: normalizeOptionalText(txData.flag),
+            cleared: txData.cleared ?? false,
+          })
+          .returning();
 
-      const [inflow] = await db
-        .insert(transactions)
-        .values({
-          accountId: targetAccountId,
-          categoryId: null,
-          type: "transfer",
-          amount: txData.amount,
-          date: txData.date,
-          payee: `Transfer : ${account.name}`,
-          memo: normalizeOptionalText(txData.memo),
-          cleared: txData.cleared ?? false,
-          flag: normalizeOptionalText(txData.flag),
-          userId,
-          transferId: outflow.id,
-        })
-        .returning();
+        const [inflow] = await tx
+          .insert(transactions)
+          .values({
+            accountId: targetAccountId,
+            categoryId: null,
+            type: "transfer",
+            amount: txData.amount,
+            date: txData.date,
+            payee: `Transfer : ${account.name}`,
+            memo: normalizeOptionalText(txData.memo),
+            cleared: txData.cleared ?? false,
+            flag: normalizeOptionalText(txData.flag),
+            userId,
+            transferId: outflow.id,
+          })
+          .returning();
 
-      await db
-        .update(transactions)
-        .set({ transferId: inflow.id })
-        .where(eq(transactions.id, outflow.id));
+        await tx
+          .update(transactions)
+          .set({ transferId: inflow.id })
+          .where(eq(transactions.id, outflow.id));
+
+        return { outflow, inflow };
+      });
 
       res.status(201).json({
         ...outflow,
@@ -397,27 +402,33 @@ transactionsRouter.put("/:id", async (req, res, next) => {
       };
 
       if (targetTx) {
-        await db
-          .update(transactions)
-          .set({
-            accountId: destinationAccountId,
-            categoryId: null,
-            type: "transfer",
-            amount: sourcePayload.amount,
-            date: sourcePayload.date,
-            payee: `Transfer : ${sourceAccount.name}`,
-            memo: sourcePayload.memo,
-            cleared: sourcePayload.cleared,
-            flag: sourcePayload.flag,
-            transferId: sourceTx.id,
-          })
-          .where(eq(transactions.id, targetTx.id));
+        // Actualizar las dos patas es una sola unidad: a medias, una se
+        // queda con datos nuevos y la otra con los viejos.
+        const updated = await db.transaction(async (tx) => {
+          await tx
+            .update(transactions)
+            .set({
+              accountId: destinationAccountId,
+              categoryId: null,
+              type: "transfer",
+              amount: sourcePayload.amount,
+              date: sourcePayload.date,
+              payee: `Transfer : ${sourceAccount.name}`,
+              memo: sourcePayload.memo,
+              cleared: sourcePayload.cleared,
+              flag: sourcePayload.flag,
+              transferId: sourceTx.id,
+            })
+            .where(eq(transactions.id, targetTx.id));
 
-        const [updated] = await db
-          .update(transactions)
-          .set({ ...sourcePayload, transferId: targetTx.id })
-          .where(eq(transactions.id, sourceTx.id))
-          .returning();
+          const [updated] = await tx
+            .update(transactions)
+            .set({ ...sourcePayload, transferId: targetTx.id })
+            .where(eq(transactions.id, sourceTx.id))
+            .returning();
+
+          return updated;
+        });
 
         return res.json({
           ...updated,
@@ -427,34 +438,39 @@ transactionsRouter.put("/:id", async (req, res, next) => {
         });
       }
 
-      const [createdTarget] = await db
-        .insert(transactions)
-        .values({
-          accountId: destinationAccountId,
-          categoryId: null,
-          type: "transfer",
-          amount: sourcePayload.amount,
-          date: sourcePayload.date,
-          payee: `Transfer : ${sourceAccount.name}`,
-          memo: sourcePayload.memo,
-          cleared: sourcePayload.cleared,
-          flag: sourcePayload.flag,
-          userId,
-          recurringTransactionId: null,
-          scheduledFor: null,
-        })
-        .returning();
+      // Igual aquí: crear la pata destino + enlazar ambas patas entre sí.
+      const updated = await db.transaction(async (tx) => {
+        const [createdTarget] = await tx
+          .insert(transactions)
+          .values({
+            accountId: destinationAccountId,
+            categoryId: null,
+            type: "transfer",
+            amount: sourcePayload.amount,
+            date: sourcePayload.date,
+            payee: `Transfer : ${sourceAccount.name}`,
+            memo: sourcePayload.memo,
+            cleared: sourcePayload.cleared,
+            flag: sourcePayload.flag,
+            userId,
+            recurringTransactionId: null,
+            scheduledFor: null,
+          })
+          .returning();
 
-      const [updated] = await db
-        .update(transactions)
-        .set({ ...sourcePayload, transferId: createdTarget.id })
-        .where(eq(transactions.id, existing.id))
-        .returning();
+        const [updated] = await tx
+          .update(transactions)
+          .set({ ...sourcePayload, transferId: createdTarget.id })
+          .where(eq(transactions.id, existing.id))
+          .returning();
 
-      await db
-        .update(transactions)
-        .set({ transferId: updated.id })
-        .where(eq(transactions.id, createdTarget.id));
+        await tx
+          .update(transactions)
+          .set({ transferId: updated.id })
+          .where(eq(transactions.id, createdTarget.id));
+
+        return updated;
+      });
 
       return res.json({
         ...updated,
@@ -481,36 +497,45 @@ transactionsRouter.put("/:id", async (req, res, next) => {
       }
     }
 
-    const [updated] = await db
-      .update(transactions)
-      .set({
-        accountId: nextAccountId,
-        categoryId: nextCategoryId,
-        type: nextType,
-        amount: parsed.data.amount ?? existing.amount,
-        date: parsed.data.date ?? existing.date,
-        payee: Object.prototype.hasOwnProperty.call(parsed.data, "payee")
-          ? normalizeOptionalText(parsed.data.payee)
-          : existing.payee,
-        memo: Object.prototype.hasOwnProperty.call(parsed.data, "memo")
-          ? normalizeOptionalText(parsed.data.memo)
-          : existing.memo,
-        cleared: parsed.data.cleared ?? existing.cleared,
-        flag: Object.prototype.hasOwnProperty.call(parsed.data, "flag")
-          ? normalizeOptionalText(parsed.data.flag)
-          : existing.flag,
-        transferId: null,
-      })
-      .where(and(eq(transactions.id, existing.id), eq(transactions.userId, userId)))
-      .returning();
+    // Si esto convierte una transferencia en un movimiento normal, la
+    // actualización y el borrado de la pata pareja van juntos: si no,
+    // podría sobrevivir una pata "transfer" sin la otra al otro lado.
+    const updated = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(transactions)
+        .set({
+          accountId: nextAccountId,
+          categoryId: nextCategoryId,
+          type: nextType,
+          amount: parsed.data.amount ?? existing.amount,
+          date: parsed.data.date ?? existing.date,
+          payee: Object.prototype.hasOwnProperty.call(parsed.data, "payee")
+            ? normalizeOptionalText(parsed.data.payee)
+            : existing.payee,
+          memo: Object.prototype.hasOwnProperty.call(parsed.data, "memo")
+            ? normalizeOptionalText(parsed.data.memo)
+            : existing.memo,
+          cleared: parsed.data.cleared ?? existing.cleared,
+          flag: Object.prototype.hasOwnProperty.call(parsed.data, "flag")
+            ? normalizeOptionalText(parsed.data.flag)
+            : existing.flag,
+          transferId: null,
+        })
+        .where(and(eq(transactions.id, existing.id), eq(transactions.userId, userId)))
+        .returning();
+
+      if (!updated) return null;
+
+      if (paired) {
+        await tx
+          .delete(transactions)
+          .where(and(eq(transactions.id, paired.id), eq(transactions.userId, userId)));
+      }
+
+      return updated;
+    });
 
     if (!updated) return res.status(404).json({ error: "Transacción no encontrada" });
-
-    if (paired) {
-      await db
-        .delete(transactions)
-        .where(and(eq(transactions.id, paired.id), eq(transactions.userId, userId)));
-    }
 
     res.json(updated);
   } catch (err) {
@@ -536,16 +561,19 @@ transactionsRouter.delete("/:id", async (req, res, next) => {
       });
     }
 
-    // Delete paired transfer if exists
-    if (existing.transferId) {
-      await db
-        .delete(transactions)
-        .where(and(eq(transactions.id, existing.transferId), eq(transactions.userId, userId)));
-    }
+    // Ambos borrados van juntos: si no, un fallo a mitad podía dejar viva
+    // la pata pareja de una transferencia ya borrada, con un transferId que
+    // apunta a nada.
+    await db.transaction(async (tx) => {
+      if (existing.transferId) {
+        await tx
+          .delete(transactions)
+          .where(and(eq(transactions.id, existing.transferId), eq(transactions.userId, userId)));
+      }
 
-    await db
-      .delete(transactions)
-      .where(eq(transactions.id, id));
+      await tx.delete(transactions).where(eq(transactions.id, id));
+    });
+
     res.json({ ok: true });
   } catch (err) {
     next(err);

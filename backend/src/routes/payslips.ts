@@ -408,28 +408,32 @@ payslipsRouter.post("/reparse", async (req, res, next) => {
   }
 });
 
-// Persiste el resultado de un parseo/reparseo: metadatos + conceptos.
+// Persiste el resultado de un parseo/reparseo: metadatos + conceptos. Todo
+// en una transacción — sin esto, un fallo justo entre el delete y el
+// insert dejaba la nómina "parsed" pero sin un solo concepto.
 async function applyParsedResult(payslipId: number, result: ReturnType<typeof matchConcepts>) {
-  await db
-    .update(payslips)
-    .set({
-      rawText: result.rawText,
-      grossSalary: result.grossSalary,
-      netSalary: result.netSalary,
-      periodMonth: result.periodMonth,
-      periodYear: result.periodYear,
-      company: result.company,
-      parsingStatus: result.concepts.length > 0 ? "parsed" : "review",
-    })
-    .where(eq(payslips.id, payslipId));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(payslips)
+      .set({
+        rawText: result.rawText,
+        grossSalary: result.grossSalary,
+        netSalary: result.netSalary,
+        periodMonth: result.periodMonth,
+        periodYear: result.periodYear,
+        company: result.company,
+        parsingStatus: result.concepts.length > 0 ? "parsed" : "review",
+      })
+      .where(eq(payslips.id, payslipId));
 
-  await db.delete(payslipConcepts).where(eq(payslipConcepts.payslipId, payslipId));
+    await tx.delete(payslipConcepts).where(eq(payslipConcepts.payslipId, payslipId));
 
-  if (result.concepts.length > 0) {
-    await db.insert(payslipConcepts).values(
-      result.concepts.map((c) => ({ ...c, payslipId }))
-    );
-  }
+    if (result.concepts.length > 0) {
+      await tx.insert(payslipConcepts).values(
+        result.concepts.map((c) => ({ ...c, payslipId })),
+      );
+    }
+  });
 }
 
 // Procesa un PDF recién subido: extrae texto + conceptos y los persiste.
