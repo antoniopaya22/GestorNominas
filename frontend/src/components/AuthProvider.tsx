@@ -53,7 +53,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
-    window.location.href = "/login";
+    // A la landing, no a /login: quien cierra sesión a propósito no
+    // necesita ver el formulario de entrar otra vez de inmediato.
+    window.location.href = "/";
   }, []);
 
   return (

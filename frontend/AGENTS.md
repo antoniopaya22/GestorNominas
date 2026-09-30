@@ -101,7 +101,7 @@ Login con Google vía **Supabase Auth** (`src/lib/supabase.ts`) — no hay login
 
 1. `AuthProvider` comprueba `supabase.auth.getSession()` al montar y se suscribe a `onAuthStateChange` → si hay sesión, llama a `getMe()` (crea la fila en `users` la primera vez) y setea el user.
 2. Login → `loginWithGoogle()` llama a `supabase.auth.signInWithOAuth({provider: "google"})`, que redirige a Google y vuelve a `/login`; la sesión se recoge sola vía `onAuthStateChange`.
-3. Logout → `supabase.auth.signOut()` → redirect a `/login`.
+3. Logout → `supabase.auth.signOut()` → redirect a `/` (la landing, no `/login` — cerrar sesión a propósito no debe llevar de vuelta al formulario de entrar).
 4. `api.ts` pide el `access_token` vigente a Supabase en cada petición (`getAuthToken()`, async) — el refresco de sesión lo gestiona el propio cliente de Supabase, no hay que hacer nada manual.
 5. Cualquier 401 en API → `signOut()` + redirect `/login` (cubre toda página bajo `/app`, no hace falta un guard por página).
 

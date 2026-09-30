@@ -200,7 +200,9 @@ function NavUser() {
 
   const logout = async () => {
     await clearAuth();
-    window.location.href = "/login";
+    // A la landing, no a /login: quien cierra sesión a propósito no
+    // necesita ver el formulario de entrar otra vez de inmediato.
+    window.location.href = "/";
   };
 
   const avatar = (

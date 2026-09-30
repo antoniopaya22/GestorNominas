@@ -1,5 +1,7 @@
 ---
 import "../styles/global.css";
+import "@fontsource/instrument-serif/400-italic.css";
+import BrandMark from "../components/marketing/BrandMark.astro";
 import LoginWrapper from "../components/LoginWrapper";
 ---
 
@@ -9,7 +11,7 @@ import LoginWrapper from "../components/LoginWrapper";
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Iniciar Sesión | SueldIA</title>
+    <title>Iniciar sesión · SueldIA</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -22,7 +24,84 @@ import LoginWrapper from "../components/LoginWrapper";
       } catch (e) {}
     </script>
   </head>
-  <body class="min-h-screen bg-muted">
-    <LoginWrapper client:load />
+  <body class="login-root min-h-screen text-foreground">
+    <div class="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-5 py-16">
+      <div class="login-dots absolute inset-x-0 top-0 -z-10 h-[520px]" aria-hidden="true"></div>
+      <div class="login-halo absolute inset-x-0 top-0 -z-10 h-[420px]" aria-hidden="true"></div>
+
+      <a href="/" class="mb-9 transition-opacity hover:opacity-80" aria-label="SueldIA, volver a la portada">
+        <BrandMark />
+      </a>
+
+      <div class="w-full max-w-sm">
+        <div class="mb-7 text-center">
+          <h1 class="text-[28px] font-semibold tracking-[-0.03em] leading-tight text-foreground">
+            Entra en tu <span class="font-serif-accent italic font-normal text-[1.05em] text-primary-700 dark:text-primary-300">cuenta.</span>
+          </h1>
+          <p class="mt-2 text-[15px] text-muted-foreground">Tus nóminas y tus finanzas, en un mismo sitio.</p>
+        </div>
+
+        <div class="login-card rounded-2xl p-6 sm:p-7">
+          <LoginWrapper client:load />
+        </div>
+
+        <p class="mt-7 text-center text-xs text-muted-foreground">
+          <a href="/" class="underline decoration-border underline-offset-4 hover:decoration-foreground">← Volver a la portada</a>
+          <span class="mx-2 text-border">·</span>
+          <a href="/privacidad" class="underline decoration-border underline-offset-4 hover:decoration-foreground">Privacidad</a>
+        </p>
+      </div>
+    </div>
   </body>
 </html>
+
+<style is:global>
+  /* Mismo tratamiento cálido de la landing (MarketingLayout.astro) — se
+     duplica aquí en vez de importar todo el layout de marketing, porque
+     esta pantalla no necesita su nav/footer, solo el mismo lienzo. */
+  .login-root {
+    font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+    background: #faf9f6;
+    font-feature-settings: "ss01", "cv11";
+  }
+  .dark .login-root {
+    background: #09090b;
+  }
+
+  /* .font-serif-accent normal solo funciona dentro de .app-root (ver
+     global.css) — aquí no estamos dentro de la app, así que se repite el
+     mismo estilo con el mismo nombre de clase. */
+  .login-root .font-serif-accent {
+    font-family: "Instrument Serif", ui-serif, Georgia, serif;
+    font-style: italic;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+
+  .login-dots {
+    background-image: radial-gradient(circle at 1px 1px, color-mix(in oklab, var(--foreground) 16%, transparent) 1px, transparent 0);
+    background-size: 22px 22px;
+    -webkit-mask-image: radial-gradient(ellipse 60% 55% at 50% 30%, #000 30%, transparent 100%);
+    mask-image: radial-gradient(ellipse 60% 55% at 50% 30%, #000 30%, transparent 100%);
+  }
+  .dark .login-dots {
+    background-image: radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.1) 1px, transparent 0);
+  }
+
+  .login-halo {
+    background: radial-gradient(ellipse 50% 60% at 50% 0%, color-mix(in oklab, var(--primary) 14%, transparent), transparent 70%);
+  }
+  .dark .login-halo {
+    background: radial-gradient(ellipse 50% 60% at 50% 0%, color-mix(in oklab, var(--primary) 10%, transparent), transparent 70%);
+  }
+
+  .login-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 12px 32px -16px rgb(15 23 42 / 0.12);
+  }
+  .dark .login-card {
+    background: #111113;
+    box-shadow: 0 12px 32px -16px rgb(0 0 0 / 0.5);
+  }
+</style>
