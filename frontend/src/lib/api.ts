@@ -147,6 +147,23 @@ export interface Payslip {
   /** Solo presente en la respuesta de /payslips/upload: id de otra nómina ya
    *  existente con el mismo perfil, periodo y tipo, o null si no hay ninguna. */
   duplicateOfId?: number | null;
+  /** Solo presente en el detalle (GET /payslips/:id). */
+  linkedTransaction?: PayslipLinkCandidate | null;
+  warnings?: PayslipWarning[];
+}
+
+export interface PayslipWarning {
+  code: "amount_mismatch" | "gross_mismatch" | "below_smi";
+  message: string;
+}
+
+export interface PayslipLinkCandidate {
+  id: number;
+  accountId: number;
+  accountName: string;
+  amount: number;
+  date: string;
+  payee: string | null;
 }
 
 export type PayslipSortField = "period" | "fileName" | "grossSalary" | "netSalary" | "parsingStatus";
@@ -180,6 +197,16 @@ export const getPayslips = (filters: PayslipFilters = {}) => {
 
 export const getPayslip = (id: number) =>
   request<Payslip & { concepts: PayslipConcept[] }>(`/payslips/${id}`);
+
+export const getPayslipLinkSuggestions = (id: number) =>
+  request<{ data: PayslipLinkCandidate[] }>(`/payslips/${id}/link-suggestions`);
+
+/** `transactionId: null` desvincula la nómina de cualquier transacción. */
+export const linkPayslipTransaction = (id: number, transactionId: number | null) =>
+  request<{ ok: boolean }>(`/payslips/${id}/link`, {
+    method: "PUT",
+    body: JSON.stringify({ transactionId }),
+  });
 
 export const uploadPayslips = async (profileId: number, files: File[], payslipType: "ordinal" | "extra" = "ordinal") => {
   const formData = new FormData();
@@ -973,3 +1000,33 @@ export const importYnab = async (file: File, dryRun = false): Promise<ImportResu
   }
   return res.json();
 };
+
+// ─── Budgets ────────────────────────────────────────────────────
+export interface CategoryBudget {
+  id: number;
+  name: string;
+  assigned: number;
+  activity: number;
+  available: number;
+}
+
+export interface CategoryGroupBudget {
+  id: number;
+  name: string;
+  categories: CategoryBudget[];
+}
+
+export interface BudgetSummary {
+  month: string;
+  readyToAssign: number;
+  groups: CategoryGroupBudget[];
+}
+
+export const getBudgetSummary = (month: string) =>
+  request<BudgetSummary>(`/budgets?month=${month}`);
+
+export const assignBudget = (categoryId: number, month: string, assigned: number) =>
+  request<{ id: number }>("/budgets", {
+    method: "PUT",
+    body: JSON.stringify({ categoryId, month, assigned }),
+  });

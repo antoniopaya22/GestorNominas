@@ -1,13 +1,15 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft, Building2, ChevronDown, FileText, Gift, Loader2, MoreHorizontal, NotebookPen, Pencil,
-  Plus, RefreshCw, Save, Tag as TagIcon, Trash2, X,
+  AlertTriangle, ArrowLeft, Building2, ChevronDown, FileText, Gift, Link2, Loader2, MoreHorizontal,
+  NotebookPen, Pencil, Plus, RefreshCw, Save, Search, Tag as TagIcon, Trash2, Unlink, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   assignTag, createNote, createTag, deleteNote, getNotes, getPayslipTags, getTags, removeTag,
-  updatePayslipConcepts, updatePayslipType, type Payslip, type PayslipConcept,
+  getPayslipLinkSuggestions, getTransactions, linkPayslipTransaction,
+  updatePayslipConcepts, updatePayslipType,
+  type Payslip, type PayslipConcept, type PayslipLinkCandidate,
 } from "../../lib/api";
 import { formatCurrency, formatPct } from "../../lib/format";
 import { PageHeader, SectionCard, StatCard, StatGrid } from "../app";
@@ -20,6 +22,9 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -307,6 +312,169 @@ function NotesCard({ payslipId }: { payslipId: number }) {
   );
 }
 
+// ─── Avisos informativos (validación de importes/SMI) ────────────
+function WarningsBanner({ warnings }: { warnings: { code: string; message: string }[] }) {
+  if (warnings.length === 0) return null;
+  return (
+    <div className="mb-6 space-y-2">
+      {warnings.map((w) => (
+        <div key={w.code} className="flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-sm text-amber-800 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <p>{w.message}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Vincular con un ingreso de Finanzas ─────────────────────────
+function LinkIncomeCard({
+  payslipId,
+  linkedTransaction,
+}: {
+  payslipId: number;
+  linkedTransaction: PayslipLinkCandidate | null | undefined;
+}) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<PayslipLinkCandidate[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  const { data: suggestions = [], isLoading: loadingSuggestions } = useQuery({
+    queryKey: ["payslip-link-suggestions", payslipId],
+    queryFn: () => getPayslipLinkSuggestions(payslipId).then((r) => r.data),
+    enabled: open,
+  });
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["payslip", payslipId] });
+    queryClient.invalidateQueries({ queryKey: ["transactions"] });
+  };
+
+  const linkMut = useMutation({
+    mutationFn: (transactionId: number) => linkPayslipTransaction(payslipId, transactionId),
+    onSuccess: () => {
+      invalidate();
+      setOpen(false);
+      toast.success("Nómina vinculada con el ingreso");
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "No se pudo vincular"),
+  });
+
+  const unlinkMut = useMutation({
+    mutationFn: () => linkPayslipTransaction(payslipId, null),
+    onSuccess: () => {
+      invalidate();
+      toast.success("Vínculo eliminado");
+    },
+    onError: () => toast.error("No se pudo quitar el vínculo"),
+  });
+
+  const runSearch = async (q: string) => {
+    setQuery(q);
+    if (q.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const res = await getTransactions({ type: "income", search: q.trim(), limit: 10 });
+      setSearchResults(res.data);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const candidateRow = (t: PayslipLinkCandidate) => (
+    <li key={t.id}>
+      <button
+        type="button"
+        onClick={() => linkMut.mutate(t.id)}
+        disabled={linkMut.isPending}
+        className="flex w-full items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2 text-left text-sm transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-50"
+      >
+        <span className="min-w-0 truncate">{t.payee || t.accountName}</span>
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+          {formatCurrency(t.amount)} · {new Date(t.date).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+        </span>
+      </button>
+    </li>
+  );
+
+  return (
+    <SectionCard title="Ingreso vinculado" icon={Link2} description="Enlaza esta nómina con su movimiento de ingreso en Finanzas.">
+      {linkedTransaction ? (
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-foreground">{linkedTransaction.payee || linkedTransaction.accountName}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {formatCurrency(linkedTransaction.amount)} · {linkedTransaction.accountName} ·{" "}
+              {new Date(linkedTransaction.date).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => unlinkMut.mutate()}
+            disabled={unlinkMut.isPending}
+            aria-label="Quitar vínculo"
+            className="shrink-0 text-muted-foreground hover:text-destructive"
+          >
+            <Unlink className="size-4" />
+          </Button>
+        </div>
+      ) : (
+        <>
+          <p className="text-sm text-muted-foreground">Aún no has vinculado el ingreso de esta nómina.</p>
+          <Button variant="outline" size="sm" className="mt-3 gap-1.5" onClick={() => setOpen(true)}>
+            <Link2 className="size-4" /> Vincular ingreso
+          </Button>
+        </>
+      )}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Vincular con un ingreso</DialogTitle>
+            <DialogDescription>Elige a mano la transacción de Finanzas que corresponde a esta nómina.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Sugeridas</p>
+              {loadingSuggestions ? (
+                <p className="text-sm text-muted-foreground">Buscando candidatas…</p>
+              ) : suggestions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sin sugerencias — busca manualmente abajo.</p>
+              ) : (
+                <ul className="space-y-1.5">{suggestions.map(candidateRow)}</ul>
+              )}
+            </div>
+
+            <div className="border-t border-border pt-4">
+              <Label htmlFor="link-search" className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Search className="size-3.5" /> Buscar otro ingreso
+              </Label>
+              <Input id="link-search" value={query} onChange={(e) => runSearch(e.target.value)} placeholder="Beneficiario…" />
+              {searching && <p className="mt-2 text-xs text-muted-foreground">Buscando…</p>}
+              {!searching && query.trim().length >= 2 && (
+                <ul className="mt-2 max-h-48 space-y-1.5 overflow-y-auto">
+                  {searchResults.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Sin resultados.</p>
+                  ) : (
+                    searchResults.map(candidateRow)
+                  )}
+                </ul>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </SectionCard>
+  );
+}
+
 // ─── Detalle ────────────────────────────────────────────────────
 export function PayslipDetail({
   payslip, profileName, onBack, onDelete, onReprocess, isReprocessing,
@@ -461,6 +629,8 @@ export function PayslipDetail({
         }
       />
 
+      {!editing && <WarningsBanner warnings={payslip.warnings ?? []} />}
+
       {editing ? (
         <SectionCard title="Datos generales" description="Corrige lo que no se haya leído bien del PDF." className="mb-6">
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
@@ -531,6 +701,7 @@ export function PayslipDetail({
 
         <div className="space-y-6">
           {!editing && gross > 0 && <BreakdownCard payslip={payslip} />}
+          <LinkIncomeCard payslipId={payslip.id} linkedTransaction={payslip.linkedTransaction} />
           <TagsCard payslipId={payslip.id} />
           <SectionCard title="Archivo" icon={FileText}>
             <dl className="space-y-2 text-sm">
