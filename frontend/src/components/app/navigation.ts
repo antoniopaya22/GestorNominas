@@ -88,10 +88,13 @@ export function findWorkspace(currentPath: string): WorkspaceMeta | null {
   return WORKSPACES.find((ws) => ws.items.some((item) => isActivePath(currentPath, item.href, item.exact))) ?? null;
 }
 
-// Fuera de un espacio (Inicio, Ajustes) el sidebar muestra Finanzas: elección
-// arbitraria pero determinista (igual en build y en cliente).
+// Fuera de un espacio (Inicio, Ajustes), el sidebar y la acción principal de
+// la cabecera (ver AppShell.tsx) muestran Nóminas por defecto — es el
+// producto principal de la app.
+export const DEFAULT_WORKSPACE: WorkspaceMeta = WORKSPACES.find((ws) => ws.key === "nominas") ?? WORKSPACES[0];
+
 export function getActiveWorkspace(currentPath: string): WorkspaceMeta {
-  return findWorkspace(currentPath) ?? WORKSPACES[0];
+  return findWorkspace(currentPath) ?? DEFAULT_WORKSPACE;
 }
 
 export interface Crumb {

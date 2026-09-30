@@ -92,7 +92,10 @@ function TransactionsView() {
   // ─── Filtros y vista ─────────────────────────────────────────
   const [tab, setTab] = useState<"movements" | "recurring">("movements");
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  // El buscador ⌘K enlaza aquí con ?buscar=<texto> (ver app/CommandMenu.tsx).
+  const [searchQuery, setSearchQuery] = useState(() =>
+    typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("buscar") ?? "",
+  );
   const [sortBy, setSortBy] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [filterType, setFilterType] = useState<"" | TxType>("");
@@ -276,12 +279,22 @@ function TransactionsView() {
     setTxDialogOpen(true);
   };
 
-  // La acción "Nueva transacción" de la cabecera de la app enlaza aquí con ?nueva=1.
+  // La acción "Nueva transacción" de la cabecera de la app enlaza aquí con
+  // ?nueva=1, y el buscador ⌘K con ?buscar=<texto> — ambos de un solo uso:
+  // se consumen y se quitan de la URL para que un refresco no los repita.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (!params.has("nueva")) return;
-    openCreateForm("expense");
-    params.delete("nueva");
+    let changed = false;
+    if (params.has("nueva")) {
+      openCreateForm("expense");
+      params.delete("nueva");
+      changed = true;
+    }
+    if (params.has("buscar")) {
+      params.delete("buscar");
+      changed = true;
+    }
+    if (!changed) return;
     const query = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps

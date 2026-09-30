@@ -98,7 +98,47 @@ const footerColumns = [
           <a href="/login" class="mk-btn mk-btn-primary h-9 px-4 text-sm rounded-full">
             Empezar gratis
           </a>
+          <button
+            type="button"
+            id="mk-menu-toggle"
+            class="md:hidden inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-expanded="false"
+            aria-controls="mk-mobile-menu"
+            aria-label="Abrir menú"
+          >
+            <svg id="mk-icon-menu" class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 12h16" /><path d="M4 6h16" /><path d="M4 18h16" />
+            </svg>
+            <svg id="mk-icon-close" class="hidden size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+            </svg>
+          </button>
         </div>
+      </div>
+
+      <div id="mk-mobile-menu" class="mk-mobile-panel md:hidden" inert>
+        <nav class="max-w-6xl mx-auto px-5 py-3 flex flex-col gap-1" aria-label="Principal, móvil">
+          {navLinks.map((link) => (
+            <a
+              href={link.href}
+              class:list={[
+                "px-3.5 py-2.5 rounded-xl text-[15px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                currentPath === link.href
+                  ? "text-foreground bg-foreground/[0.05]"
+                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04]",
+              ]}
+            >
+              {link.label}
+            </a>
+          ))}
+          <div class="my-2 border-t border-border/70" role="separator"></div>
+          <a href="/login" class="px-3.5 py-2.5 rounded-xl text-[15px] text-muted-foreground hover:text-foreground hover:bg-foreground/[0.04] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+            Iniciar sesión
+          </a>
+          <a href="/login" class="mk-btn mk-btn-primary h-10 px-4 text-sm rounded-full justify-center mt-1">
+            Empezar gratis
+          </a>
+        </nav>
       </div>
     </header>
 
@@ -160,6 +200,55 @@ const footerColumns = [
           });
         }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
         items.forEach(function (el) { io.observe(el); });
+      })();
+    </script>
+
+    <script is:inline>
+      (function () {
+        var header = document.getElementById("mk-header");
+        var toggle = document.getElementById("mk-menu-toggle");
+        var panel = document.getElementById("mk-mobile-menu");
+        var iconMenu = document.getElementById("mk-icon-menu");
+        var iconClose = document.getElementById("mk-icon-close");
+        if (!header || !toggle || !panel) return;
+
+        function setOpen(open) {
+          header.toggleAttribute("data-menu-open", open);
+          toggle.setAttribute("aria-expanded", open ? "true" : "false");
+          toggle.setAttribute("aria-label", open ? "Cerrar menú" : "Abrir menú");
+          panel.toggleAttribute("inert", !open);
+          if (iconMenu && iconClose) {
+            iconMenu.classList.toggle("hidden", open);
+            iconClose.classList.toggle("hidden", !open);
+          }
+        }
+
+        toggle.addEventListener("click", function () {
+          setOpen(toggle.getAttribute("aria-expanded") !== "true");
+        });
+
+        panel.querySelectorAll("a").forEach(function (link) {
+          link.addEventListener("click", function () { setOpen(false); });
+        });
+
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "Escape" && toggle.getAttribute("aria-expanded") === "true") {
+            setOpen(false);
+            toggle.focus();
+          }
+        });
+
+        document.addEventListener("click", function (e) {
+          if (toggle.getAttribute("aria-expanded") !== "true") return;
+          if (header.contains(e.target)) return;
+          setOpen(false);
+        });
+
+        // Si la ventana crece hasta escritorio, no dejar el menú "abierto" de fondo.
+        var mq = window.matchMedia("(min-width: 768px)");
+        var onMq = function (e) { if (e.matches) setOpen(false); };
+        if (mq.addEventListener) mq.addEventListener("change", onMq);
+        else if (mq.addListener) mq.addListener(onMq);
       })();
     </script>
   </body>
@@ -270,6 +359,34 @@ const footerColumns = [
       );
     }
 
+    /* Panel de navegación móvil: desplegable bajo la cabecera, sin
+       desplazar el contenido (position: absolute) para no provocar
+       layout shift ni scroll horizontal. */
+    .mk-mobile-panel {
+      position: absolute;
+      inset-inline: 0;
+      top: 100%;
+      transform-origin: top;
+      border-bottom: 1px solid var(--border);
+      background: rgb(250 249 246 / 0.98);
+      backdrop-filter: saturate(160%) blur(14px);
+      -webkit-backdrop-filter: saturate(160%) blur(14px);
+      box-shadow: 0 12px 32px -12px rgb(15 23 42 / 0.14);
+      opacity: 0;
+      transform: translateY(-6px);
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .dark .mk-mobile-panel {
+      background: rgb(9 9 11 / 0.98);
+      box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.55);
+    }
+    #mk-header[data-menu-open] .mk-mobile-panel {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
     /* Superficie de tarjeta de marketing */
     .mk-card {
       background: var(--card);
@@ -324,6 +441,9 @@ const footerColumns = [
         animation: none;
       }
       .mk-btn {
+        transition: none;
+      }
+      .mk-mobile-panel {
         transition: none;
       }
     }

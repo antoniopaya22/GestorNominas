@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, ComposedChart, Line, ReferenceLine,
@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportData, getAnalytics, getProfiles, type AnalyticsData } from "../lib/api";
+import { useSelectedProfile } from "../hooks/use-selected-profile";
 import { formatCompact, formatCurrency, formatMonthLabel, formatPct } from "../lib/format";
 import { Providers } from "./Providers";
 import {
@@ -65,12 +66,6 @@ function buildEvolution(trends: AnalyticsData["trends"]) {
   return out;
 }
 
-function readProfileParam(): number | null {
-  if (typeof window === "undefined") return null;
-  const v = Number(new URLSearchParams(window.location.search).get("perfil"));
-  return Number.isInteger(v) && v > 0 ? v : null;
-}
-
 function LegendKey({ color, label, dashed }: { color: string; label: string; dashed?: boolean }) {
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -98,18 +93,12 @@ function AnalyticsSkeleton() {
 
 function AnalyticsView() {
   const { data: profiles = [], isLoading: profilesLoading } = useQuery({ queryKey: ["profiles"], queryFn: getProfiles });
-  const [selectedProfile, setSelectedProfile] = useState<number | null>(null);
+  const [selectedProfile, setSelectedProfile] = useSelectedProfile(profiles.map((p) => p.id));
   const [range, setRange] = useState<Range>("24");
   const [yoyMetric, setYoyMetric] = useState<"net" | "gross">("net");
   const [concept, setConcept] = useState<string>("");
   const [exportYear, setExportYear] = useState<string>("all");
   const [exporting, setExporting] = useState(false);
-
-  useEffect(() => {
-    if (selectedProfile || profiles.length === 0) return;
-    const fromUrl = readProfileParam();
-    setSelectedProfile(profiles.some((p) => p.id === fromUrl) ? fromUrl : profiles[0].id);
-  }, [profiles, selectedProfile]);
 
   const { data: analytics, isLoading, error, refetch } = useQuery({
     queryKey: ["analytics", selectedProfile],
@@ -512,7 +501,7 @@ function AnalyticsView() {
                         {a.value != null && a.expected != null && (
                           <span className="tabular-nums">
                             {isPct ? formatPct(a.value) : formatCurrency(a.value)}
-                            <span className="text-muted-foreground/70"> · esperado {isPct ? formatPct(a.expected) : formatCurrency(a.expected)}</span>
+                            <span className="text-muted-foreground"> · esperado {isPct ? formatPct(a.expected) : formatCurrency(a.expected)}</span>
                           </span>
                         )}
                         {a.kind === "alert" && <span>Recordatorio</span>}

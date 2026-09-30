@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDropzone, type FileRejection } from "react-dropzone";
 import {
@@ -8,6 +8,7 @@ import {
 import { toast } from "sonner";
 import { getProfiles, uploadPayslips, type Payslip } from "../lib/api";
 import { formatCurrency } from "../lib/format";
+import { useSelectedProfile } from "../hooks/use-selected-profile";
 import { Providers } from "./Providers";
 import { PageHeader, PageHeaderSkeleton, SectionCard, Segmented } from "./app";
 import { EmptyState } from "./ui/EmptyState";
@@ -35,12 +36,6 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toLocaleString("es-ES", { maximumFractionDigits: 1 })} MB`;
-}
-
-function readProfileParam(): number | null {
-  if (typeof window === "undefined") return null;
-  const v = Number(new URLSearchParams(window.location.search).get("perfil"));
-  return Number.isInteger(v) && v > 0 ? v : null;
 }
 
 // ─── Fila de la cola ────────────────────────────────────────────
@@ -163,15 +158,9 @@ function UploadManager() {
   const queryClient = useQueryClient();
   const { data: profiles = [], isLoading } = useQuery({ queryKey: ["profiles"], queryFn: getProfiles });
 
-  const [selectedProfile, setSelectedProfile] = useState<number | null>(null);
+  const [selectedProfile, setSelectedProfile] = useSelectedProfile(profiles.map((p) => p.id));
   const [payslipType, setPayslipType] = useState<"ordinal" | "extra">("ordinal");
   const [queue, setQueue] = useState<QueueItem[]>([]);
-
-  useEffect(() => {
-    if (selectedProfile || profiles.length === 0) return;
-    const fromUrl = readProfileParam();
-    setSelectedProfile(profiles.some((p) => p.id === fromUrl) ? fromUrl : profiles[0].id);
-  }, [profiles, selectedProfile]);
 
   const patch = (id: string, changes: Partial<QueueItem>) =>
     setQueue((q) => q.map((item) => (item.id === id ? { ...item, ...changes } : item)));

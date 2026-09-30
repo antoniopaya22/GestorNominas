@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { type AuthUser, getMe } from "../lib/api";
 import { supabase } from "../lib/supabase";
 
@@ -12,32 +13,34 @@ interface AuthContext {
 const AuthCtx = createContext<AuthContext | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const loadUser = useCallback(async () => {
-    try {
-      setUser(await getMe());
-    } catch {
-      setUser(null);
-    }
-  }, []);
+  // null = comprobando todavía la sesión de Supabase (getSession() es async).
+  const [hasSession, setHasSession] = useState<boolean | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) loadUser().finally(() => setLoading(false));
-      else setLoading(false);
-    });
+    supabase.auth.getSession().then(({ data: { session } }) => setHasSession(!!session));
 
     // Se dispara tras el redirect de vuelta de Google, y en el refresco
     // automático de la sesión que hace el propio cliente de Supabase.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) loadUser();
-      else setUser(null);
+      setHasSession(!!session);
     });
 
     return () => subscription.unsubscribe();
-  }, [loadUser]);
+  }, []);
+
+  // Misma query (clave "me") que una página pueda usar directamente (p. ej.
+  // HomeDashboardPage) — React Query la comparte en vez de duplicarla: antes
+  // esto y una página así hacían dos peticiones idénticas a /auth/me en
+  // cada carga. Un 401 ya lo gestiona request() en lib/api.ts (signOut +
+  // redirect a /login), así que aquí basta con no reintentar.
+  const { data: user, isLoading: userLoading } = useQuery({
+    queryKey: ["me"],
+    queryFn: getMe,
+    enabled: hasSession === true,
+    retry: false,
+  });
+
+  const loading = hasSession === null || (hasSession === true && userLoading);
 
   const loginWithGoogle = useCallback(async () => {
     await supabase.auth.signInWithOAuth({
@@ -54,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthCtx.Provider value={{ user, loading, loginWithGoogle, logout }}>
+    <AuthCtx.Provider value={{ user: user ?? null, loading, loginWithGoogle, logout }}>
       {children}
     </AuthCtx.Provider>
   );

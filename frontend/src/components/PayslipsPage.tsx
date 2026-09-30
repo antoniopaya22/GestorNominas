@@ -10,6 +10,8 @@ import {
   type PayslipSortField,
 } from "../lib/api";
 import { formatCurrency } from "../lib/format";
+import { readIntParam, setIntParam } from "../lib/url-params";
+import { useSelectedProfile } from "../hooks/use-selected-profile";
 import { Providers } from "./Providers";
 import {
   PageHeader, PageHeaderSkeleton, SectionCard, StatCard, StatCardSkeleton, StatGrid, ListCardSkeleton,
@@ -52,19 +54,6 @@ const TYPE_OPTIONS = [
 
 function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-function readParam(name: string): number | null {
-  if (typeof window === "undefined") return null;
-  const v = Number(new URLSearchParams(window.location.search).get(name));
-  return Number.isInteger(v) && v > 0 ? v : null;
-}
-
-function setUrlParam(name: string, value: number | null) {
-  const url = new URL(window.location.href);
-  if (value) url.searchParams.set(name, String(value));
-  else url.searchParams.delete(name);
-  window.history.replaceState(null, "", url);
 }
 
 function SortHeader({ label, field, sortField, sortDir, onSort, align = "left" }: {
@@ -116,9 +105,9 @@ function FilterSelect({ value, onChange, placeholder, options, className }: {
 // ─── Vista ──────────────────────────────────────────────────────
 function PayslipsList() {
   const queryClient = useQueryClient();
-  const { data: profiles = [], isLoading: profilesLoading } = useQuery({ queryKey: ["profiles"], queryFn: getProfiles });
+  const { data: profiles = [], isLoading: profilesLoading, error: profilesError, refetch: refetchProfiles } = useQuery({ queryKey: ["profiles"], queryFn: getProfiles });
 
-  const [selectedProfile, setSelectedProfile] = useState<number | null>(null);
+  const [selectedProfile, setSelectedProfile] = useSelectedProfile(profiles.map((p) => p.id));
   const [selectedPayslip, setSelectedPayslip] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [yearFilter, setYearFilter] = useState("");
@@ -133,21 +122,15 @@ function PayslipsList() {
 
   // Tras montar (no en el render inicial) para no desincronizar la hidratación.
   useEffect(() => {
-    const fromUrl = readParam("nomina");
+    const fromUrl = readIntParam("nomina");
     if (fromUrl) setSelectedPayslip(fromUrl);
   }, []);
-
-  useEffect(() => {
-    if (selectedProfile || profiles.length === 0) return;
-    const fromUrl = readParam("perfil");
-    setSelectedProfile(profiles.some((p) => p.id === fromUrl) ? fromUrl : profiles[0].id);
-  }, [profiles, selectedProfile]);
 
   const profileId = selectedProfile ?? profiles[0]?.id;
   const profile = profiles.find((p) => p.id === profileId);
   const pageSize = monthFilter ? MONTH_FILTER_LIMIT : PAGE_SIZE;
 
-  const { data: payslipsData, isLoading, isFetching } = useQuery({
+  const { data: payslipsData, isLoading, isFetching, error: payslipsError, refetch: refetchPayslips } = useQuery({
     queryKey: ["payslips", profileId, yearFilter, search, statusFilter, typeFilter, sortField, sortDir, monthFilter ? 1 : page, pageSize],
     queryFn: () =>
       getPayslips({
@@ -185,7 +168,7 @@ function PayslipsList() {
 
   const openPayslip = (id: number | null) => {
     setSelectedPayslip(id);
-    setUrlParam("nomina", id);
+    setIntParam("nomina", id);
     document.querySelector("main")?.scrollTo?.({ top: 0 });
     window.scrollTo({ top: 0 });
   };
@@ -297,6 +280,17 @@ function PayslipsList() {
     );
   }
 
+  if (profilesError) {
+    return (
+      <>
+        <PageHeader title="Mis nóminas" description="Todas tus nóminas, con sus conceptos, en un solo sitio." />
+        <EmptyState icon={AlertTriangle} title="No se pudieron cargar tus perfiles" description="Vuelve a intentarlo en unos segundos.">
+          <Button variant="outline" onClick={() => refetchProfiles()}>Reintentar</Button>
+        </EmptyState>
+      </>
+    );
+  }
+
   if (profiles.length === 0) {
     return (
       <>
@@ -345,12 +339,16 @@ function PayslipsList() {
           <ProfileSelector
             profiles={profiles}
             value={profileId ?? 0}
-            onChange={(v) => { setSelectedProfile(v as number); setUrlParam("perfil", v as number); setPage(1); setYearFilter(""); }}
+            onChange={(v) => { setSelectedProfile(v as number); setPage(1); setYearFilter(""); }}
           />
         )}
       </PageHeader>
 
-      {isEmptyProfile ? (
+      {payslipsError && !isFetching ? (
+        <EmptyState icon={AlertTriangle} title="No se pudieron cargar las nóminas" description="Vuelve a intentarlo en unos segundos.">
+          <Button variant="outline" onClick={() => refetchPayslips()}>Reintentar</Button>
+        </EmptyState>
+      ) : isEmptyProfile ? (
         <EmptyState
           icon={Upload}
           title={`${profile?.name ?? "Este perfil"} aún no tiene nóminas`}

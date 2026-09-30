@@ -50,6 +50,7 @@ import {
   HOME_ITEM,
   SETTINGS_ITEM,
   WORKSPACES,
+  DEFAULT_WORKSPACE,
   findWorkspace,
   getActiveWorkspace,
   getBreadcrumbTrail,
@@ -88,7 +89,7 @@ function WorkspaceSwitcher({ active }: { active: WorkspaceMeta }) {
             <BrandMark />
             <div className="grid flex-1 text-left text-sm leading-tight">
               <Wordmark />
-              <span className="truncate text-xs text-sidebar-foreground/60">{active.label}</span>
+              <span className="truncate text-xs text-sidebar-foreground/75">{active.label}</span>
             </div>
             <ChevronsUpDown className="ml-auto size-4 text-sidebar-foreground/40" />
           </DropdownMenuTrigger>
@@ -227,7 +228,7 @@ function NavUser() {
             {avatar}
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-medium">{user?.name || "Tu cuenta"}</span>
-              <span className="truncate text-xs text-sidebar-foreground/60">{user?.email}</span>
+              <span className="truncate text-xs text-sidebar-foreground/75">{user?.email}</span>
             </div>
             <ChevronsUpDown className="ml-auto size-4 text-sidebar-foreground/40" />
           </DropdownMenuTrigger>
@@ -391,7 +392,7 @@ function NotificationBell() {
 function AppHeader({ currentPath, onOpenSearch }: { currentPath: string; onOpenSearch: () => void }) {
   const crumbs = getBreadcrumbTrail(currentPath);
   // En Inicio/Ajustes la acción rápida es subir nómina; nunca se muestra en su propia página.
-  const action = (findWorkspace(currentPath) ?? WORKSPACES[1]).primaryAction;
+  const action = (findWorkspace(currentPath) ?? DEFAULT_WORKSPACE).primaryAction;
   const showAction = !isActivePath(currentPath, action.href.split("?")[0]);
   const ActionIcon = action.icon;
 
@@ -495,7 +496,7 @@ export function AppShell({ currentPath, children }: AppShellProps) {
               </SidebarGroupContent>
             </SidebarGroup>
             <SidebarGroup className="py-1">
-              <SidebarGroupLabel className="text-[11px] tracking-wide text-sidebar-foreground/50">{activeWorkspace.label}</SidebarGroupLabel>
+              <SidebarGroupLabel className="text-[11px] tracking-wide text-sidebar-foreground/75">{activeWorkspace.label}</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu className="gap-0.5">
                   {activeWorkspace.items.map((item) => (

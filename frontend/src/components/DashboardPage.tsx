@@ -7,6 +7,7 @@ import {
 import {
   CalendarRange, FileText, BarChart3, ArrowUp, ArrowDown, ArrowUpDown,
   AreaChart as AreaIcon, LineChart as LineIcon, CircleDollarSign, Landmark, Receipt, Percent, Gift, X,
+  AlertTriangle,
 } from "lucide-react";
 import { getDashboard, getProfiles, type DashboardData } from "../lib/api";
 import { Providers } from "./Providers";
@@ -172,7 +173,7 @@ function DashboardSkeleton() {
 
 // ─── Vista ──────────────────────────────────────────────────────
 function DashboardView() {
-  const { data: profiles = [], isLoading: profilesLoading } = useQuery({
+  const { data: profiles = [], isLoading: profilesLoading, error: profilesError, refetch: refetchProfiles } = useQuery({
     queryKey: ["profiles"],
     queryFn: getProfiles,
   });
@@ -189,7 +190,7 @@ function DashboardView() {
 
   const profileIds = selectedProfiles.length > 0 ? selectedProfiles : profiles.map((p) => p.id);
 
-  const { data: fullDashboardData, isLoading: isDashboardLoading } = useQuery({
+  const { data: fullDashboardData, isLoading: isDashboardLoading, error: dashboardError, refetch: refetchDashboard } = useQuery({
     queryKey: ["dashboard", profileIds],
     queryFn: () => getDashboard(profileIds),
     enabled: profiles.length > 0,
@@ -201,7 +202,13 @@ function DashboardView() {
   const selectedRangeTo = rangeTo && availableMonths.includes(rangeTo) ? rangeTo : "";
   const hasDateFilter = Boolean(selectedRangeFrom || selectedRangeTo);
 
-  const { data: filteredDashboardData, isLoading: isFilteredDashboardLoading, isFetching: isFilteredDashboardFetching } = useQuery({
+  const {
+    data: filteredDashboardData,
+    isLoading: isFilteredDashboardLoading,
+    isFetching: isFilteredDashboardFetching,
+    error: filteredDashboardError,
+    refetch: refetchFilteredDashboard,
+  } = useQuery({
     queryKey: ["dashboard", profileIds, selectedRangeFrom || null, selectedRangeTo || null],
     queryFn: () => getDashboard(profileIds, selectedRangeFrom || undefined, selectedRangeTo || undefined),
     enabled: profiles.length > 0 && hasDateFilter,
@@ -209,6 +216,15 @@ function DashboardView() {
 
   const data = hasDateFilter ? filteredDashboardData ?? fullDashboardData : fullDashboardData;
   const isLoading = !data && (isDashboardLoading || isFilteredDashboardLoading);
+  // Sin esto, un fallo de red dejaba `data` en undefined para siempre y la
+  // página se quedaba en el esqueleto de carga sin fin, o peor: con
+  // profiles.length en 0 por el fallo, parecía que no había nóminas.
+  const loadError = profilesError || (hasDateFilter ? filteredDashboardError : dashboardError);
+  const retryLoad = () => {
+    refetchProfiles();
+    if (hasDateFilter) refetchFilteredDashboard();
+    else refetchDashboard();
+  };
 
   const handleRangeFromChange = (value: string) => {
     setRangeFrom(value);
@@ -305,6 +321,20 @@ function DashboardView() {
     />
   );
 
+  if (loadError && !isLoading) {
+    return (
+      <>
+        <PageHeader title="Nóminas" description="Tu evolución salarial, en un vistazo." />
+        <EmptyState
+          icon={AlertTriangle}
+          title="No se pudieron cargar tus nóminas"
+          description="Vuelve a intentarlo en unos segundos."
+        >
+          <Button variant="outline" onClick={retryLoad}>Reintentar</Button>
+        </EmptyState>
+      </>
+    );
+  }
   if (profiles.length === 0 && !profilesLoading) return <><PageHeader title="Nóminas" description="Tu evolución salarial, en un vistazo." />{emptyState}</>;
   if (isLoading || !data || !derived) return <DashboardSkeleton />;
 

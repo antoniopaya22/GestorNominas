@@ -1,9 +1,11 @@
 import * as React from "react";
-import { CornerDownLeft, Monitor, Moon, Search, Sun, type LucideIcon } from "lucide-react";
+import { CornerDownLeft, FileText, Monitor, Moon, Receipt, Search, Sun, type LucideIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "cn";
 import { HOME_ITEM, SETTINGS_ITEM, WORKSPACES } from "./navigation";
 import { useTheme, type ThemePreference } from "@/hooks/use-theme";
+import { getPayslips, getTransactions } from "@/lib/api";
+import { formatCurrency } from "@/lib/format";
 
 interface CommandEntry {
   id: string;
@@ -21,12 +23,60 @@ const go = (href: string) => () => {
   window.location.href = href;
 };
 
+const MONTH_SHORT = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+function payslipPeriodLabel(month: number | null, year: number | null): string {
+  if (!month || !year) return "Sin periodo";
+  return `${MONTH_SHORT[month - 1]} ${year}`;
+}
+
 // Paleta ligera sobre el Dialog de Base UI (sin cmdk, que arrastra Radix).
 export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { setPreference } = useTheme();
   const [query, setQuery] = React.useState("");
   const [activeIndex, setActiveIndex] = React.useState(0);
+  const [searchEntries, setSearchEntries] = React.useState<CommandEntry[]>([]);
   const listRef = React.useRef<HTMLDivElement>(null);
+
+  // Búsqueda real de nóminas y transacciones (con retraso, ⌘K es su propia
+  // isla sin QueryClientProvider — mismo patrón de fetch simple que la
+  // campana de notificaciones en AppShell.tsx). A partir de 2 caracteres.
+  React.useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setSearchEntries([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      Promise.all([
+        getPayslips({ search: q, limit: 5 }).catch(() => ({ data: [] })),
+        getTransactions({ search: q, limit: 5 }).catch(() => ({ data: [] })),
+      ]).then(([payslips, transactions]) => {
+        if (cancelled) return;
+        const payslipEntries: CommandEntry[] = payslips.data.map((p) => ({
+          id: `payslip:${p.id}`,
+          group: "Nóminas",
+          label: p.company ?? p.fileName,
+          hint: payslipPeriodLabel(p.periodMonth, p.periodYear),
+          icon: FileText,
+          run: go(`/app/payslips?perfil=${p.profileId}&nomina=${p.id}`),
+        }));
+        const txEntries: CommandEntry[] = transactions.data.map((t) => ({
+          id: `tx:${t.id}`,
+          group: "Transacciones",
+          label: t.payee || t.memo || "Sin descripción",
+          hint: `${formatCurrency(t.amount)} · ${t.date}`,
+          icon: Receipt,
+          run: go(`/app/transactions?buscar=${encodeURIComponent(t.payee || q)}`),
+        }));
+        setSearchEntries([...payslipEntries, ...txEntries]);
+      });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query]);
 
   const entries = React.useMemo<CommandEntry[]>(() => {
     const nav: CommandEntry[] = [
@@ -65,13 +115,16 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
 
   const filtered = React.useMemo(() => {
     const q = normalize(query.trim());
-    if (!q) return entries;
-    return entries.filter((e) => normalize(`${e.label} ${e.hint ?? ""} ${e.keywords ?? ""}`).includes(q));
-  }, [entries, query]);
+    const local = q ? entries.filter((e) => normalize(`${e.label} ${e.hint ?? ""} ${e.keywords ?? ""}`).includes(q)) : entries;
+    return q ? [...local, ...searchEntries] : local;
+  }, [entries, query, searchEntries]);
 
-  React.useEffect(() => setActiveIndex(0), [query]);
+  React.useEffect(() => setActiveIndex(0), [query, searchEntries]);
   React.useEffect(() => {
-    if (!open) setQuery("");
+    if (!open) {
+      setQuery("");
+      setSearchEntries([]);
+    }
   }, [open]);
 
   React.useEffect(() => {

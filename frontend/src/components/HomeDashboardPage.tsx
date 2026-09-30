@@ -6,6 +6,7 @@ import {
 import {
   ArrowDownRight, ArrowRight, ArrowUpRight, ArrowLeftRight, CreditCard, Download, FileText,
   Landmark, PiggyBank, Plus, Receipt, TrendingUp, Upload, Users, Wallet, Banknote, CircleDollarSign,
+  AlertTriangle,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -15,12 +16,13 @@ import {
 import { Providers } from "./Providers";
 import { formatCurrency, formatCompact, formatMonthLabel, formatPct } from "../lib/format";
 import { ChartTooltip } from "./ui/ChartTooltip";
+import { EmptyState } from "./ui/EmptyState";
 import {
   PageHeader, StatCard, StatGrid, SectionCard, ChartCard, CardLink,
   PageHeaderSkeleton, StatCardSkeleton, ChartCardSkeleton, ListCardSkeleton,
   chartAxis, chartGrid, chartColors, chartBarCursor, DeltaBadge, type StatDelta,
 } from "./app";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "cn";
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -228,8 +230,8 @@ const QUICK_ACTIONS = [
 // ─── Vista principal ────────────────────────────────────────────
 function HomeDashboardView() {
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: getMe, retry: false });
-  const { data: payroll, isLoading: loadingPayroll } = useQuery({ queryKey: ["dashboard"], queryFn: () => getDashboard() });
-  const { data: finance, isLoading: loadingFinance } = useQuery({ queryKey: ["finance-summary"], queryFn: getFinanceSummary });
+  const { data: payroll, isLoading: loadingPayroll, error: payrollError, refetch: refetchPayroll } = useQuery({ queryKey: ["dashboard"], queryFn: () => getDashboard() });
+  const { data: finance, isLoading: loadingFinance, error: financeError, refetch: refetchFinance } = useQuery({ queryKey: ["finance-summary"], queryFn: getFinanceSummary });
   const { data: trends = [] } = useQuery({ queryKey: ["finance-trends"], queryFn: () => getFinanceTrends() });
   const { data: accounts = [] } = useQuery({ queryKey: ["accounts"], queryFn: getAccounts });
   const { data: txData } = useQuery({
@@ -272,6 +274,19 @@ function HomeDashboardView() {
   }, [trends, payroll, latest, finance]);
 
   if (loadingPayroll || loadingFinance) return <HomeSkeleton />;
+
+  // Antes, si ambas fallaban (p. ej. un corte de red), un usuario con datos
+  // reales veía la bienvenida de "primera vez" en vez de un aviso de error.
+  if (payrollError && financeError) {
+    return (
+      <>
+        <PageHeader eyebrow={todayLabel()} title={`${greeting()}${firstName ? "," : "."}`} accent={firstName ? `${firstName}.` : undefined} />
+        <EmptyState icon={AlertTriangle} title="No se pudo cargar tu resumen" description="Vuelve a intentarlo en unos segundos.">
+          <Button variant="outline" onClick={() => { refetchPayroll(); refetchFinance(); }}>Reintentar</Button>
+        </EmptyState>
+      </>
+    );
+  }
 
   const kpis = payroll?.kpis;
   const hasPayroll = !!kpis && kpis.totalPayslips > 0;

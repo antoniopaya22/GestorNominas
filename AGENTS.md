@@ -2,16 +2,16 @@
 
 ## Visión General
 
-Aplicación web monorepo de gestión y análisis de nóminas españolas. Solo versión web (sin escritorio, sin OCR — ver `old/` para la versión anterior con Electron/Tesseract, retirada). Backend API REST desplegado como función de Vercel + Frontend Astro estático + Postgres (Supabase).
+Aplicación web monorepo de gestión y análisis de nóminas españolas. Solo versión web (sin escritorio, sin OCR — ver `old/` para la versión anterior con Electron/Tesseract, retirada). Backend Express + Frontend Astro estático + Postgres (Supabase), desplegados como dos "Services" de un mismo proyecto de Vercel (`vercel.json` en la raíz).
 
 ## Arquitectura
 
 ```
-[Browser] → [Astro estático + React islands] → Vercel rewrites /api/* → [Express en Vercel Function] → [Postgres (Supabase)]
+[Browser] → [Astro estático + React islands] → Vercel rewrites /api/* → [Express, servicio "backend" de Vercel] → [Postgres (Supabase)]
 ```
 
 - **Frontend**: Astro (salida estática) + React islands con `client:load`, UI con shadcn/ui. En dev, proxy de Vite hacia el backend local.
-- **Backend**: Express envuelto como función de Vercel (`api/index.ts` en la raíz re-exporta la app de `backend/src/index.ts`). `app.listen()` solo corre fuera de Vercel (desarrollo local).
+- **Backend**: Express normal (`backend/src/index.ts`, `export default app`) — `vercel.json` lo despliega como servicio (`"framework": "express"`, `root: "backend"`), sin wrapper de función ni `api/index.ts` (ese wrapper ya no existe). `app.listen()` solo corre fuera de Vercel (desarrollo local). Un cron diario (`vercel.json` → `crons`, `/api/cron/daily`) evalúa alertas y sincroniza recurrentes — ver `backend/AGENTS.md`.
 - **Base de datos**: Postgres en Supabase. Drizzle ORM (`drizzle-orm/postgres-js`) para schema y queries — sin dependencias nativas.
 - **Sin storage de archivos**: los PDFs de nóminas se procesan en memoria al subirlos y se descartan — solo se guarda el texto extraído (`rawText`) y los conceptos ya estructurados. `old/` es la referencia de la versión anterior (SQLite + disco local + Electron + OCR), no se mantiene.
 

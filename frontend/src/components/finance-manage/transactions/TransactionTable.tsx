@@ -216,7 +216,7 @@ export function TransactionTable(props: Props) {
                             <span className="truncate">{cat}</span>
                           </span>
                         ) : (
-                          <span className="text-xs text-muted-foreground/70">Sin categoría</span>
+                          <span className="text-xs text-muted-foreground">Sin categoría</span>
                         )}
                       </td>
                       {showAccount && (
