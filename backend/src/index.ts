@@ -23,6 +23,7 @@ import { transactionsRouter } from "./routes/transactions.js";
 import { recurringTransactionsRouter } from "./routes/recurring-transactions.js";
 import { importRouter } from "./routes/import.js";
 import { financeRouter } from "./routes/finance.js";
+import { budgetsRouter } from "./routes/budgets.js";
 import { cronRouter } from "./routes/cron.js";
 import { db, client } from "./db/index.js";
 
@@ -109,6 +110,7 @@ app.use("/api/recurring-transactions", authMiddleware, recurringTransactionsRout
 app.use("/api/transactions", authMiddleware, transactionsRouter);
 app.use("/api/import", authMiddleware, importRouter);
 app.use("/api/finance", authMiddleware, financeRouter);
+app.use("/api/budgets", authMiddleware, budgetsRouter);
 app.use("/api/export", authMiddleware, exportRouter);
 app.use("/api/alerts", authMiddleware, alertsRouter);
 app.use("/api/notes", authMiddleware, notesRouter);

@@ -29,6 +29,13 @@
       "when": 1790753353883,
       "tag": "0003_db_indices_and_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790757655931,
+      "tag": "0004_payslip_link_and_budgets",
+      "breakpoints": true
     }
   ]
 }

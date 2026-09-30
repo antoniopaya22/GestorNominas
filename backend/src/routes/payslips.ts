@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "../db/index.js";
-import { payslips, payslipConcepts, profiles } from "../db/schema.js";
-import { eq, and, asc, desc, ilike, or, ne } from "drizzle-orm";
+import { payslips, payslipConcepts, profiles, transactions, accounts } from "../db/schema.js";
+import { eq, and, asc, desc, ilike, or, ne, isNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { upload, validatePdfMagicBytes, fixFilenameEncoding } from "../middleware/upload.js";
 import { parsePayslip } from "../parsers/parser-engine.js";
@@ -10,6 +10,8 @@ import { z } from "zod";
 import { validateIdParam } from "../middleware/params.js";
 import { logger } from "../logger.js";
 import { evaluateRulesForUser } from "../services/alerts.service.js";
+import { scoreLinkCandidates, payslipReferenceDateMs } from "../services/payslip-links.service.js";
+import { validatePayslip } from "../services/payslip-validation.service.js";
 
 export const payslipsRouter = Router();
 payslipsRouter.param("id", validateIdParam);
@@ -227,7 +229,27 @@ payslipsRouter.get("/:id", async (req, res, next) => {
       .from(payslipConcepts)
       .where(eq(payslipConcepts.payslipId, id));
 
-    res.json({ ...payslip, concepts });
+    const [linkedTransaction] = await db
+      .select({
+        id: transactions.id,
+        accountId: transactions.accountId,
+        accountName: accounts.name,
+        amount: transactions.amount,
+        date: transactions.date,
+        payee: transactions.payee,
+      })
+      .from(transactions)
+      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+      .where(eq(transactions.payslipId, id));
+
+    const warnings = validatePayslip({
+      payslipType: payslip.payslipType,
+      grossSalary: payslip.grossSalary,
+      netSalary: payslip.netSalary,
+      concepts,
+    });
+
+    res.json({ ...payslip, concepts, linkedTransaction: linkedTransaction ?? null, warnings });
   } catch (err) {
     next(err);
   }
@@ -267,17 +289,21 @@ payslipsRouter.put("/:id/concepts", async (req, res, next) => {
 
     const { concepts, ...meta } = parsed.data;
 
-    await db
-      .update(payslips)
-      .set({ ...meta, parsingStatus: "parsed" })
-      .where(eq(payslips.id, id));
+    // Igual que applyParsedResult: sustituir los conceptos es un delete +
+    // insert, y a medias dejaba la nómina sin un solo concepto.
+    await db.transaction(async (tx) => {
+      await tx
+        .update(payslips)
+        .set({ ...meta, parsingStatus: "parsed" })
+        .where(eq(payslips.id, id));
 
-    await db.delete(payslipConcepts).where(eq(payslipConcepts.payslipId, id));
-    if (concepts.length > 0) {
-      await db.insert(payslipConcepts).values(
-        concepts.map((c) => ({ ...c, payslipId: id }))
-      );
-    }
+      await tx.delete(payslipConcepts).where(eq(payslipConcepts.payslipId, id));
+      if (concepts.length > 0) {
+        await tx.insert(payslipConcepts).values(
+          concepts.map((c) => ({ ...c, payslipId: id }))
+        );
+      }
+    });
 
     res.json({ ok: true });
   } catch (err) {
@@ -317,6 +343,93 @@ payslipsRouter.post("/:id/reprocess", async (req, res, next) => {
       .where(eq(payslipConcepts.payslipId, id));
 
     res.json({ ...updated, concepts });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Vincular nómina con un ingreso de Finanzas ──────────────────
+// Siempre a mano: esto solo sugiere candidatas, nunca crea ni enlaza nada
+// por sí solo. El usuario confirma desde el detalle de la nómina.
+
+payslipsRouter.get("/:id/link-suggestions", async (req, res, next) => {
+  try {
+    const { userId } = req.user!;
+    const userProfileIds = await getUserProfileIds(userId);
+    const id = Number(req.params.id);
+    const [payslip] = await db.select().from(payslips).where(eq(payslips.id, id));
+    if (!payslip || !userProfileIds.includes(payslip.profileId))
+      return res.status(404).json({ error: "Nómina no encontrada" });
+
+    if (payslip.netSalary == null) return res.json({ data: [] });
+
+    const candidates = await db
+      .select({
+        id: transactions.id,
+        accountId: transactions.accountId,
+        accountName: accounts.name,
+        amount: transactions.amount,
+        date: transactions.date,
+        payee: transactions.payee,
+      })
+      .from(transactions)
+      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+      .where(and(eq(transactions.userId, userId), eq(transactions.type, "income"), isNull(transactions.payslipId)));
+
+    const targetDate = payslipReferenceDateMs(payslip.periodYear, payslip.periodMonth);
+    const scored = scoreLinkCandidates(candidates, payslip.netSalary, targetDate);
+
+    res.json({ data: scored });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const linkSchema = z.object({ transactionId: z.number().int().positive().nullable() });
+
+payslipsRouter.put("/:id/link", async (req, res, next) => {
+  try {
+    const { userId } = req.user!;
+    const userProfileIds = await getUserProfileIds(userId);
+    const id = Number(req.params.id);
+    const [payslip] = await db.select().from(payslips).where(eq(payslips.id, id));
+    if (!payslip || !userProfileIds.includes(payslip.profileId))
+      return res.status(404).json({ error: "Nómina no encontrada" });
+
+    const parsed = linkSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Datos inválidos", details: parsed.error.flatten().fieldErrors });
+    }
+
+    if (parsed.data.transactionId === null) {
+      await db
+        .update(transactions)
+        .set({ payslipId: null })
+        .where(and(eq(transactions.payslipId, id), eq(transactions.userId, userId)));
+      return res.json({ ok: true });
+    }
+
+    const [tx] = await db
+      .select()
+      .from(transactions)
+      .where(and(eq(transactions.id, parsed.data.transactionId), eq(transactions.userId, userId)));
+    if (!tx) return res.status(404).json({ error: "Transacción no encontrada" });
+    if (tx.type !== "income") {
+      return res.status(400).json({ error: "Solo se puede vincular una nómina a un ingreso" });
+    }
+    if (tx.payslipId && tx.payslipId !== id) {
+      return res.status(409).json({ error: "Esa transacción ya está vinculada a otra nómina" });
+    }
+
+    // Libera primero cualquier transacción que hoy apunte a esta nómina —
+    // la clave única de transactions.payslip_id no admite dos filas con el
+    // mismo valor a la vez, así que reasignar sin soltar antes fallaría.
+    await db.transaction(async (dbTx) => {
+      await dbTx.update(transactions).set({ payslipId: null }).where(eq(transactions.payslipId, id));
+      await dbTx.update(transactions).set({ payslipId: id }).where(eq(transactions.id, parsed.data.transactionId!));
+    });
+
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

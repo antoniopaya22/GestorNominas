@@ -167,6 +167,7 @@ transactionsRouter.get("/", async (req, res, next) => {
         end`,
         flag: transactions.flag,
         importedFrom: transactions.importedFrom,
+        payslipId: transactions.payslipId,
         createdAt: transactions.createdAt,
       })
       .from(transactions)

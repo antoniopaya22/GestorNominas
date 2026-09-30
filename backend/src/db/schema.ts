@@ -227,6 +227,11 @@ export const transactions = pgTable(
       () => recurringTransactions.id,
       { onDelete: "set null" },
     ),
+    // Enlace manual nómina ↔ ingreso (el usuario lo confirma a mano desde el
+    // detalle de la nómina, con una sugerencia automática de candidata —
+    // nunca se crea ni se enlaza solo). Si se borra la nómina, la
+    // transacción se queda, solo pierde el enlace.
+    payslipId: integer("payslip_id").references(() => payslips.id, { onDelete: "set null" }),
     scheduledFor: text("scheduled_for"),
     payee: text("payee"),
     memo: text("memo"),
@@ -246,6 +251,8 @@ export const transactions = pgTable(
     // antes solo se evitaba comprobando en memoria, sin garantía atómica.
     recurringOccurrenceIdx: uniqueIndex("transactions_recurring_occurrence_idx")
       .on(table.recurringTransactionId, table.scheduledFor),
+    // Una nómina no puede quedar enlazada a más de una transacción a la vez.
+    payslipIdx: uniqueIndex("transactions_payslip_idx").on(table.payslipId),
   }),
 );
 
@@ -279,3 +286,26 @@ export const recurringTransactions = pgTable("recurring_transactions", {
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ─── Budgets (presupuesto por categoría y mes, estilo YNAB) ─────
+export const budgets = pgTable(
+  "budgets",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    categoryId: integer("category_id")
+      .notNull()
+      .references(() => categories.id, { onDelete: "cascade" }),
+    // "YYYY-MM" — mismo formato de texto que transactions.date, sin día.
+    month: text("month").notNull(),
+    assigned: doublePrecision("assigned").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    // Como mucho una asignación por categoría y mes — la mutación es upsert.
+    categoryMonthIdx: uniqueIndex("budgets_category_month_idx").on(table.categoryId, table.month),
+    userMonthIdx: index("budgets_user_month_idx").on(table.userId, table.month),
+  }),
+);

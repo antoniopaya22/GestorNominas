@@ -15,6 +15,7 @@ import {
   recurringTransactions,
   alertRules,
   alertHistory,
+  budgets,
   users,
 } from "../db/schema.js";
 import { eq, and, sql, gte, lte, like, desc, asc, inArray } from "drizzle-orm";
@@ -43,7 +44,7 @@ exportRouter.get("/all", async (req, res, next) => {
       : [];
     const payslipIds = userPayslips.map((p) => p.id);
 
-    const [concepts, notes, payslipTagLinks, userTags, userAccounts, groups, cats, txs, recurring, rules, history] =
+    const [concepts, notes, payslipTagLinks, userTags, userAccounts, groups, cats, txs, recurring, rules, history, userBudgets] =
       await Promise.all([
         payslipIds.length
           ? db.select().from(payslipConcepts).where(inArray(payslipConcepts.payslipId, payslipIds))
@@ -67,6 +68,7 @@ exportRouter.get("/all", async (req, res, next) => {
         db.select().from(recurringTransactions).where(eq(recurringTransactions.userId, userId)),
         db.select().from(alertRules).where(eq(alertRules.userId, userId)),
         db.select().from(alertHistory).where(eq(alertHistory.userId, userId)),
+        db.select().from(budgets).where(eq(budgets.userId, userId)),
       ]);
 
     res.setHeader("Content-Disposition", `attachment; filename="sueldia-datos-${userId}.json"`);
@@ -86,6 +88,7 @@ exportRouter.get("/all", async (req, res, next) => {
       recurringTransactions: recurring,
       alertRules: rules.map((r) => ({ ...r, config: JSON.parse(r.config) })),
       alertHistory: history,
+      budgets: userBudgets,
     });
   } catch (err) {
     next(err);
