@@ -5,7 +5,7 @@ import ExtractionVisual from "../components/marketing/ExtractionVisual.astro";
 import DashboardVisual from "../components/marketing/DashboardVisual.astro";
 import FinanceVisual from "../components/marketing/FinanceVisual.astro";
 import CtaBand from "../components/marketing/CtaBand.astro";
-import { Faq } from "../components/marketing/Faq";
+import Faq from "../components/marketing/Faq.astro";
 import {
   Check, ArrowRight, BellRing, Users, FileSpreadsheet, SunMoon, RefreshCw, Building2, Landmark,
   Upload, Sparkles, LineChart, KeyRound, FileX2, Lock, TrendingDown, CalendarX2, ShieldCheck, Moon, Sun,
@@ -117,6 +117,29 @@ const faqs = [
 ---
 
 <MarketingLayout title="Tus nóminas, explicadas al instante" description="Sube tus nóminas en PDF y SueldIA extrae cada concepto, analiza tu evolución salarial e IRPF y te avisa si algo cambia. Gratis.">
+  <!-- Datos estructurados (JSON-LD) — Google acepta el bloque en cualquier
+       parte del documento, no hace falta que vaya en <head>. -->
+  <script type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "SueldIA",
+    applicationCategory: "FinanceApplication",
+    operatingSystem: "Web",
+    description: "Sube tus nóminas en PDF y SueldIA extrae cada concepto, analiza tu evolución salarial e IRPF y gestiona tus finanzas personales.",
+    url: Astro.site?.toString(),
+    offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
+    inLanguage: "es-ES",
+  })} />
+  <script type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqs.map((f) => ({
+      "@type": "Question",
+      name: f.q,
+      acceptedAnswer: { "@type": "Answer", text: f.a },
+    })),
+  })} />
+
   <!-- ─── Hero ─────────────────────────────────────────────── -->
   <section class="relative isolate">
     <div class="absolute inset-x-0 top-0 h-[780px] mk-dots -z-10" aria-hidden="true"></div>
@@ -401,7 +424,7 @@ const faqs = [
         </p>
       </div>
       <div class="reveal" data-delay="1">
-        <Faq client:visible items={faqs} />
+        <Faq items={faqs} />
       </div>
     </div>
   </section>

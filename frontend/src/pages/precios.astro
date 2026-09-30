@@ -1,7 +1,7 @@
 ---
 import MarketingLayout from "../layouts/MarketingLayout.astro";
 import CtaBand from "../components/marketing/CtaBand.astro";
-import { Faq } from "../components/marketing/Faq";
+import Faq from "../components/marketing/Faq.astro";
 import { Check, ArrowRight, Clock } from "lucide-react";
 
 const plans = [
@@ -135,7 +135,7 @@ const faqs = [
         </p>
       </div>
       <div class="reveal" data-delay="1">
-        <Faq client:visible items={faqs} />
+        <Faq items={faqs} />
       </div>
     </div>
   </section>

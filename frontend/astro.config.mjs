@@ -3,6 +3,11 @@ import react from "@astrojs/react";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
+  // Sin dominio propio todavía (0 dominios en el proyecto de Vercel) — usa
+  // el alias estable *.vercel.app del propio proyecto. Cambiar aquí en
+  // cuanto haya un dominio de verdad; de esto salen las canonical/OG y el
+  // sitemap.
+  site: "https://sueldia.vercel.app",
   integrations: [react()],
   server: { port: 4321 },
   vite: {

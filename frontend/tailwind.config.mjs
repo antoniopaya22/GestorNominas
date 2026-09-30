@@ -5,8 +5,16 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"Fira Sans"', "system-ui", "sans-serif"],
-        mono: ['"Fira Code"', "monospace"],
+        // global.css (@theme inline) ya redefine --font-sans a Geist
+        // Variable (autoalojada) para toda la app — esto solo evita que el
+        // bridge de compatibilidad siga mencionando Fira Sans, que no se
+        // carga desde ningún sitio.
+        sans: ['"Geist Variable"', "system-ui", "sans-serif"],
+        // Fira Code se cargaba desde Google Fonts solo para esto — una
+        // pila de monospace del sistema no necesita red ni bloquea el
+        // renderizado, y es la misma idea que .app-root .font-mono (Geist)
+        // aplicada fuera de la app.
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
       },
       colors: {
         // Verde del logo: 500 = "IA" del wordmark; 600 es el tono con
